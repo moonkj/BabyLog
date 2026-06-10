@@ -37,6 +37,7 @@ struct LiquidButton<Label: View>: View {
         .buttonStyle(LiquidPressStyle())
         .blShadow(.fab)
         .onAppear { flow = true }
+        .onDisappear { flow = false }   // 디버거 D-FIX: 오프스크린 시 애니 중단(배터리/GPU)
     }
 
     // 광택 메니스커스 (항상)

@@ -35,6 +35,7 @@ struct QuickRecordFAB: View {
                         }
                     }
                     .buttonStyle(LiquidPressStyle())
+                    .accessibilityLabel(a.label)   // 디버거 D-FIX: 하위 액션 VoiceOver 라벨
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }

@@ -25,12 +25,29 @@ targets:
         INFOPLIST_FILE: App/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_USER_SCRIPT_SANDBOXING: YES
+  BabyLogTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - Tests/BabyLogTests
+    dependencies:
+      - target: BabyLog
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.babylog.app.tests
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   BabyLog:
     build:
       targets:
         BabyLog: all
+        BabyLogTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - BabyLogTests
     archive:
       config: Release

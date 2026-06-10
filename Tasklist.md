@@ -72,3 +72,21 @@
 - **D1.** 임신 주수: LMP 기준 산출, 초음파 보정 EDD 입력 시 EDD 우선 / 'D+주차' 표기
 - **D2.** 월령: Calendar 기반 개월수(생후 N개월) + D+N일 병기
 - **D3.** '기록 멈춤': 사용자 토글 강제 X, 미접속 자동 감지로 권유 알림 '자동 억제' + 따뜻한 수동 진입점. 임계값 **미접속 30일** (확정)
+
+---
+
+## Phase 3 병렬 작업 (진행중 · 2026-06-10)
+
+> 팀장이 백그라운드 병렬 디스패치 → 완료 시 통합 빌드·검증. 충돌 방지로 디렉토리 분리.
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| coder | Core+Data (AgeCalculator·Models·PregnancyTransition·EventBus) | `App/Sources/Core·Data` | ✅ 빌드 검증 |
+| qa | 단위 테스트 27개 (계산·승계 검증) | `Tests/BabyLogTests` | ✅ 27/27 통과 |
+| debugger | Phase 3 리스크 감사 (A~E + 가설 H1~H5) | `team/debug/phase3-risk-audit.md` | ✅ 완료 |
+| perf-doc | README + 기술문서 3종 | `README.md`·`docs/` | ✅ 완료 |
+
+- **교차레이어 계약**: coder↔qa가 `AgeCalculator`/`PregnancyTransition` API 시그니처 공유 → 정합 보장 ✅
+- **✅ 통합 결과**: test 타깃 추가 → `xcodegen` → `xcodebuild test` → **27/27 PASS**
+- **과학적 토론(해소)**: QA 테스트가 이름 검증 결함(`"\n"` 통과) 적발 → `.whitespacesAndNewlines` 수정 → 녹색
+- **디버거 후속 과제**: 상실 알림 차단 · 전환 원자성(B2) · AgeCalculator UTC 정규화 · ink3 대비 → Phase 3 본구현 트래킹

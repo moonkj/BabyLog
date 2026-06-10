@@ -87,3 +87,26 @@
 
 ### 다음
 - 병렬 워크플로우로 Phase 3 본구현 (데이터 레이어 · 테스트 · 문서 · 리스크 감사)
+
+---
+
+## 2026-06-10 — Phase 3 병렬 통합 (Coder·QA·Debugger·Doc)
+
+**상태:** ✅ 통합 빌드 + 테스트 성공 (**27/27 PASS**)
+
+### 병렬 산출물 통합
+- **coder**: Core+Data (AgeCalculator·Models·PregnancyTransition·EventBus) — 앱 빌드 ✅
+- **qa**: 27개 단위테스트(`Tests/BabyLogTests`) — test 타깃 `project.yml` 추가, 시뮬 실행
+- **debugger**: `team/debug/phase3-risk-audit.md` (리스크 A~E + 가설 H1~H5)
+- **doc**: `README.md` + `docs/{architecture,design-system,setup-and-build}.md`
+
+### 과학적 토론 — 교차레이어 버그 발견·해소
+- QA 테스트가 Coder 이름 검증 결함 적발: `childName="\n"`이 통과(`.whitespaces`만 트림)
+- 결론: `.whitespacesAndNewlines`로 수정 → **27/27 통과**
+- 디버거 D-FIX 즉시 반영: LiquidButton `onDisappear` 애니 중단, FAB 하위액션 VoiceOver 라벨
+
+### 디버거 후속 과제 (Phase 3 본구현에서)
+- 상실 이벤트(`pregnancyEndedInLoss`) 구독 → 알림 취소 (민감영역 최우선)
+- Pregnancy→Child CoreData 트랜잭션 원자성/복구 (B2)
+- AgeCalculator UTC 정규화 + LMP>오늘/미래 birthDate 입력 검증
+- ink3-on-canvas WCAG AA 대비 재검토
