@@ -9,6 +9,7 @@ struct MainTabView: View {
     @EnvironmentObject private var store: AppStore
     @AppStorage("bl_onboarded") private var onboarded = false
     @AppStorage("bl_fab_side") private var fabSide = "right"
+    @AppStorage("bl_night_dim") private var nightDim = false
     @State private var tab: AppTab = .home
     @State private var mode: AppMode = .baby
     @State private var showQuickRecord = false
@@ -22,6 +23,23 @@ struct MainTabView: View {
                 mainUI
             } else {
                 OnboardingView { withAnimation(.easeOut) { onboarded = true } }
+            }
+        }
+        .overlay { nightDimOverlay }
+    }
+
+    /// 야간 초저휘도 — 설정 ON 시 22~06시에 은은한 디밍(새벽 수유 배려). 5분마다 시간 재평가.
+    @ViewBuilder
+    private var nightDimOverlay: some View {
+        if nightDim {
+            TimelineView(.periodic(from: .now, by: 300)) { ctx in
+                let hour = Calendar.current.component(.hour, from: ctx.date)
+                let isNight = hour >= 22 || hour < 6
+                Color.black
+                    .opacity(isNight ? 0.32 : 0)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .animation(.easeInOut(duration: 0.6), value: isNight)
             }
         }
     }
