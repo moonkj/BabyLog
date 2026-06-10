@@ -200,21 +200,10 @@ struct DongneTab: View {
                 switch seg {
                 case 0:
                     NearbyScreen()
+                case 1:
+                    MarketScreen()
                 default:
-                    ScrollView {
-                        BLCard {
-                            VStack(alignment: .leading, spacing: 8) {
-                                BLBadge(tone: seg == 1 ? .amber : .blue, text: "준비중")
-                                Text(seg == 1 ? "중고 마켓" : "동네 크루")
-                                    .font(AppFont.title).foregroundStyle(AppColors.ink)
-                                Text(seg == 1 ? "졸업템을 자연스럽게 — v2에서 열려요"
-                                              : "비슷한 또래 양육자 매칭 — v3에서 열려요")
-                                    .font(AppFont.caption).foregroundStyle(AppColors.ink2)
-                            }
-                        }
-                        .padding(Spacing.s5)
-                        Color.clear.frame(height: 96)
-                    }
+                    CrewScreen()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -229,54 +218,12 @@ struct DongneTab: View {
 
 // MARK: - 가계부
 struct BudgetTab: View {
-    var body: some View {
-        TabScaffold(title: "가계부", sub: "지출 · 정부지원금") {
-            BLCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    BLBadge(tone: .coral, text: "D-4", systemIcon: "calendar")
-                    Text("아동수당 신청 마감").font(AppFont.title).foregroundStyle(AppColors.ink)
-                    Text("월 10만원 · 복지로에서 신청").font(AppFont.caption).foregroundStyle(AppColors.ink2)
-                    LiquidButton(action: {}) { Text("신청 방법 보기") }
-                }
-            }
-        }
-    }
+    var body: some View { BudgetScreen() }
 }
 
 // MARK: - 내정보
 struct ProfileTab: View {
-    var body: some View {
-        TabScaffold(title: "내정보", sub: "프로필 · 뱃지 · 설정") {
-            VStack(alignment: .leading, spacing: Spacing.s4) {
-                HStack(spacing: 12) {
-                    Circle().fill(AppColors.primarySoft).frame(width: 56, height: 56)
-                        .overlay { Image(systemName: "person.fill").foregroundStyle(AppColors.primary) }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("김지수").font(AppFont.h2).foregroundStyle(AppColors.ink)
-                        BLBadge(tone: .amber, text: "골든 맘", systemIcon: "crown.fill")
-                    }
-                    Spacer()
-                }
-                HStack(spacing: 8) {
-                    BLBadge(tone: .purple, text: "안심 거래왕")
-                    BLBadge(tone: .mint, text: "나눔 천사")
-                    BLBadge(tone: .blue, text: "육아고수")
-                }
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .liquidGlass(cornerRadius: Radius.lg)   // iOS 26 네이티브 Liquid Glass 데모
-
-            BLCard {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("데이터 비매각 · 무광고 · 영구 보존", systemImage: "checkmark.shield.fill")
-                        .font(.system(size: 14, weight: .bold)).foregroundStyle(AppColors.primary)
-                    Text("사진은 서버에 올리지 않아요. 언제든 내보낼 수 있어요.")
-                        .font(AppFont.caption).foregroundStyle(AppColors.ink2)
-                }
-            }
-        }
-    }
+    var body: some View { ProfileScreen() }
 }
 
 // MARK: - 공용 탭 스캐폴드

@@ -30,7 +30,9 @@ struct MainTabView: View {
                 .tabItem { Label("홈", systemImage: "house.fill") }
                 .tag(AppTab.home)
 
-                RecordScreen()
+                Group {
+                    if mode == .pregnancy { PregnancyRecordScreen() } else { RecordScreen() }
+                }
                     .tabItem { Label("기록", systemImage: "book.closed.fill") }
                     .tag(AppTab.record)
                 DongneTab()

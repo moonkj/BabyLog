@@ -166,3 +166,17 @@
 - **과학적 토론(해소)**: networking `public`↔internal 충돌 · `mockPlaces` 파일프라이빗 접근 → 수정
 - **실기기**: 팀 `R3K972V8DA`(계정 세션 없음)→`QN975MTM7H`로 정정 후 `devicectl` 설치·실행 성공
 - 검증: `xcodebuild test` **87/87 PASS**
+
+---
+
+## 2026-06-10 — Phase 3 라운드 5 통합 (남은 화면 본구현)
+
+**상태:** ✅ build+test **111/111 PASS** · iPhone 재설치 · GitHub 푸시
+
+- **가계부**(BudgetScreen: 도넛·정부지원금 전면·BudgetSummary), **내정보**(ProfileScreen: 티어 진행·뱃지 컬렉션·Pro·TierCalculator), **임신 기록 탭**(PregnancyRecordScreen: 태동 카운터·체중 차트·배사진 D라인·산전검사 + BirthTransitionView), **동네 마켓**(MarketScreen)·**크루**(CrewScreen 콜드스타트)
+- qa: BudgetSummary·TierCalculator 19 테스트
+- Shell 와이어링: 5탭 전부 실화면 + 임신모드 record→PregnancyRecordScreen
+- 이번 라운드 **컴파일 버그 0** (계약 정합 우수)
+
+### 현재 앱 상태 (judgeable)
+온보딩 → 홈(육아/임신 모드) → 기록(타임라인·성장차트·예방접종 / 임신: 태아가이드·태동·배사진) → 동네(주변·응급·마켓·크루) → 가계부(지원금·도넛) → 내정보(티어·뱃지·Pro). + 빠른기록 시트, 성장카드 공유, 상실 알림 차단, 로컬 영속화, 외부 API 스텁. 라이트 모드. **테스트 111개.**

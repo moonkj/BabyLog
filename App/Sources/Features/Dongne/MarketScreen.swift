@@ -1,0 +1,477 @@
+// MarketScreen.swift
+// BabyLog · Features/Dongne
+// DongneTab의 "마켓" 세그먼트에 임베드하여 사용합니다.
+// Swift 5 / iOS 17 / SwiftUI + Foundation only
+
+import SwiftUI
+import Foundation
+
+// MARK: - Market Models
+
+/// 상태 등급 S/A/B/C
+enum MarketItemGrade: String, CaseIterable {
+    case s = "S"
+    case a = "A"
+    case b = "B"
+    case c = "C"
+
+    var label: String {
+        switch self {
+        case .s: return "거의새것"
+        case .a: return "깨끗"
+        case .b: return "사용감있음"
+        case .c: return "하자있음"
+        }
+    }
+
+    var badgeTone: BadgeTone {
+        switch self {
+        case .s: return .blue
+        case .a: return .mint
+        case .b: return .amber
+        case .c: return .coral
+        }
+    }
+
+    var systemIcon: String {
+        switch self {
+        case .s: return "seal.fill"
+        case .a: return "checkmark.circle.fill"
+        case .b: return "minus.circle.fill"
+        case .c: return "exclamationmark.circle.fill"
+        }
+    }
+}
+
+/// 판매자 티어
+enum MarketSellerTier: String {
+    case golden = "골든 맘"
+    case warm   = "따뜻한 이웃"
+    case new    = "신규"
+
+    var badgeTone: BadgeTone {
+        switch self {
+        case .golden: return .amber
+        case .warm:   return .mint
+        case .new:    return .grey
+        }
+    }
+}
+
+/// 마켓 카테고리
+enum MarketCategory: String, CaseIterable {
+    case all    = "전체"
+    case cloth  = "의류"
+    case feed   = "수유용품"
+    case ride   = "이동수단"
+    case toy    = "완구"
+    case meal   = "식사"
+
+    var systemIcon: String {
+        switch self {
+        case .all:   return "square.grid.2x2.fill"
+        case .cloth: return "tshirt.fill"
+        case .feed:  return "drop.fill"
+        case .ride:  return "stroller.fill"
+        case .toy:   return "teddybear.fill"
+        case .meal:  return "fork.knife"
+        }
+    }
+}
+
+struct MarketItem: Identifiable {
+    let id: Int
+    let title: String
+    let category: MarketCategory
+    let grade: MarketItemGrade
+    let monthsTag: String        // 예: "6–12개월"
+    let price: Int               // 0 = 무료나눔
+    let originalPrice: Int?
+    let isFree: Bool
+    let hasRecall: Bool
+    let isGraduate: Bool         // 졸업템
+    let sellerName: String
+    let sellerTier: MarketSellerTier
+    let distanceText: String
+    let favoriteCount: Int
+    let photoSeed: Int
+}
+
+/// "곧 필요해요" 월령 연동 추천 아이템
+struct MarketNeedSoonItem: Identifiable {
+    let id: Int
+    let title: String
+    let reason: String
+    let photoSeed: Int
+}
+
+// MARK: - Mock Data
+
+private let mkNeedSoonItems: [MarketNeedSoonItem] = [
+    MarketNeedSoonItem(id: 1, title: "걸음마 보조기",   reason: "10개월쯤 필요해요",    photoSeed: 2),
+    MarketNeedSoonItem(id: 2, title: "식사 의자",        reason: "이유식 시작 전 준비", photoSeed: 5),
+    MarketNeedSoonItem(id: 3, title: "욕조 샴푸의자",    reason: "목 가눌 때 부터",     photoSeed: 3),
+    MarketNeedSoonItem(id: 4, title: "보행기",           reason: "6개월+ 권장",         photoSeed: 0),
+    MarketNeedSoonItem(id: 5, title: "유아 체온계",      reason: "지금 당장 필요해요",  photoSeed: 4),
+]
+
+private let mkItems: [MarketItem] = [
+    MarketItem(id: 1,  title: "스토케 트립트랩 식사의자",  category: .meal,  grade: .s, monthsTag: "6개월+",    price: 180_000, originalPrice: 350_000, isFree: false, hasRecall: false, isGraduate: false, sellerName: "보리맘",  sellerTier: .golden, distanceText: "210m",  favoriteCount: 34, photoSeed: 5),
+    MarketItem(id: 2,  title: "에어웨이브 공기청정 유모차", category: .ride,  grade: .a, monthsTag: "0–36개월",  price: 95_000,  originalPrice: 280_000, isFree: false, hasRecall: false, isGraduate: true,  sellerName: "하준이네", sellerTier: .warm,   distanceText: "480m",  favoriteCount: 21, photoSeed: 1),
+    MarketItem(id: 3,  title: "코니 바운서 아기 그네",     category: .toy,   grade: .b, monthsTag: "0–6개월",   price: 35_000,  originalPrice: 89_000,  isFree: false, hasRecall: true,  isGraduate: true,  sellerName: "민서맘",  sellerTier: .warm,   distanceText: "320m",  favoriteCount: 12, photoSeed: 3),
+    MarketItem(id: 4,  title: "모유 냉동 보관팩 80매",     category: .feed,  grade: .s, monthsTag: "전 월령",    price: 0,       originalPrice: nil,     isFree: true,  hasRecall: false, isGraduate: false, sellerName: "서연이네", sellerTier: .golden, distanceText: "90m",   favoriteCount: 8,  photoSeed: 2),
+    MarketItem(id: 5,  title: "노르딕 방수 점프수트",      category: .cloth, grade: .a, monthsTag: "12–18개월",  price: 22_000,  originalPrice: 68_000,  isFree: false, hasRecall: false, isGraduate: true,  sellerName: "지우맘",  sellerTier: .new,    distanceText: "560m",  favoriteCount: 5,  photoSeed: 4),
+    MarketItem(id: 6,  title: "베이비뵨 바운서 블리스",    category: .toy,   grade: .s, monthsTag: "0–8개월",   price: 120_000, originalPrice: 249_000, isFree: false, hasRecall: false, isGraduate: false, sellerName: "태양맘",  sellerTier: .warm,   distanceText: "740m",  favoriteCount: 27, photoSeed: 0),
+]
+
+// MARK: - MarketScreen
+
+/// DongneTab의 "마켓" 세그먼트에 임베드하는 메인 뷰.
+struct MarketScreen: View {
+    @State private var selectedCategory: MarketCategory = .all
+    @State private var showSellSheet: Bool = false
+
+    private var filteredItems: [MarketItem] {
+        if selectedCategory == .all { return mkItems }
+        return mkItems.filter { $0.category == selectedCategory }
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    needSoonSection
+                    categoryChips
+                    itemList
+                        .padding(.bottom, 80) // FAB 여백
+                }
+            }
+            .background(AppColors.canvas.ignoresSafeArea())
+
+            sellButton
+                .padding(.trailing, Spacing.s5)
+                .padding(.bottom, Spacing.s6)
+        }
+        .sheet(isPresented: $showSellSheet) {
+            MkSellSheetPlaceholder()
+                .presentationDetents([.medium])
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    // MARK: 곧 필요해요 섹션
+    private var needSoonSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppColors.primary)
+                Text("곧 필요해요")
+                    .font(AppFont.title)
+                    .foregroundStyle(AppColors.ink)
+                Spacer()
+                Text("월령 기반")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.ink3)
+            }
+            .padding(.horizontal, Spacing.s5)
+            .padding(.top, Spacing.s3)
+            .padding(.bottom, 12)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(mkNeedSoonItems) { item in
+                        MkNeedSoonCard(item: item)
+                    }
+                }
+                .padding(.horizontal, Spacing.s5)
+                .padding(.bottom, 4)
+            }
+        }
+        .padding(.bottom, 14)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("곧 필요해요 — 월령 기반 추천")
+    }
+
+    // MARK: 카테고리 칩
+    private var categoryChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.s2) {
+                ForEach(MarketCategory.allCases, id: \.self) { cat in
+                    Button {
+                        selectedCategory = cat
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: cat.systemIcon)
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(cat.rawValue)
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundStyle(selectedCategory == cat ? Color.white : AppColors.ink2)
+                        .padding(.horizontal, 14)
+                        .frame(height: 36)
+                        .background(selectedCategory == cat ? AppColors.ink : AppColors.surface, in: Capsule())
+                        .overlay { Capsule().stroke(selectedCategory == cat ? AppColors.ink : AppColors.line, lineWidth: 1) }
+                    }
+                    .buttonStyle(LiquidPressStyle(scale: 0.96))
+                    .accessibilityLabel(cat.rawValue)
+                    .accessibilityAddTraits(selectedCategory == cat ? [.isSelected] : [])
+                }
+            }
+            .padding(.horizontal, Spacing.s5)
+        }
+        .padding(.bottom, 14)
+    }
+
+    // MARK: 매물 리스트
+    private var itemList: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("\(filteredItems.count)개 매물")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(AppColors.ink3)
+                .padding(.horizontal, 2)
+
+            ForEach(filteredItems) { item in
+                MkItemCard(item: item)
+            }
+        }
+        .padding(.horizontal, Spacing.s5)
+    }
+
+    // MARK: 팔기 버튼
+    private var sellButton: some View {
+        Button {
+            showSellSheet = true
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "tag.fill")
+                    .font(.system(size: 15, weight: .bold))
+                Text("팔기")
+                    .font(.system(size: 16, weight: .bold))
+            }
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 22)
+            .frame(height: 50)
+            .background(AppColors.ink, in: Capsule())
+            .blShadow(.fab)
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.95))
+        .accessibilityLabel("팔기")
+        .accessibilityHint("내 물건을 마켓에 등록합니다")
+    }
+}
+
+// MARK: - MkNeedSoonCard
+
+private struct MkNeedSoonCard: View {
+    let item: MarketNeedSoonItem
+
+    var body: some View {
+        Button { } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                ZStack {
+                    PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 14)
+                        .frame(width: 124, height: 92)
+                    Image(systemName: "bag.fill")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
+                Text(item.title)
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(AppColors.ink)
+                    .lineLimit(1)
+
+                Text(item.reason)
+                    .font(.system(size: 11.5, weight: .regular))
+                    .foregroundStyle(AppColors.ink3)
+                    .lineLimit(1)
+            }
+            .frame(width: 124)
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.97))
+        .accessibilityLabel("\(item.title) — \(item.reason)")
+    }
+}
+
+// MARK: - MkItemCard
+
+private struct MkItemCard: View {
+    let item: MarketItem
+
+    var body: some View {
+        Button { } label: {
+            BLCard(padding: 0) {
+                HStack(alignment: .center, spacing: 0) {
+                    // 사진 영역
+                    photoArea
+                        .frame(width: 112)
+
+                    // 정보 영역
+                    infoArea
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.99))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var photoArea: some View {
+        ZStack(alignment: .topLeading) {
+            PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
+                .frame(width: 112)
+                .overlay(alignment: .topLeading) {
+                    // 리콜 경고 뱃지
+                    if item.hasRecall {
+                        BLBadge(tone: .coral, text: "리콜", systemIcon: "exclamationmark.triangle.fill", dot: false)
+                            .padding(8)
+                    }
+                }
+                .overlay(alignment: .bottomLeading) {
+                    // 졸업템 뱃지
+                    if item.isGraduate {
+                        BLBadge(tone: .mint, text: "졸업템", systemIcon: nil, dot: true)
+                            .padding(8)
+                    }
+                }
+        }
+        .clipped()
+        .accessibilityHidden(true)
+    }
+
+    private var infoArea: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // 상태등급 + 월령 태그
+            HStack(spacing: 5) {
+                BLBadge(
+                    tone: item.grade.badgeTone,
+                    text: "\(item.grade.rawValue)등급",
+                    systemIcon: item.grade.systemIcon,
+                    dot: false
+                )
+                BLBadge(tone: .grey, text: item.monthsTag, systemIcon: nil, dot: false)
+            }
+
+            // 제목
+            Text(item.title)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppColors.ink)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+
+            // 가격
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(item.isFree ? "무료나눔" : "\(item.price.formatted())원")
+                    .font(AppFont.num(17, weight: .heavy))
+                    .foregroundStyle(item.isFree ? AppColors.primary : AppColors.ink)
+
+                if !item.isFree, let orig = item.originalPrice {
+                    Text("\(orig.formatted())원")
+                        .font(AppFont.num(12))
+                        .foregroundStyle(AppColors.ink3)
+                        .strikethrough(true, color: AppColors.ink3)
+                }
+            }
+
+            // 판매자 미니 뱃지 (이름 + 티어)
+            HStack(spacing: 5) {
+                Text(item.sellerName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.ink2)
+                BLBadge(tone: item.sellerTier.badgeTone, text: item.sellerTier.rawValue, systemIcon: nil, dot: false)
+            }
+
+            // 거리 + 관심
+            HStack(spacing: 4) {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppColors.ink3)
+                Text(item.distanceText)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppColors.ink3)
+                Text("·")
+                    .foregroundStyle(AppColors.ink3)
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(AppColors.ink3)
+                Text("관심 \(item.favoriteCount)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AppColors.ink3)
+            }
+        }
+    }
+
+    private var accessibilityDescription: String {
+        let gradeDesc = "\(item.grade.rawValue)등급 \(item.grade.label)"
+        let priceDesc = item.isFree ? "무료나눔" : "\(item.price.formatted())원"
+        let recallDesc = item.hasRecall ? ", 리콜 이력 있음" : ""
+        let gradDesc = item.isGraduate ? ", 졸업템" : ""
+        return "\(item.title), \(gradeDesc), \(item.monthsTag), \(priceDesc), 판매자 \(item.sellerName) \(item.sellerTier.rawValue), \(item.distanceText)\(recallDesc)\(gradDesc)"
+    }
+}
+
+// MARK: - MkSellSheetPlaceholder
+
+private struct MkSellSheetPlaceholder: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // 핸들
+            Capsule()
+                .fill(AppColors.line2)
+                .frame(width: 36, height: 5)
+                .padding(.top, 10)
+                .padding(.bottom, 20)
+                .accessibilityHidden(true)
+
+            VStack(spacing: 16) {
+                ZStack {
+                    PhotoPlaceholder(seed: 0, cornerRadius: 18)
+                        .frame(height: 160)
+                    VStack(spacing: 8) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 30, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                        Text("사진 추가 (최소 2장)")
+                            .font(.system(size: 13.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .shadow(radius: 2)
+                    }
+                }
+                .accessibilityLabel("사진 추가 영역")
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("무엇을 정리할까요?")
+                        .font(.system(size: 19, weight: .heavy))
+                        .foregroundStyle(AppColors.ink)
+                    Text("사진을 올리면 AI가 자동 분류해드려요.")
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(AppColors.ink2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                LiquidButton(action: { dismiss() }) {
+                    Text("다음")
+                }
+                .accessibilityLabel("다음")
+            }
+            .padding(.horizontal, Spacing.s5)
+            .padding(.bottom, Spacing.s6)
+        }
+        .background(AppColors.canvas)
+    }
+}
+
+// MARK: - Preview
+
+#if DEBUG
+#Preview {
+    NavigationStack {
+        MarketScreen()
+    }
+}
+#endif

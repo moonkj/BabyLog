@@ -140,3 +140,17 @@
 - iPhone "Moon"(iOS 26.5.1)에 **설치 + 실행 성공** (라이트 모드)
 - 원인 해결: 잘못된 팀 `R3K972V8DA`(계정 세션 없음) → 실제 Xcode 팀 **`QN975MTM7H`**(kyeongju Moon)로 자동 서명·`devicectl` 설치
 - 맥북 카페인 모드 ON(8h) · 앱=**아이폰 전용**(TARGETED_DEVICE_FAMILY=1, 세로 고정)
+
+### 라운드 5 (✅ 완료 · 2026-06-10) — "계속 진행"(남은 화면 본구현)
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| coder | 가계부 본구현(도넛·정부지원금·BudgetSummary) | `Features/Budget` | ✅ |
+| coder | 내정보(프로필·티어진행·뱃지컬렉션·Pro·TierCalculator) | `Features/Profile` | ✅ |
+| coder | 임신 기록 탭(태아가이드·산모기록·산전검사)+출산전환 | `Features/Pregnancy` | ✅ |
+| coder | 동네 마켓 + 크루(콜드스타트 기대감 UI) | `Features/Dongne` | ✅ |
+| qa | BudgetSummary·TierCalculator 테스트 19개 | `Tests` | ✅ |
+
+- **팀장 통합(Shell)**: BudgetTab→BudgetScreen · ProfileTab→ProfileScreen · DongneTab(마켓→MarketScreen·크루→CrewScreen) · 임신모드 기록탭→PregnancyRecordScreen
+- **✅ 통합 결과**: build→test → **111/111 PASS** (컴파일 버그 0) · iPhone 재설치·실행 완료
+- 5탭 전부 실화면 완성 → 전체 기능 판단 가능 상태
