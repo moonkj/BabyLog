@@ -53,7 +53,7 @@ struct MainTabView: View {
 
             // 빠른 기록 FAB (홈·기록·동네) — 위치는 설정(bl_fab_side, 한손 조작)
             if tab == .home || tab == .record || tab == .dongne {
-                QuickRecordFAB(mode: mode, onQuickRecord: { showQuickRecord = true })
+                QuickRecordFAB(mode: mode, onQuickRecord: { Haptics.light(); showQuickRecord = true })
                     .padding(fabOnLeft ? .leading : .trailing, Spacing.s5)
                     .padding(.bottom, 92)
                     .transition(.scale.combined(with: .opacity))

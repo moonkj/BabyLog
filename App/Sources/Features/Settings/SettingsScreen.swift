@@ -46,6 +46,11 @@ struct SettingsScreen: View {
         .background(AppColors.canvas.ignoresSafeArea())
         .navigationTitle("설정")
         .navigationBarTitleDisplayMode(.large)
+        // 설정 변경 미세 피드백 (§8.5)
+        .sensoryFeedback(.selection, trigger: theme)
+        .sensoryFeedback(.selection, trigger: fabSide)
+        .sensoryFeedback(.selection, trigger: caregiverTitle)
+        .sensoryFeedback(.impact(weight: .light), trigger: nightDim)
         .sheet(isPresented: $showShareSheet) {
             if let url = exportURL {
                 SettingsShareSheet(activityItems: [url])
