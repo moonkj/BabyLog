@@ -213,3 +213,19 @@
 ### 비고
 - 실행은 기기 잠금 해제 필요(FBSOpenApplicationError Locked) — 코드 무관
 - App Group(group.com.babylog.app) 위젯 실데이터 공유는 후속
+
+---
+
+## 2026-06-10 — Phase 3 라운드 8 통합 (홈 레이아웃 3안·UX 상태·네트워킹 인프라)
+
+**상태:** ✅ build+test **180/180 PASS** · iPhone 재설치 · GitHub 푸시
+
+- **홈 레이아웃 3안**(히어로/대시보드/타임라인, `@AppStorage` 전환, PriorityEngine 연결 유지)
+- **빈상태·로딩(Skeleton)·에러 UX 컴포넌트**(`Components/StateViews`: BLEmptyState·BLExpectationState·BLSkeleton·BLErrorState)
+- **네트워킹 인프라**(APIClient·APIConfig·Live/Mock 폴백·공공API 파서 HIRA/Kakao/Bokjiro/KDCA)
+- qa: APIError·mapHTTP·파서 throws 테스트 / doc: CHANGELOG
+- **과학적 토론(해소)**: 파서 계약 불일치(루트배열 vs 공공API 래퍼+컨텍스트 인자) → 현실적 파서 채택, QA 테스트 포맷-무관 재작성
+- 검증: **180/180 PASS** · 실행은 기기 잠금 해제 필요(코드 무관)
+
+### 남은 백로그 (별도 전용 라운드 권장)
+- CoreData+CloudKit 실영속화 · App Group 위젯 실데이터 · 외부 API 실키 연동 · 온보딩→실데이터 흐름 · SPM 모듈화 · 다크모드 재정비 · Pretendard 폰트

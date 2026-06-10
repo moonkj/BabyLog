@@ -11,59 +11,101 @@
 | 항목 | 현황 |
 |---|---|
 | **화면** | 5탭 전부 실화면 완성 (홈·기록·동네·가계부·내정보) |
-| **테스트** | 171개 전량 통과 (PASS 100%) |
-| **커밋** | 8커밋 (main 브랜치) |
-| **실기기** | iPhone "Moon" (iOS 26.5.1) 설치·실행 확인 |
-| **배경색** | 흰색 `#FFFFFF` 고정 (라이트 모드, 오너 요청) |
+| **테스트** | 171개+ (라운드 8 추가분 포함, PASS 100% 유지) |
+| **커밋** | main 브랜치 지속 증가 |
+| **실기기** | iPhone "Moon" (iOS 26.5.1) 설치·실행 확인 (위젯 포함) |
+| **디자인** | 화이트 `#FFFFFF` + 딥 인디고 `#1A1B2E` + 앤티크 골드 `#C9A961` (TickLab 참고 프리미엄) |
 | **디스플레이 모드** | 라이트 모드 고정 (`UIUserInterfaceStyle=Light`) |
 | **프레임워크** | Swift/SwiftUI (iOS 26 Liquid Glass 네이티브) |
-| **WidgetKit** | 오늘 할 일·아이 요약·주변 응급 위젯 추가 예정 (라운드 7) |
+| **WidgetKit** | 오늘 할 일·아이 요약·주변 소아과 3종 위젯 완성 (라운드 7 완료) |
+| **네트워킹 인프라** | `APIClient` + `APIConfig` + Live/Mock 폴백 + 응답 파서 추가 (라운드 8) |
+| **UX 컴포넌트** | 빈상태·Skeleton 로딩·에러 핸들링 컴포넌트 일체 (라운드 8) |
 
 ### 남은 백로그 (v1 → v2 이후)
 
 - **CoreData + CloudKit** 실영속화 (현재 인메모리 + Codable 자동저장)
-- **외부 API 실연동** (질병청·카카오맵·심평원·복지로 현재 Mock 스텁)
+- **외부 API 실키 연동** — 질병청·카카오맵·심평원·복지로 실제 API 키 적용 (현재 Mock 스텁)
+- **App Group 위젯 실데이터** — WidgetKit 타깃과 앱 간 App Group 컨테이너 공유 실영속화
 - **SPM 모듈화** — BLCore·BLData·BLGrowth 등 패키지 분리
-- **다크 모드 재정비** — 배경색 `#FFFFFF` 고정 이후 다크 팔레트 토큰 재조정 필요
-- **App Group 위젯 공유** — WidgetKit 타깃과 앱 간 AppStore 데이터 공유 (App Group 컨테이너)
+- **다크 모드 재정비** — 인디고·골드 팔레트 기반 다크 토큰 전면 재조정
 - **Pretendard Variable** 폰트 번들 (현재 시스템 폰트 근사)
+- **온보딩 → 실데이터 흐름** — 온보딩 입력값을 AppStore 실데이터로 직결하는 end-to-end 파이프라인
 - **접근성 완성** — 야간 초저휘도 모드, 조부모 심플 뷰 토글
 
 ---
 
-## 라운드 7 — 배경색·엔진 UI 연결·실사진·WidgetKit (진행중 · 2026-06-10)
+## 라운드 8 — 홈 레이아웃 3안·빈상태/로딩/에러 UX·네트워킹 인프라 (완료 · 2026-06-10)
 
-> **테스트 목표**: 171개 → 예정 (위젯·UI 연결 테스트 추가 후 팀장 통합 build/test 예정)
+> **테스트**: 171개 → 171개+ (네트워킹·UX 컴포넌트 테스트 추가)
 
 ### 산출물
 
 | 파일 / 항목 | 내용 |
 |---|---|
-| `DesignSystem/AppColors.swift` 外 전 화면 | 배경색을 `#FFFFFF` (순백) 로 통일. `AppColors.background` 토큰 갱신. Liquid Glass 글래스 레이어와 대비 강화. |
-| `Features/Home/HomeScreen.swift` | `PriorityEngine` → 홈 "지금 가장 중요한 것" 카드 와이어링 완료. 엔진 출력(`PriorityItem`)을 카드 UI에 바인딩. |
-| `Features/Profile/ProfileScreen.swift` | `BadgeEngine` → 뱃지 그리드 UI 연결. 7종 뱃지 실시간 부여 반영. |
-| `Features/Profile/ProfileScreen.swift` (내보내기) | `DataExporter` → 내정보 탭 "데이터 내보내기" 버튼 진입점 연결. `ShareLink` / `UIActivityViewController` 경유 JSON 공유. |
-| `Features/QuickRecord/QuickRecordSheet.swift` | 빠른기록 시트에 **PhotosUI** `PhotosPicker` 통합 — 실기기 사진 라이브러리에서 사진 선택 후 기록 첨부. |
-| `Features/ShareCard/ShareCardView.swift` | 성장카드에 **PhotosUI** `PhotosPicker` 통합 — 아이 실사진 선택 → 카드 합성(`ImageRenderer.renderCard`). |
-| `BabyLogWidget/` (신규 타깃) | **WidgetKit** 위젯 타깃 추가. `project.yml` 에 Widget Extension 타깃 추가. |
-| `BabyLogWidget/TodayTaskWidget.swift` | "오늘 할 일" 위젯 — 임박 예방접종·기록 권유 등 PriorityEngine 상위 1건 표시. |
-| `BabyLogWidget/BabySummaryWidget.swift` | "아이 요약" 위젯 — 아이 이름·월령·최근 기록 한 줄 요약. |
-| `BabyLogWidget/NearbyEmergencyWidget.swift` | "주변 응급" 위젯 — 저장된 응급실 즐겨찾기 1건 빠른 호출. |
+| `Features/Home/HomeLayoutOption.swift` | **홈 레이아웃 3안** 정의 및 선택 로직 — ①히어로(대형 우선순위 카드 중심), ②대시보드(6종 요약 타일 그리드), ③타임라인(최근 기록 세로 스트림) |
+| `Features/Home/HomeHeroLayout.swift` | 히어로 레이아웃 구현 — PriorityEngine 최상위 1건을 풀폭 히어로 카드로 강조 |
+| `Features/Home/HomeDashboardLayout.swift` | 대시보드 레이아웃 구현 — 아이 월령·예방접종·지원금·기록 요약·날씨 등 6종 타일 2열 그리드 |
+| `Features/Home/HomeTimelineLayout.swift` | 타임라인 레이아웃 구현 — 최근 기록(사진+메모) 세로 피드, 빠른 기록 진입 FAB와 통합 |
+| `Components/EmptyStateView.swift` | **빈상태 컴포넌트** — 이미지·제목·설명·CTA 버튼 조합. 탭별 맥락 메시지 주입 지원. 기대감 UI(설레는 첫 기록 유도 문구). |
+| `Components/SkeletonView.swift` | **Skeleton 로딩 컴포넌트** — shimmer 애니메이션 적용 카드·리스트·타일 플레이스홀더. `@Environment(\.accessibilityReduceMotion)` 자동 대응. |
+| `Components/ErrorStateView.swift` | **에러 핸들링 컴포넌트** — 네트워크·데이터 에러 유형별 아이콘·메시지·재시도 버튼. Live/Mock 폴백 전환 시 UI 연속성 유지. |
+| `Networking/APIClient.swift` | **APIClient** — async/await 기반 범용 HTTP 클라이언트. `URLSession` 래퍼, 타임아웃·재시도 정책 내장. 테스트 주입 가능(`APIClientProtocol`). |
+| `Networking/APIConfig.swift` | **APIConfig** — 외부 API 엔드포인트·키·헤더 중앙 관리. 질병청·카카오맵·심평원·복지로 설정 분리. 실키 미입력 시 자동 Mock 폴백. |
+| `Networking/LiveAPIProvider.swift` | **Live 프로바이더** — 실키 환경변수 검출 시 실제 외부 API 호출 경로 활성화. |
+| `Networking/MockAPIProvider.swift` | **Mock 프로바이더** — 실키 미설정 시 자동 선택. 기존 라운드 4 Mock 스텁을 APIClient 계약으로 업그레이드. |
+| `Networking/APIResponseParser.swift` | **응답 파서** — JSONDecoder 래퍼. 외부 API별 응답 모델 디코딩·에러 변환·빈응답 처리 통합. |
 
 ### 주요 변경 사항
 
 | 항목 | 내용 |
 |---|---|
-| **배경색 #FFFFFF** | 앱 전역 배경을 순백으로 고정. 기존 회색 계열 `systemBackground` 대비 더 밝고 선명한 카드 층위 표현. |
+| **홈 레이아웃 3안** | 히어로·대시보드·타임라인 3가지 레이아웃을 사용자가 선택하거나 아이 월령에 따라 자동 추천. `AppStorage` 기반 선택 영속화. |
+| **기대감 UX 컴포넌트** | 빈상태(EmptyState)·Skeleton 로딩·에러 상태 3종 컴포넌트를 전 탭·전 화면에 통일 적용. 데이터 없음/로딩 중/에러 각 상태에서 사용자 이탈 방지 UX. |
+| **네트워킹 인프라 재정비** | 라운드 4의 임시 Mock 스텁을 `APIClient`+`APIConfig`+파서 아키텍처로 격상. Live/Mock 폴백 자동 전환으로 실키 없이도 앱 전 기능 동작. |
+| **과학적 토론(해소)** | `APIClientProtocol` 격리 → QA Mock 주입 시 URLSession 실호출 0건 보장. SkeletonView `frame` 고정 vs 동적 — 동적(`GeometryReader`) 채택으로 다양한 화면 크기 대응. |
+
+### 팀장 통합 완료
+
+- `HomeScreen.swift` 레이아웃 스위처(히어로/대시보드/타임라인) 연결 + `AppStorage` 영속화
+- EmptyStateView / SkeletonView / ErrorStateView 전 탭 진입점 일괄 삽입
+- `APIClient` + `APIConfig` → 기존 `Networking/` 스텁 교체, Live/Mock 자동 폴백 동작 확인
+- 전체 build+test PASS 확인 + iPhone 재설치
+
+---
+
+## 라운드 7 — TickLab 프리미엄 색상·엔진 UI 연결·실사진·WidgetKit (완료 · 2026-06-10)
+
+> **테스트**: 171개 전량 통과 (PASS 100%) · iPhone 위젯 포함 설치 확인
+
+### 산출물
+
+| 파일 / 항목 | 내용 |
+|---|---|
+| `DesignSystem/AppColors.swift` 外 전 화면 | **TickLab 참고 프리미엄 색상** — 배경 화이트 `#FFFFFF` + 딥 인디고 `#1A1B2E` + 앤티크 골드 `#C9A961`. 토큰 이름 유지로 전 화면 자동 반영. |
+| `Features/Home/HomeScreen.swift` | `PriorityEngine` → 홈 "지금 가장 중요한 것" 카드 와이어링 완료. 엔진 출력(`PriorityItem`)을 카드 UI에 바인딩. |
+| `Features/Profile/ProfileScreen.swift` | `BadgeEngine` → 뱃지 그리드 UI 연결. 7종 뱃지 획득/잠금 실시간 반영. |
+| `Features/Profile/ProfileScreen.swift` (내보내기) | `DataExporter` → 내정보 탭 "데이터 내보내기" 버튼 진입점 연결. `ShareLink` / `UIActivityViewController` 경유 JSON 공유. |
+| `Features/QuickRecord/QuickRecordSheet.swift` | 빠른기록 시트에 **PhotosUI** `PhotosPicker` 통합 — 실기기 사진 라이브러리에서 사진 선택 후 기록 첨부. |
+| `Features/ShareCard/ShareCardView.swift` | 성장카드에 **PhotosUI** `PhotosPicker` 통합 — 아이 실사진 선택 → 카드 합성(`ImageRenderer.renderCard`). |
+| `BabyLogWidget/` (신규 타깃) | **WidgetKit** 위젯 Extension 타깃 추가(`com.babylog.app.widget`). `project.yml` Widget Extension 타깃 추가. |
+| `BabyLogWidget/TodayTaskWidget.swift` | "오늘 할 일" 위젯 — PriorityEngine 상위 1건(임박 예방접종·기록 권유) Small/Medium. |
+| `BabyLogWidget/BabySummaryWidget.swift` | "아이 요약" 위젯 — 아이 이름·월령·최근 기록 한 줄 요약. |
+| `BabyLogWidget/NearbyEmergencyWidget.swift` | "주변 소아과" 위젯 — 저장된 즐겨찾기 1건 빠른 호출. |
+
+### 주요 변경 사항
+
+| 항목 | 내용 |
+|---|---|
+| **TickLab 프리미엄 색상** | 배경 화이트 + 딥 인디고 + 앤티크 골드 3색 체계로 전면 리스킨. 깔끔하고 고급스러운 인상. Liquid Glass 레이어와 대비 최적화. |
 | **엔진 UI 3종 연결** | 라운드 6에서 ready 상태였던 PriorityEngine·BadgeEngine·DataExporter를 각 화면에 실제 바인딩. |
-| **PhotosUI 실사진 picker** | `PHPickerViewController` 기반 `PhotosPicker` — 빠른기록 및 성장카드 두 곳에서 실기기 사진 첨부 가능. |
-| **WidgetKit 3종** | App Extension 타깃 신규 추가. 오늘 할 일·아이 요약·주변 응급 3종 위젯. App Group 데이터 공유는 후속(백로그). |
+| **PhotosUI 실사진 picker** | `PHPickerViewController` 기반 `PhotosPicker` + 다운샘플링 — 빠른기록·성장카드 두 곳에서 실기기 사진 첨부 가능. |
+| **WidgetKit 3종** | App Extension 타깃 신규 추가. 오늘 할 일·아이 요약·주변 소아과 3종 위젯. App Group 실데이터 공유는 후속(백로그). |
 
-### 팀장 통합 예정
+### 팀장 통합 완료
 
-- Widget Extension `project.yml` 타깃 추가 + App Group entitlement 기초 설정
-- 위젯 3종 빌드 검증 + 시뮬레이터 위젯 갤러리 확인
-- 전체 build+test PASS 확인 후 iPhone 재설치
+- Widget Extension `project.yml` 타깃 추가 + `Widget/Info.plist` `CFBundleIdentifier` 보강 (과학적 토론 해소)
+- 위젯 3종 빌드 검증 + iPhone 위젯 갤러리 확인
+- 전체 build+test **171/171 PASS** 확인 후 iPhone 재설치 완료
 
 ---
 
@@ -295,7 +337,8 @@
 | 라운드 4 (동네·외부API·영속화·라이트모드) | **87** | +26 (네트워킹·영속화 자동연결) |
 | 라운드 5 (가계부·내정보·임신기록·마켓·크루) | **111** | +24 (BudgetSummary·TierCalculator) |
 | 라운드 6 (알림스케줄·우선순위·뱃지·내보내기) | **171** | +60 (엔진 4종: NotificationScheduler·PriorityEngine·BadgeEngine·DataExporter) |
-| 라운드 7 (배경색·엔진 UI·실사진·WidgetKit) | **예정** | 위젯·UI 연결 테스트 추가 후 확정 |
+| 라운드 7 (TickLab 프리미엄 색상·엔진 UI·실사진·WidgetKit) | **171** | 테스트 추가 없음 (UI 연결·위젯·리스킨, 기존 171 유지) |
+| 라운드 8 (홈 레이아웃 3안·빈상태/로딩/에러·네트워킹 인프라) | **171+** | +α (APIClient·SkeletonView·EmptyState·ErrorState·파서 테스트 추가) |
 
 ---
 

@@ -184,3 +184,17 @@
 - **✅ 통합 결과**: build→test → **171/171 PASS** · iPhone 설치 완료(위젯 포함, 잠금 해제 후 실행)
 - **과학적 토론(해소)**: 위젯 임베드 번들ID 빈값 → Info.plist `CFBundleIdentifier=$(PRODUCT_BUNDLE_IDENTIFIER)` 보강
 - **디자인 방향**: 배경 화이트 + 딥 인디고 + 앤티크 골드 (깔끔·고급)
+
+### 라운드 8 (✅ 완료 · 2026-06-10) — 체감·인프라
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| coder | 홈 레이아웃 3안(히어로/대시보드/타임라인) | `Tabs` HomeTab | ✅ |
+| coder | 빈상태/로딩(Skeleton)/에러 UX 컴포넌트 | `Components/StateViews` | ✅ |
+| coder | 네트워킹 인프라(APIClient·Config·Live/Mock·파서) | `Networking` | ✅ |
+| qa | 네트워킹 인프라 테스트 | `Tests` | ✅ |
+| doc | CHANGELOG | `docs` | ✅ |
+
+- **✅ 통합 결과**: build→test → **180/180 PASS** · iPhone 재설치(잠금 해제 후 실행)
+- **과학적 토론(해소)**: 네트워킹 파서 계약 불일치(QA 루트배열 가정 ↔ 코더 공공API 래퍼+컨텍스트 인자) → 코더 현실적 파서 채택, QA 테스트 포맷-무관 재작성
+- **별도 전용 라운드 권장(무거움/리스크)**: CoreData+CloudKit 실영속화 · App Group 위젯 실데이터 · 외부 API 실키 연동 · SPM 모듈화 · 온보딩→실데이터 흐름
