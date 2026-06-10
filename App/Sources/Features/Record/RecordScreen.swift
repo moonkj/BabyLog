@@ -7,6 +7,7 @@ struct RecordScreen: View {
     @State private var segment: RecordSegment = .timeline
     @State private var growthMetric: GrowthMetric = .weight
     @State private var expandAssurance = false
+    @State private var showShareCard = false
 
     var body: some View {
         ScrollView {
@@ -39,6 +40,11 @@ struct RecordScreen: View {
             }
         }
         .background(AppColors.canvas)
+        .sheet(isPresented: $showShareCard) {
+            if let child = SampleData.children.first {
+                ShareCardView(child: child)
+            }
+        }
     }
 
     // MARK: 상단 헤더
@@ -57,7 +63,7 @@ struct RecordScreen: View {
             }
             Spacer()
             Button {
-                // 공유 액션 (추후 구현)
+                showShareCard = true
             } label: {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 17, weight: .semibold))

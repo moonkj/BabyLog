@@ -159,10 +159,12 @@ struct RecordTab: View {
 // MARK: - 동네 (주변/마켓/크루 세그먼트)
 struct DongneTab: View {
     @State private var seg = 0
+    @State private var showEmergency = false
     private let segs = ["주변", "마켓", "크루"]
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.s4) {
+        NavigationStack {
+            VStack(spacing: Spacing.s4) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("동네").font(.system(size: 24, weight: .heavy)).foregroundStyle(AppColors.ink)
@@ -170,11 +172,17 @@ struct DongneTab: View {
                             .font(AppFont.caption).foregroundStyle(AppColors.ink3)
                     }
                     Spacer()
-                    Label("응급", systemImage: "cross.case.fill")
-                        .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).frame(height: 38)
-                        .background(AppColors.danger, in: Capsule())
+                    Button { showEmergency = true } label: {
+                        Label("응급", systemImage: "cross.case.fill")
+                            .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 14).frame(height: 38)
+                            .background(AppColors.danger, in: Capsule())
+                    }
+                    .buttonStyle(LiquidPressStyle())
                 }
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, Spacing.s5)
+
                 HStack(spacing: 4) {
                     ForEach(segs.indices, id: \.self) { i in
                         Button { withAnimation(.easeOut(duration: 0.15)) { seg = i } } label: {
@@ -187,23 +195,35 @@ struct DongneTab: View {
                         .buttonStyle(LiquidPressStyle(scale: 0.97))
                     }
                 }
-                BLCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            BLBadge(tone: .mint, text: "영업중", systemIcon: "clock.fill")
-                            Spacer()
-                            Text("3분 전 확인").font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                .padding(.horizontal, Spacing.s5)
+
+                switch seg {
+                case 0:
+                    NearbyScreen()
+                default:
+                    ScrollView {
+                        BLCard {
+                            VStack(alignment: .leading, spacing: 8) {
+                                BLBadge(tone: seg == 1 ? .amber : .blue, text: "준비중")
+                                Text(seg == 1 ? "중고 마켓" : "동네 크루")
+                                    .font(AppFont.title).foregroundStyle(AppColors.ink)
+                                Text(seg == 1 ? "졸업템을 자연스럽게 — v2에서 열려요"
+                                              : "비슷한 또래 양육자 매칭 — v3에서 열려요")
+                                    .font(AppFont.caption).foregroundStyle(AppColors.ink2)
+                            }
                         }
-                        Text("행복소아과의원").font(AppFont.title).foregroundStyle(AppColors.ink)
-                        Text("도보 4분 · ★ 4.8").font(AppFont.caption).foregroundStyle(AppColors.ink2)
-                        LiquidButton(action: {}) { Label("전화하기", systemImage: "phone.fill") }
+                        .padding(Spacing.s5)
+                        Color.clear.frame(height: 96)
                     }
                 }
-                Color.clear.frame(height: 96)
             }
-            .padding(Spacing.s5)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(AppColors.canvas)
+            .toolbar(.hidden, for: .navigationBar)
+            .fullScreenCover(isPresented: $showEmergency) {
+                EmergencyScreen(onClose: { showEmergency = false })
+            }
         }
-        .background(AppColors.canvas)
     }
 }
 

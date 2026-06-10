@@ -121,3 +121,22 @@
 - **✅ 통합 결과**: `xcodegen`→build→test → **61/61 PASS**
 - **과학적 토론(해소)**: ShareCard 문자열 따옴표 미이스케이프 컴파일에러 → 수정
 - **충족**: 입력검증·EventBus 격리 ✅(디버거 과제 일부 해소). **남은 1줄 와이어링**: 성장카드 공유 진입점(기록 화면 공유 버튼) — 화면은 컴파일·available
+
+### 라운드 4 (✅ 완료 · 2026-06-10)
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| coder | 동네 주변 + 응급(다크 풀스크린) | `Features/Dongne` | ✅ |
+| coder | 외부 API 스텁(질병청·카카오맵·심평원·복지로 Mock) | `Networking` | ✅ |
+| coder | 영속화 자동연결(AppStore autosave/restore) + 샘플데이터 | `Data` | ✅ |
+| qa | 네트워킹·영속화 테스트 | `Tests` | ✅ |
+
+- **팀장 통합(Shell)**: 동네 주변→`NearbyScreen` · 응급→`EmergencyScreen`(fullScreenCover) · 성장카드 공유 진입점(기록 헤더 `.sheet`)
+- **라이트 모드 고정**: Info.plist `UIUserInterfaceStyle=Light` (오너 요청)
+- **✅ 통합 결과**: build→test → **87/87 PASS**
+- **과학적 토론(해소)**: networking `public`↔internal 타입 충돌 / `mockPlaces` 파일프라이빗 접근 → 수정
+
+### 🔌 실기기 설치 (✅ 완료)
+- iPhone "Moon"(iOS 26.5.1)에 **설치 + 실행 성공** (라이트 모드)
+- 원인 해결: 잘못된 팀 `R3K972V8DA`(계정 세션 없음) → 실제 Xcode 팀 **`QN975MTM7H`**(kyeongju Moon)로 자동 서명·`devicectl` 설치
+- 맥북 카페인 모드 ON(8h) · 앱=**아이폰 전용**(TARGETED_DEVICE_FAMILY=1, 세로 고정)

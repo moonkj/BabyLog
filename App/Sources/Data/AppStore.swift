@@ -5,8 +5,8 @@ import Combine
 
 /// 임신 → 출산 전환을 원자적으로 관리하는 인메모리 스토어.
 ///
-/// - Note: CoreData + CloudKit 영속화는 후속 인프라 단계에서 추가 예정.
-///   현재는 런타임 메모리 전용이므로 앱 재시작 시 초기화된다.
+/// - Note: `persistence` 인자를 주입하면 init 시 저장된 상태를 자동 복원하고,
+///   `enableAutoPersist()`를 호출하면 상태 변경 시 0.5s debounce 후 자동 저장된다.
 final class AppStore: ObservableObject {
 
     // MARK: Published State
@@ -17,13 +17,56 @@ final class AppStore: ObservableObject {
     // MARK: - Private
 
     private let bus: EventBus
+    private let persistence: LocalPersistence?
+    private var cancellables = Set<AnyCancellable>()
 
     // MARK: Init
 
-    init(pregnancies: [Pregnancy] = [], children: [Child] = [], bus: EventBus = .shared) {
+    /// - Parameters:
+    ///   - pregnancies: 초기 임신 목록 (기본값 `[]`)
+    ///   - children:    초기 아이 목록 (기본값 `[]`)
+    ///   - bus:         이벤트 버스 (기본값 `.shared`)
+    ///   - persistence: 로컬 영속화 헬퍼. 주입 시 init에서 저장 파일을 읽어 상태를 복원한다.
+    ///                  nil이면 영속화를 사용하지 않는다 (기존 동작 유지).
+    init(
+        pregnancies: [Pregnancy] = [],
+        children: [Child] = [],
+        bus: EventBus = .shared,
+        persistence: LocalPersistence? = nil
+    ) {
         self.pregnancies = pregnancies
         self.children = children
         self.bus = bus
+        self.persistence = persistence
+
+        // persistence가 주입된 경우 저장된 상태로 복원 (파일 없으면 무시)
+        if let persistence = persistence,
+           let saved = try? persistence.load() {
+            self.pregnancies = saved.pregnancies
+            self.children = saved.children
+        }
+    }
+
+    // MARK: - Auto Persist
+
+    /// 상태 변경을 감지해 0.5s debounce 후 자동으로 영속화한다.
+    ///
+    /// `persistence`가 nil이면 아무 동작도 하지 않는다.
+    /// 구독은 내부 `cancellables`에 보관되므로 store 생존 중 유지된다.
+    func enableAutoPersist() {
+        guard persistence != nil else { return }
+
+        // pregnancies와 children 두 Publisher를 combineLatest로 묶어
+        // 어느 한 쪽이 바뀌어도 저장이 트리거되도록 한다.
+        $pregnancies
+            .combineLatest($children)
+            .dropFirst()                          // init 시 초기값 방출 무시
+            .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
+            .sink { [weak self] _, _ in
+                guard let self else { return }
+                try? self.persistence?.save(self.snapshot())
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Persistence Convenience

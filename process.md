@@ -153,3 +153,16 @@
 
 ### 남은 와이어링
 - 성장카드 공유 진입점(기록 화면 공유 버튼) — 화면 자체는 컴파일·available, 진입 1줄
+
+---
+
+## 2026-06-10 — Phase 3 라운드 4 통합 + 실기기 설치 + 라이트모드
+
+**상태:** ✅ build+test **87/87 PASS** · iPhone 설치·실행 성공 · GitHub 푸시
+
+- **동네**(NearbyScreen + EmergencyScreen 다크 풀스크린), **외부 API 스텁**(질병청·카카오맵·심평원·복지로 Mock), **영속화 자동연결**(AppStore autosave/restore) + SampleData, qa 테스트
+- **Shell 와이어링**: 동네 주변→NearbyScreen · 응급 fullScreenCover · 성장카드 공유 진입점(기록 헤더 `.sheet`)
+- **라이트 모드 고정**(Info.plist `UIUserInterfaceStyle=Light`)
+- **과학적 토론(해소)**: networking `public`↔internal 충돌 · `mockPlaces` 파일프라이빗 접근 → 수정
+- **실기기**: 팀 `R3K972V8DA`(계정 세션 없음)→`QN975MTM7H`로 정정 후 `devicectl` 설치·실행 성공
+- 검증: `xcodebuild test` **87/87 PASS**
