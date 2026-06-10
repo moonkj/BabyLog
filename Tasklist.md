@@ -169,3 +169,18 @@
 - **팀장 통합**: 알림 권한 + 예방접종 리마인더 **앱 런치 연결**(UNPendingScheduler). PriorityEngine·BadgeEngine·DataExporter는 테스트 완료·available(UI 진입 점진 연결).
 - **✅ 통합 결과**: build→test → **171/171 PASS** · iPhone 재설치·실행
 - **과학적 토론(해소)**: PriorityItem `referenceId` 추가 · DataExport 테스트 UUID 코드 수정 · `vaccineReminders` fireDate 전역 정렬(QA 예측 적중)
+
+### 라운드 7 (✅ 완료 · 2026-06-10) — 프리미엄 리스킨 + 엔진 UI + 위젯
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| lead | **TickLab 참고 프리미엄 색상**(딥 인디고+앤티크 골드 on 화이트) | `AppColors` | ✅ |
+| coder | 엔진 UI 연결(PriorityEngine→홈·BadgeEngine→뱃지·DataExporter→내보내기) | `Tabs`·`Profile` | ✅ |
+| coder | 실사진 picker(PhotosUI) → 빠른기록·성장카드 | `Features/Shared`·`QuickRecord`·`ShareCard` | ✅ |
+| coder | WidgetKit 위젯(오늘 할일·아이 요약·주변 소아과) | `Widget/` (신규 타깃) | ✅ |
+| doc | CHANGELOG | `docs/CHANGELOG.md` | ✅ |
+
+- **팀장 통합**: 위젯 extension 타깃 `project.yml` 추가(embed) · Widget/Info.plist 번들키 보강 · 색상 토큰 리스킨
+- **✅ 통합 결과**: build→test → **171/171 PASS** · iPhone 설치 완료(위젯 포함, 잠금 해제 후 실행)
+- **과학적 토론(해소)**: 위젯 임베드 번들ID 빈값 → Info.plist `CFBundleIdentifier=$(PRODUCT_BUNDLE_IDENTIFIER)` 보강
+- **디자인 방향**: 배경 화이트 + 딥 인디고 + 앤티크 골드 (깔끔·고급)

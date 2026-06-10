@@ -195,3 +195,21 @@
 
 ### 남은 UI 연결 (엔진은 ready)
 - PriorityEngine→홈 카드 · BadgeEngine→뱃지 그리드 · DataExporter→내정보 내보내기 버튼
+
+---
+
+## 2026-06-10 — Phase 3 라운드 7 통합 (프리미엄 리스킨 + 엔진 UI + 위젯)
+
+**상태:** ✅ build+test **171/171 PASS** · iPhone 설치(위젯 포함) · GitHub 푸시
+
+- **TickLab 참고 프리미엄 색상**: 배경 화이트(#FFFFFF) + 딥 인디고(#1A1B2E) + 앤티크 골드(#C9A961) — 깔끔·고급. 토큰 이름 유지로 전 화면 자동 반영.
+- **엔진 UI 연결**: PriorityEngine→홈 우선순위 카드 · BadgeEngine→뱃지 그리드 획득/잠금 · DataExporter→내정보 "데이터 내보내기" → 공유 시트
+- **실사진 picker**(PhotosUI PhotosPicker + 다운샘플): 빠른기록 시트·성장카드 배경 실제 사진
+- **WidgetKit 위젯**(신규 extension 타깃 com.babylog.app.widget): Small/Medium — 아이 요약·오늘 할 일·주변 소아과
+- doc: CHANGELOG 갱신
+- **과학적 토론(해소)**: 위젯 임베드 번들ID 빈값 → Widget/Info.plist CFBundleIdentifier 보강 후 통과
+- 검증: 171/171 PASS, 디바이스 빌드(앱+위젯 서명) 성공·설치
+
+### 비고
+- 실행은 기기 잠금 해제 필요(FBSOpenApplicationError Locked) — 코드 무관
+- App Group(group.com.babylog.app) 위젯 실데이터 공유는 후속

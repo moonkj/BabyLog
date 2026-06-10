@@ -31,35 +31,35 @@ private func dyn(_ light: UInt32, _ dark: UInt32) -> Color {
 /// BabyLog 색상 토큰 — DESIGN.md §2·§3 / babylog-ds.css 기준 (라이트·다크 적응형)
 /// 프로덕션은 Asset Catalog named color로 이관 권장 (DESIGN.md §2.4).
 enum AppColors {
-    // Surfaces (warm ivory ↔ 진차콜)
-    static let canvas   = dyn(0xF4EFE6, 0x1A1A1C)
-    static let surface  = dyn(0xFFFFFF, 0x2A2A2D)
-    static let surface2 = dyn(0xFBF7F0, 0x222226)
-    static let surface3 = dyn(0xF0EADE, 0x303035)
+    // Surfaces — 클린 화이트 (TickLab 프리미엄 참고) / 다크는 딥 인디고
+    static let canvas   = dyn(0xFFFFFF, 0x0F1118)
+    static let surface  = dyn(0xFFFFFF, 0x171922)
+    static let surface2 = dyn(0xF7F8FA, 0x1F2230)
+    static let surface3 = dyn(0xEFF1F4, 0x2C3040)
 
-    // Ink (순수 검정 금지)
-    static let ink   = dyn(0x211D17, 0xF3EFE7)
-    static let ink2  = dyn(0x6B6256, 0xB8AFA0)
-    static let ink3  = dyn(0xA89D8C, 0x8A8175)
+    // Ink — 딥 인디고 텍스트 (순수 검정 금지)
+    static let ink   = dyn(0x1A1B2E, 0xF2F2F7)
+    static let ink2  = dyn(0x404040, 0xAEB2C2)
+    static let ink3  = dyn(0x737373, 0x7E8295)
     static let onPrimary = Color.white
 
-    // Hairlines
-    static let line  = dyn(0xE9E1D3, 0x3A3A40)
-    static let line2 = dyn(0xDBD1BF, 0x47474D)
+    // Hairlines — 뉴트럴 그레이
+    static let line  = dyn(0xE5E5E5, 0x2C3040)
+    static let line2 = dyn(0xD4D4D4, 0x3A3F52)
 
-    // Brand sage
-    static let primary      = dyn(0x4E8268, 0x8FBCA3)
-    static let primaryPress = dyn(0x3F6B55, 0x6FA386)
-    static let primarySoft  = dyn(0xDCEFE6, 0x24443A)
-    static let primaryTint  = dyn(0xE1F5EE, 0x1F3C33)
+    // Brand primary — 딥 인디고 (TickLab 시그니처)
+    static let primary      = dyn(0x1A1B2E, 0xD8B973)
+    static let primaryPress = dyn(0x2A2C4F, 0xC9A961)
+    static let primarySoft  = dyn(0xEAEAEF, 0x26283E)
+    static let primaryTint  = dyn(0xF3F3F7, 0x1F2230)
 
-    // Gold (Pro·골든 티어)
-    static let gold     = dyn(0xB0832E, 0xD7A94E)
-    static let goldTint = dyn(0xFAEEDA, 0x37301E)
+    // Accent — 앤티크 골드 (TickLab 럭셔리 시그니처 / Pro·골든 티어)
+    static let gold     = dyn(0xC9A961, 0xD8B973)
+    static let goldTint = dyn(0xFAF6E8, 0x322D1C)
 
-    // Danger (응급·리콜)
-    static let danger     = dyn(0xBE4D38, 0xE0735C)
-    static let dangerTint = dyn(0xFAE2DB, 0x38201A)
+    // Danger (응급·리콜) — 딥 레드
+    static let danger     = dyn(0xB5363A, 0xE86B6F)
+    static let dangerTint = dyn(0xF7E6E7, 0x3A211B)
 
     // 응급 모드 다크 (고정)
     static let emergencyBg     = Color(hex: 0x15110E)

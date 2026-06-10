@@ -18,6 +18,9 @@ struct QuickRecordSheet: View {
     // 이정표 선택 (다중)
     @State private var selectedMilestones: Set<String> = []
 
+    // 사진 선택
+    @State private var selectedPhoto: UIImage? = nil
+
     // 자세히 펼치기 입력
     @State private var memo: String = ""
     @State private var heightText: String = ""
@@ -138,34 +141,53 @@ struct QuickRecordSheet: View {
         .padding(.bottom, Spacing.s4)
     }
 
-    // 사진 드롭존 (PhotoPlaceholder + 카메라 아이콘 오버레이)
+    // 사진 드롭존 — PhotoPickerButton으로 실제 사진 선택 연결
     private var photoDropZone: some View {
         let dropHeight: CGFloat = showDetail ? 150 : 210
-        return Button {
-            // 사진 선택 목업: 탭 시 시각적 피드백만 (실제 picker는 팀장이 연결)
-        } label: {
+        return PhotoPickerButton(image: $selectedPhoto) {
             ZStack {
-                PhotoPlaceholder(seed: mode == .pregnancy ? 3 : 1, cornerRadius: Radius.lg)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: dropHeight)
+                // 선택된 이미지 있으면 미리보기, 없으면 플레이스홀더
+                SelectedPhotoView(
+                    image: selectedPhoto,
+                    cornerRadius: Radius.lg
+                ) {
+                    PhotoPlaceholder(seed: mode == .pregnancy ? 3 : 1, cornerRadius: Radius.lg)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: dropHeight)
 
-                VStack(spacing: Spacing.s2) {
-                    Image(systemName: photoCameraIcon)
-                        .font(.system(size: 34, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.95))
+                // 미선택 상태: 드롭존 안내 오버레이
+                if selectedPhoto == nil {
+                    VStack(spacing: Spacing.s2) {
+                        Image(systemName: photoCameraIcon)
+                            .font(.system(size: 34, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.95))
+                            .accessibilityHidden(true)
+                        Text(photoPrompt)
+                            .font(.system(size: 13.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    }
+                } else {
+                    // 선택 완료 상태: 우하단 교체 힌트
+                    Image(systemName: "photo.badge.arrow.down.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(10)
+                        .background(.black.opacity(0.35), in: Circle())
+                        .padding(10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .accessibilityHidden(true)
-                    Text(photoPrompt)
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                 }
             }
         }
         .buttonStyle(LiquidPressStyle(scale: 0.97))
         .frame(height: dropHeight)
         .accessibilityLabel(mode == .pregnancy ? "배 사진 추가 버튼" : "사진 추가 버튼")
-        .accessibilityHint("탭하여 사진을 선택합니다")
+        .accessibilityValue(selectedPhoto != nil ? "사진 선택됨" : "사진 없음")
+        .accessibilityHint("탭하여 사진 라이브러리에서 선택합니다")
         .animation(.easeInOut(duration: 0.22), value: showDetail)
+        .animation(.easeInOut(duration: 0.18), value: selectedPhoto != nil)
     }
 
     // 이정표 칩 가로 스크롤

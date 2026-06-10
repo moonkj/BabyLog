@@ -2,6 +2,32 @@ import SwiftUI
 
 // MARK: - 홈 (오늘의 한 장면) — 스크린샷 01-home 재현
 struct HomeTab: View {
+
+    // MARK: Priority Engine — 목업 입력 (PriorityEngine 연결)
+    /// scheduledDate가 오늘로부터 4일 뒤인 미완료 VaccineRecord 1건
+    private static let mockVaccines: [VaccineRecord] = {
+        let fourDaysLater = Calendar.current.date(byAdding: .day, value: 4, to: Date()) ?? Date()
+        return [
+            VaccineRecord(
+                id: UUID(),
+                childId: UUID(),
+                vaccineId: "DTaP 4차",
+                scheduledDate: fourDaysLater,
+                completedDate: nil,
+                hospital: "행복소아과"
+            )
+        ]
+    }()
+
+    private var priorityItem: PriorityItem? {
+        PriorityEngine.topPriority(
+            vaccines: Self.mockVaccines,
+            subsidies: [],
+            hasRecentRecord: false,
+            now: Date()
+        )
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s4) {
@@ -79,34 +105,45 @@ struct HomeTab: View {
             .blShadow(.card)
     }
 
+    @ViewBuilder
     private var priorityCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("지금 가장 중요해요", systemImage: "sparkles")
-                        .font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.gold)
-                    Text("DTaP 4차 접종").font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
-                    Text("지호 · 행복소아과 · 예약 권장").font(AppFont.caption).foregroundStyle(AppColors.ink2)
+        if let item = priorityItem {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("지금 가장 중요해요", systemImage: "sparkles")
+                            .font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.gold)
+                        Text(item.title)
+                            .font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
+                        Text(item.subtitle)
+                            .font(AppFont.caption).foregroundStyle(AppColors.ink2)
+                    }
+                    Spacer()
+                    if let dDay = item.dDay {
+                        Text("D-\(dDay)")
+                            .font(.system(size: 22, weight: .heavy)).foregroundStyle(AppColors.gold)
+                            .accessibilityLabel("디데이 \(dDay)일 전")
+                    }
                 }
-                Spacer()
-                Text("D-4").font(.system(size: 22, weight: .heavy)).foregroundStyle(AppColors.gold)
-            }
-            HStack(spacing: 10) {
-                LiquidButton(fill: AppColors.gold, action: {}) { Text("접종 예약하기") }
-                Button {} label: {
-                    Image(systemName: "bell.fill").font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.gold)
-                        .frame(width: 52, height: 52)
-                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                HStack(spacing: 10) {
+                    LiquidButton(fill: AppColors.gold, action: {}) { Text("접종 예약하기") }
+                    Button {} label: {
+                        Image(systemName: "bell.fill").font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppColors.gold)
+                            .frame(width: 52, height: 52)
+                            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    }
+                    .buttonStyle(LiquidPressStyle())
+                    .fixedSize()
                 }
-                .buttonStyle(LiquidPressStyle())
-                .fixedSize()
             }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            .blShadow(.card)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("우선순위 카드: \(item.title). \(item.subtitle)")
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-        .blShadow(.card)
     }
 
     private var nudgeCard: some View {

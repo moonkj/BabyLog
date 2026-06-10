@@ -11,26 +11,65 @@
 | 항목 | 현황 |
 |---|---|
 | **화면** | 5탭 전부 실화면 완성 (홈·기록·동네·가계부·내정보) |
-| **테스트** | 111개 전량 통과 (PASS 100%) |
+| **테스트** | 171개 전량 통과 (PASS 100%) |
+| **커밋** | 8커밋 (main 브랜치) |
 | **실기기** | iPhone "Moon" (iOS 26.5.1) 설치·실행 확인 |
-| **디스플레이 모드** | 라이트 모드 고정 (오너 요청, `UIUserInterfaceStyle=Light`) |
+| **배경색** | 흰색 `#FFFFFF` 고정 (라이트 모드, 오너 요청) |
+| **디스플레이 모드** | 라이트 모드 고정 (`UIUserInterfaceStyle=Light`) |
 | **프레임워크** | Swift/SwiftUI (iOS 26 Liquid Glass 네이티브) |
+| **WidgetKit** | 오늘 할 일·아이 요약·주변 응급 위젯 추가 예정 (라운드 7) |
 
 ### 남은 백로그 (v1 → v2 이후)
 
 - **CoreData + CloudKit** 실영속화 (현재 인메모리 + Codable 자동저장)
 - **외부 API 실연동** (질병청·카카오맵·심평원·복지로 현재 Mock 스텁)
-- **WidgetKit** — 오늘의 할 일·아이 요약·주변 응급 위젯
 - **SPM 모듈화** — BLCore·BLData·BLGrowth 등 패키지 분리
+- **다크 모드 재정비** — 배경색 `#FFFFFF` 고정 이후 다크 팔레트 토큰 재조정 필요
+- **App Group 위젯 공유** — WidgetKit 타깃과 앱 간 AppStore 데이터 공유 (App Group 컨테이너)
 - **Pretendard Variable** 폰트 번들 (현재 시스템 폰트 근사)
-- **다크 모드** 지원 (현재 라이트 고정)
 - **접근성 완성** — 야간 초저휘도 모드, 조부모 심플 뷰 토글
 
 ---
 
-## 라운드 6 — 알림 스케줄링·우선순위 엔진·뱃지 엔진·데이터 내보내기 (진행중 · 2026-06-10)
+## 라운드 7 — 배경색·엔진 UI 연결·실사진·WidgetKit (진행중 · 2026-06-10)
 
-> **테스트 목표**: 111개 → 예정 (엔진 4종 테스트 추가 후 팀장 통합 build/test 예정)
+> **테스트 목표**: 171개 → 예정 (위젯·UI 연결 테스트 추가 후 팀장 통합 build/test 예정)
+
+### 산출물
+
+| 파일 / 항목 | 내용 |
+|---|---|
+| `DesignSystem/AppColors.swift` 外 전 화면 | 배경색을 `#FFFFFF` (순백) 로 통일. `AppColors.background` 토큰 갱신. Liquid Glass 글래스 레이어와 대비 강화. |
+| `Features/Home/HomeScreen.swift` | `PriorityEngine` → 홈 "지금 가장 중요한 것" 카드 와이어링 완료. 엔진 출력(`PriorityItem`)을 카드 UI에 바인딩. |
+| `Features/Profile/ProfileScreen.swift` | `BadgeEngine` → 뱃지 그리드 UI 연결. 7종 뱃지 실시간 부여 반영. |
+| `Features/Profile/ProfileScreen.swift` (내보내기) | `DataExporter` → 내정보 탭 "데이터 내보내기" 버튼 진입점 연결. `ShareLink` / `UIActivityViewController` 경유 JSON 공유. |
+| `Features/QuickRecord/QuickRecordSheet.swift` | 빠른기록 시트에 **PhotosUI** `PhotosPicker` 통합 — 실기기 사진 라이브러리에서 사진 선택 후 기록 첨부. |
+| `Features/ShareCard/ShareCardView.swift` | 성장카드에 **PhotosUI** `PhotosPicker` 통합 — 아이 실사진 선택 → 카드 합성(`ImageRenderer.renderCard`). |
+| `BabyLogWidget/` (신규 타깃) | **WidgetKit** 위젯 타깃 추가. `project.yml` 에 Widget Extension 타깃 추가. |
+| `BabyLogWidget/TodayTaskWidget.swift` | "오늘 할 일" 위젯 — 임박 예방접종·기록 권유 등 PriorityEngine 상위 1건 표시. |
+| `BabyLogWidget/BabySummaryWidget.swift` | "아이 요약" 위젯 — 아이 이름·월령·최근 기록 한 줄 요약. |
+| `BabyLogWidget/NearbyEmergencyWidget.swift` | "주변 응급" 위젯 — 저장된 응급실 즐겨찾기 1건 빠른 호출. |
+
+### 주요 변경 사항
+
+| 항목 | 내용 |
+|---|---|
+| **배경색 #FFFFFF** | 앱 전역 배경을 순백으로 고정. 기존 회색 계열 `systemBackground` 대비 더 밝고 선명한 카드 층위 표현. |
+| **엔진 UI 3종 연결** | 라운드 6에서 ready 상태였던 PriorityEngine·BadgeEngine·DataExporter를 각 화면에 실제 바인딩. |
+| **PhotosUI 실사진 picker** | `PHPickerViewController` 기반 `PhotosPicker` — 빠른기록 및 성장카드 두 곳에서 실기기 사진 첨부 가능. |
+| **WidgetKit 3종** | App Extension 타깃 신규 추가. 오늘 할 일·아이 요약·주변 응급 3종 위젯. App Group 데이터 공유는 후속(백로그). |
+
+### 팀장 통합 예정
+
+- Widget Extension `project.yml` 타깃 추가 + App Group entitlement 기초 설정
+- 위젯 3종 빌드 검증 + 시뮬레이터 위젯 갤러리 확인
+- 전체 build+test PASS 확인 후 iPhone 재설치
+
+---
+
+## 라운드 6 — 알림 스케줄링·우선순위 엔진·뱃지 엔진·데이터 내보내기 (완료 · 2026-06-10)
+
+> **테스트**: 111개 → **171개** (+60, 엔진 4종 테스트 60개 추가) · build+test **171/171 PASS**
 
 ### 산출물
 
@@ -42,11 +81,11 @@
 | `Features/Profile/BadgeEngine.swift` | 활동 지표 기반 뱃지 자동 부여 엔진 (SPEC 7.3). 7종 뱃지(기록시작·30일연속·육아고수·나눔천사·거래50·첫크루·맘인플루언서). `Set<String>` 반환, 순수 함수. |
 | `Data/DataExport.swift` | 데이터 주권(CLAUDE.md) 구현체. `exportJSON` / `importJSON` 라운드트립 + `exportToTemporaryFile`. ISO 8601·prettyPrinted·sortedKeys. CoreData 전환 후 API 계약 유지 예정. |
 
-### 팀장 통합 예정
+### 팀장 통합 완료
 
-- 우선순위 엔진 → 홈 카드 와이어링
-- 알림 권한 요청 → 앱 런치 시 트리거
-- 데이터 내보내기 → 내정보 버튼 진입점
+- 알림 권한 요청 + 예방접종 리마인더 → **앱 런치 연결** (UNPendingScheduler) ✅
+- 우선순위 엔진·뱃지 엔진·데이터 내보내기 → 테스트 완료·available (UI 진입점 연결은 라운드 7)
+- 과학적 토론(해소): `PriorityItem.referenceId` 추가 · DataExport 테스트 UUID 코드 수정 · `vaccineReminders` fireDate 전역 정렬 (QA 예측 적중)
 
 ---
 
@@ -255,7 +294,8 @@
 | 라운드 3 (온보딩·빠른기록·성장카드·인프라) | **61** | +18 (검증·버스격리·영속화) |
 | 라운드 4 (동네·외부API·영속화·라이트모드) | **87** | +26 (네트워킹·영속화 자동연결) |
 | 라운드 5 (가계부·내정보·임신기록·마켓·크루) | **111** | +24 (BudgetSummary·TierCalculator) |
-| 라운드 6 (알림스케줄·우선순위·뱃지·내보내기) | **예정** | 엔진 4종 테스트 추가 후 확정 |
+| 라운드 6 (알림스케줄·우선순위·뱃지·내보내기) | **171** | +60 (엔진 4종: NotificationScheduler·PriorityEngine·BadgeEngine·DataExporter) |
+| 라운드 7 (배경색·엔진 UI·실사진·WidgetKit) | **예정** | 위젯·UI 연결 테스트 추가 후 확정 |
 
 ---
 

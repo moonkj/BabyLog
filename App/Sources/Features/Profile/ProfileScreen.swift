@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - ProfileScreen
 
@@ -9,6 +10,8 @@ struct ProfileScreen: View {
     // MARK: Mock State (실제 구현 시 ViewModel / Environment 주입)
     @State private var selectedBadgeCategory: BadgeCatalogItem.BadgeCategory? = nil
     @State private var showProDetail = false
+    @State private var exportURL: URL? = nil
+    @State private var showShareSheet = false
 
     // 샘플 프로필 데이터 (ViewModel 교체 전 하드코딩)
     private let tradeCount   = 18
@@ -20,6 +23,24 @@ struct ProfileScreen: View {
     private let nickname     = "지호님"
     private let childAge     = "16개월 아이"
     private let region       = "서울 마포구"
+
+    // MARK: BadgeEngine — 목업 활동치
+    /// BadgeEngine으로 획득 뱃지 Set 결정 (ViewModel 교체 전 목업 입력)
+    private let mockRecordCount     = 5   // 기록 시작 조건 충족
+    private let mockConsecutiveDays = 0   // streak_30 미충족
+    private let mockTradeCount      = 18  // sharing_angel(3+) 충족, trade_50 미충족
+    private let mockCrewMeetings    = 1   // first_crew 충족
+    private let mockPostLikes       = 42  // info_master(500+) 미충족
+
+    private var engineEarnedBadgeIds: Set<String> {
+        BadgeEngine.earnedBadges(
+            recordCount:     mockRecordCount,
+            consecutiveDays: mockConsecutiveDays,
+            tradeCount:      mockTradeCount,
+            crewMeetings:    mockCrewMeetings,
+            postLikes:       mockPostLikes
+        )
+    }
 
     private var currentTier: Tier {
         TierCalculator.tier(tradeCount: tradeCount, avgRating: avgRating, joinedMonths: joinedMonths)
@@ -33,9 +54,19 @@ struct ProfileScreen: View {
         TierCalculator.tradesNeededForNext(currentTier: currentTier, tradeCount: tradeCount)
     }
 
+    /// 카탈로그 항목의 isEarned를 BadgeEngine 결과로 덮어쓴 배열을 반환합니다.
+    private var resolvedCatalog: [BadgeCatalogItem] {
+        let earned = engineEarnedBadgeIds
+        return BadgeCatalogItem.sampleCatalog.map { item in
+            var copy = item
+            copy.isEarned = earned.contains(item.id)
+            return copy
+        }
+    }
+
     private var filteredBadges: [BadgeCatalogItem] {
-        guard let cat = selectedBadgeCategory else { return BadgeCatalogItem.sampleCatalog }
-        return BadgeCatalogItem.sampleCatalog.filter { $0.category == cat }
+        guard let cat = selectedBadgeCategory else { return resolvedCatalog }
+        return resolvedCatalog.filter { $0.category == cat }
     }
 
     private let badgeCategories: [BadgeCatalogItem.BadgeCategory?] =
@@ -58,6 +89,11 @@ struct ProfileScreen: View {
         .background(AppColors.canvas.ignoresSafeArea())
         .navigationTitle("내 정보")
         .navigationBarTitleDisplayMode(.large)
+        .sheet(isPresented: $showShareSheet) {
+            if let url = exportURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -144,9 +180,9 @@ struct ProfileScreen: View {
         .accessibilityLabel("티어: \(currentTier.displayName)")
     }
 
-    // 보조 뱃지 (획득한 것만 최대 3개)
+    // 보조 뱃지 (획득한 것만 최대 3개) — BadgeEngine 결과 기준
     private var auxiliaryBadges: some View {
-        let earned = BadgeCatalogItem.sampleCatalog.filter(\.isEarned).prefix(3)
+        let earned = resolvedCatalog.filter(\.isEarned).prefix(3)
         return HStack(spacing: Spacing.s2) {
             ForEach(earned) { badge in
                 BLBadge(tone: badge.tone, text: badge.name, systemIcon: badge.systemIcon, dot: false)
@@ -375,8 +411,8 @@ struct ProfileScreen: View {
 
     private var badgeCollectionSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            let earnedCount = BadgeCatalogItem.sampleCatalog.filter(\.isEarned).count
-            let totalCount  = BadgeCatalogItem.sampleCatalog.count
+            let earnedCount = resolvedCatalog.filter(\.isEarned).count
+            let totalCount  = resolvedCatalog.count
 
             BLSectionHead(
                 eyebrow: "COLLECTION",
@@ -442,7 +478,14 @@ struct ProfileScreen: View {
                         iconFg: Color(hex: 0x5B53B0),
                         title: "내 데이터 내보내기",
                         subtitle: "표준 포맷으로 언제든",
-                        showDivider: true
+                        showDivider: true,
+                        onTap: {
+                            let state = SampleData.store().snapshot()
+                            if let url = try? DataExporter.exportToTemporaryFile(state) {
+                                exportURL = url
+                                showShareSheet = true
+                            }
+                        }
                     )
                     privacyRow(
                         icon: "heart.fill",
@@ -472,7 +515,8 @@ struct ProfileScreen: View {
         iconFg: Color,
         title: String,
         subtitle: String,
-        showDivider: Bool
+        showDivider: Bool,
+        onTap: (() -> Void)? = nil
     ) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: Spacing.s3) {
@@ -504,6 +548,7 @@ struct ProfileScreen: View {
             .padding(.horizontal, Spacing.s4)
             .frame(minHeight: 64) // 44pt 이상 탭 영역 확보
             .contentShape(Rectangle())
+            .onTapGesture { onTap?() }
 
             if showDivider {
                 Divider()
@@ -586,6 +631,19 @@ private struct BadgeTileView: View {
         )
         .accessibilityAddTraits(badge.isEarned ? [] : .isStaticText)
     }
+}
+
+// MARK: - ShareSheet
+
+/// UIActivityViewController 래퍼 — 데이터 내보내기 공유 시트용
+private struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Preview

@@ -57,6 +57,9 @@ final class ShareCardViewModel: ObservableObject {
     @Published var faceBlur: Bool = false
     @Published var watermark: Bool = true
 
+    // 배경 사진 (로컬 전용 — 서버 미전송, CLAUDE.md 절대원칙)
+    @Published var backgroundPhoto: UIImage? = nil
+
     // Pro 상태 (팀장 주입 예정 — 현재는 false 고정)
     let isPro: Bool = false
 
@@ -122,6 +125,15 @@ struct ShareCardView: View {
     @State private var shareImage: UIImage? = nil
     @State private var showShareSheet = false
 
+    // 배경 사진 선택 (vm.backgroundPhoto와 동기)
+    // PhotoPickerButton의 @Binding을 vm.backgroundPhoto에 직접 연결하기 위한 래퍼
+    private var backgroundPhotoBinding: Binding<UIImage?> {
+        Binding(
+            get: { vm.backgroundPhoto },
+            set: { vm.backgroundPhoto = $0 }
+        )
+    }
+
     private let editorBg = Color(hex: 0x15110E)
     private let previewWidth: CGFloat = 300
 
@@ -163,11 +175,50 @@ struct ShareCardView: View {
 
     private var previewSection: some View {
         let h = previewWidth / vm.aspect.ratio
-        return ZStack {
-            ShareCardCanvas(vm: vm)
-                .frame(width: previewWidth, height: h)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: .black.opacity(0.5), radius: 24, x: 0, y: 12)
+        return VStack(spacing: Spacing.s4) {
+            // 카드 미리보기
+            ZStack {
+                ShareCardCanvas(vm: vm)
+                    .frame(width: previewWidth, height: h)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .shadow(color: .black.opacity(0.5), radius: 24, x: 0, y: 12)
+            }
+
+            // 배경 사진 변경 버튼 (PhotoPickerButton 연결)
+            PhotoPickerButton(image: backgroundPhotoBinding) {
+                HStack(spacing: Spacing.s2) {
+                    Image(systemName: vm.backgroundPhoto == nil
+                          ? "photo.on.rectangle.angled"
+                          : "photo.badge.arrow.down.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .accessibilityHidden(true)
+                    Text(vm.backgroundPhoto == nil ? "배경 사진 선택" : "배경 사진 변경")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(vm.backgroundPhoto == nil
+                                 ? Color.white.opacity(0.75)
+                                 : AppColors.primary)
+                .padding(.horizontal, Spacing.s5)
+                .frame(height: 44)   // 44pt 터치영역
+                .background(
+                    vm.backgroundPhoto == nil
+                        ? Color.white.opacity(0.08)
+                        : AppColors.primary.opacity(0.18),
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule()
+                        .strokeBorder(
+                            vm.backgroundPhoto == nil
+                                ? Color.white.opacity(0.15)
+                                : AppColors.primary.opacity(0.4),
+                            lineWidth: 1
+                        )
+                }
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.96))
+            .accessibilityLabel(vm.backgroundPhoto == nil ? "배경 사진 선택" : "배경 사진 변경")
+            .accessibilityHint("탭하여 사진 라이브러리에서 카드 배경 사진을 선택합니다")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.s5)
@@ -319,8 +370,16 @@ struct ShareCardCanvas: View {
 
     private func photoLayer(w: CGFloat, h: CGFloat) -> some View {
         ZStack {
-            // 사진 플레이스홀더 (실제 사진은 팀장이 profileImageRef로 교체 연결)
-            PhotoPlaceholder(seed: abs(vm.child.name.hashValue) % 6, cornerRadius: 0)
+            // 배경: 선택된 실제 이미지 우선, 없으면 플레이스홀더
+            if let photo = vm.backgroundPhoto {
+                Image(uiImage: photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: w, height: h)
+                    .clipped()
+            } else {
+                PhotoPlaceholder(seed: abs(vm.child.name.hashValue) % 6, cornerRadius: 0)
+            }
 
             // 얼굴 블러: 중앙 상단 영역에 frosted-glass 원형 마스크
             if vm.faceBlur {

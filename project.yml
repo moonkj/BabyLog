@@ -19,12 +19,26 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - App/Sources
+    dependencies:
+      - target: BabyLogWidget
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.babylog.app
         INFOPLIST_FILE: App/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_USER_SCRIPT_SANDBOXING: YES
+  BabyLogWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - Widget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.babylog.app.widget
+        INFOPLIST_FILE: Widget/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
   BabyLogTests:
     type: bundle.unit-test
     platform: iOS
