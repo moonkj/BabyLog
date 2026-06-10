@@ -64,6 +64,61 @@ struct HomeTab: View {
         return "\(amount)원"
     }
 
+    // MARK: 홈 타임라인 실데이터
+    struct HomeRecentItem: Identifiable {
+        let id: UUID
+        let badge: String?
+        let caption: String
+        let date: Date
+        let tone: BadgeTone
+        let icon: String?
+    }
+
+    /// 선택 아이의 최근 기록(다이어리+성장) 최신순 최대 5건
+    private var recentHomeRecords: [HomeRecentItem] {
+        guard let cid = selectedChild?.id else { return [] }
+        let diaries = store.diaryEntries(for: cid).map { e in
+            HomeRecentItem(
+                id: e.id,
+                badge: e.milestone,
+                caption: e.content ?? (e.recordType == "photo" ? "사진을 남겼어요" : "오늘의 기록"),
+                date: e.date,
+                tone: e.milestone != nil ? .amber : .mint,
+                icon: e.recordType == "photo" ? nil : "text.alignleft"
+            )
+        }
+        let growth = store.growthRecords(for: cid).map { g in
+            HomeRecentItem(id: g.id, badge: nil, caption: growthCaption(g),
+                           date: g.date, tone: .blue, icon: "ruler")
+        }
+        return Array((diaries + growth).sorted { $0.date > $1.date }.prefix(5))
+    }
+
+    private func growthCaption(_ g: GrowthRecord) -> String {
+        var parts: [String] = []
+        if let h = g.heightCm { parts.append("키 \(formatMeasure(h))cm") }
+        if let w = g.weightKg { parts.append("몸무게 \(formatMeasure(w))kg") }
+        if let hc = g.headCircumferenceCm { parts.append("머리둘레 \(formatMeasure(hc))cm") }
+        return parts.isEmpty ? "성장 기록" : parts.joined(separator: " · ")
+    }
+
+    private func formatMeasure(_ v: Double) -> String {
+        v == v.rounded() ? "\(Int(v))" : String(format: "%.1f", v)
+    }
+
+    private func relativeDay(_ date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "오늘" }
+        if cal.isDateInYesterday(date) { return "어제" }
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: date),
+                                      to: cal.startOfDay(for: Date())).day ?? 0
+        if days < 7 { return "\(days)일 전" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "M월 d일"
+        return f.string(from: date)
+    }
+
     // MARK: Priority Engine — 목업 입력 (PriorityEngine 연결)
     /// scheduledDate가 오늘로부터 4일 뒤인 미완료 VaccineRecord 1건
     private static let mockVaccines: [VaccineRecord] = {
@@ -220,7 +275,19 @@ struct HomeTab: View {
             priorityCard
             nudgeCard
             peerCard
-            memoryCard
+            if memoryEntry != nil { memoryCard }
+        }
+    }
+
+    /// 1년 전 오늘(±3일)의 다이어리 기록 — 있으면 추억 카드 노출
+    private var memoryEntry: DiaryEntry? {
+        guard let cid = selectedChild?.id else { return nil }
+        let cal = Calendar.current
+        guard let target = cal.date(byAdding: .year, value: -1, to: Date()) else { return nil }
+        let targetDay = cal.startOfDay(for: target)
+        return store.diaryEntries(for: cid).first { entry in
+            let d = cal.dateComponents([.day], from: cal.startOfDay(for: entry.date), to: targetDay).day ?? 99
+            return abs(d) <= 3
         }
     }
 
@@ -414,10 +481,11 @@ struct HomeTab: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
                 BLBadge(tone: .pink, text: "1년 전 오늘", systemIcon: "clock")
-                Text("처음으로 배밀이를 시작한 날 🥰")
+                Text(memoryEntry?.content ?? memoryEntry?.milestone ?? "소중한 순간을 남긴 날 🥰")
                     .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(AppColors.ink)
                     .lineSpacing(2)
+                    .lineLimit(2)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -427,7 +495,7 @@ struct HomeTab: View {
         .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .blShadow(.card)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("1년 전 오늘: 처음으로 배밀이를 시작한 날")
+        .accessibilityLabel("1년 전 오늘: \(memoryEntry?.content ?? memoryEntry?.milestone ?? "소중한 순간")")
     }
 
     // MARK: ═══════════════════════════════════
@@ -604,13 +672,21 @@ struct HomeTab: View {
             priorityCardCompact
             // 또래 이야기
             peerCard
-            // 최근 기록 섹션
+            // 최근 기록 섹션 — 선택 아이의 실 기록
             BLSectionHead(title: "최근 기록", action: "전체", onAction: { onNavigate(.record) })
-            VStack(spacing: 10) {
-                timelineRecord(seed: 1, badge: "첫 걸음마", caption: "드디어 혼자 세 걸음!", day: "오늘", tone: .mint, icon: nil)
-                timelineRecord(seed: 2, badge: nil, caption: "키 79cm · 몸무게 10.2kg", day: "어제", tone: .blue, icon: "ruler")
-                timelineRecord(seed: 3, badge: "이정표", caption: "배밀이 처음 성공한 날", day: "6월 5일", tone: .amber, icon: nil)
-                timelineRecord(seed: 4, badge: nil, caption: "DTaP 3차 접종 완료", day: "5월 28일", tone: .coral, icon: "syringe")
+            if recentHomeRecords.isEmpty {
+                BLEmptyState(
+                    icon: "camera.fill",
+                    title: "아직 기록이 없어요",
+                    message: "오른쪽 아래 버튼으로 오늘의 순간을 남겨보세요."
+                )
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(Array(recentHomeRecords.enumerated()), id: \.element.id) { idx, item in
+                        timelineRecord(seed: idx + 1, badge: item.badge, caption: item.caption,
+                                       day: relativeDay(item.date), tone: item.tone, icon: item.icon)
+                    }
+                }
             }
         }
     }
