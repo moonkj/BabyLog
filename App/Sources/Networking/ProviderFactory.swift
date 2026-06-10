@@ -65,4 +65,10 @@ enum ProviderFactory {
         }
         return MockVaccineScheduleProvider()
     }
+
+    /// 해당 키가 없어 Mock(샘플 데이터)으로 동작하는지 여부.
+    /// 화면에서 "샘플 데이터" 안내를 조건부로 노출하는 데 사용.
+    static func isMock(_ keyName: String) -> Bool {
+        APIConfig.key(keyName) == nil
+    }
 }

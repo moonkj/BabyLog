@@ -215,11 +215,6 @@ struct MarketDetailSellerCard: View {
                 }
 
                 Spacer(minLength: 0)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
-                    .accessibilityHidden(true)
             }
         }
         .accessibilityElement(children: .combine)

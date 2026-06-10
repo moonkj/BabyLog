@@ -140,6 +140,10 @@ struct MarketScreen: View {
         ZStack(alignment: .bottomTrailing) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
+                    BLSampleNote(message: "지금 매물은 샘플이에요. 동네 거래는 곧 열려요 — 친구를 초대하면 더 빨리 열려요.")
+                        .padding(.horizontal, Spacing.s5)
+                        .padding(.top, Spacing.s3)
+                        .padding(.bottom, Spacing.s2)
                     needSoonSection
                     categoryChips
                     itemList

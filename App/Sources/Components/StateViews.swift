@@ -83,6 +83,33 @@ struct BLEmptyState: View {
     }
 }
 
+// MARK: - BLSampleNote
+// 키/백엔드 미연동으로 샘플 데이터를 보여줄 때의 정직한 안내 배너.
+// "안 되는 것"이 아니라 "곧 실제 정보로 채워질" 상태임을 알린다.
+
+struct BLSampleNote: View {
+    var message: String = "지금은 샘플 데이터예요. 곧 우리 동네 실제 정보로 채워질 거예요."
+
+    var body: some View {
+        HStack(spacing: Spacing.s2) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppColors.primary)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppColors.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Spacing.s3)
+        .padding(.vertical, Spacing.s2)
+        .background(AppColors.primaryTint, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("안내: \(message)")
+    }
+}
+
 // MARK: - BLExpectationState
 // DESIGN.md §10.1 — 콜드스타트형 변형 (기대감 UI).
 // SPEC.md 14.5(기능 13.5) — 진행바·대기명단·오픈알림으로 부정적 공백 대체.

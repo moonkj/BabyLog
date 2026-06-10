@@ -435,6 +435,9 @@ struct NearbyScreen: View {
         case .loaded(let hospitals):
             let openCount = hospitals.filter(\.isOpenNow).count
             VStack(alignment: .leading, spacing: 11) {
+                if ProviderFactory.isMock(APIConfig.hiraKeyName) {
+                    BLSampleNote(message: "지금은 샘플 병원 정보예요. 공공데이터 키를 연결하면 실제 우리 동네 병원으로 채워져요.")
+                }
                 Text("현재 영업중 \(openCount)곳 · 거리순")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(AppColors.ink3)
