@@ -1,7 +1,6 @@
 // Features/Pregnancy/PregnancyRecordScreen.swift
 // BabyLog · 임신 모드 기록 탭 메인 스크린
 // SwiftUI / Swift Charts / Foundation only
-// 팀장 통합 시: AppStore / Pregnancy 모델 주입, showBirthTransition 시트 연결 확인
 
 import SwiftUI
 import Charts
@@ -9,11 +8,12 @@ import Charts
 // MARK: - 진입점
 
 /// 임신 모드 기록 탭 스크린.
-/// 목업 LMP/EDD 기반으로 단독 실행 가능.
-/// 팀장 통합 시 `pregnancy: Pregnancy`를 외부에서 주입.
+/// AppStore.activePregnancy 실데이터 우선, 없으면 목업 폴백.
 struct PregnancyRecordScreen: View {
 
-    // ── 목업 임신 데이터 ──────────────────────────────────────────────
+    @EnvironmentObject private var store: AppStore
+
+    // ── 목업 폴백 ────────────────────────────────────────────────────
     private let mockLMP: Date = Calendar.current.date(
         byAdding: .day, value: -168,
         to: Calendar.current.startOfDay(for: Date())
@@ -26,19 +26,29 @@ struct PregnancyRecordScreen: View {
 
     private let mockNickname: String = "튼튼이"
 
+    // ── 실데이터 vs 목업 ─────────────────────────────────────────────
+    private var lmp: Date  { store.activePregnancy?.lmpDate ?? mockLMP }
+    private var edd: Date  { store.activePregnancy?.eddDate ?? mockEDD }
+    private var nickname: String {
+        store.activePregnancy?.nickname?.isEmpty == false
+            ? store.activePregnancy!.nickname!
+            : mockNickname
+    }
+
     // ── 주수·D-day 계산 ─────────────────────────────────────────────
     private var pregnancyWeek: (weeks: Int, days: Int) {
-        AgeCalculator.pregnancyWeeks(lmp: mockLMP, edd: mockEDD, asOf: Date()) ?? (24, 0)
+        AgeCalculator.pregnancyWeeks(lmp: lmp, edd: edd, asOf: Date()) ?? (24, 0)
     }
 
     private var dDayToBirth: Int {
-        AgeCalculator.dDayToBirth(edd: mockEDD, asOf: Date())
+        AgeCalculator.dDayToBirth(edd: edd, asOf: Date())
     }
 
     // ── 상태 ────────────────────────────────────────────────────────
     @State private var selectedSegment: RecordSegment = .fetus
     @State private var movementCount: Int = 3
     @State private var showBirthTransition: Bool = false
+    @State private var showPauseConfirm: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -47,35 +57,152 @@ struct PregnancyRecordScreen: View {
 
                 ScrollView {
                     VStack(spacing: 0) {
-                        // ① 태아 히어로 카드
-                        heroSection
-                            .padding(.horizontal, Spacing.s5)
-                            .padding(.top, Spacing.s3)
-                            .padding(.bottom, Spacing.s3)
+                        // 상실/일시중단 상태면 안내 카드, 아니면 일반 화면
+                        if let preg = store.activePregnancy ?? store.pregnancies.first,
+                           preg.status == .loss || preg.status == .paused {
+                            pausedOrLossCard(pregnancy: preg)
+                                .padding(.horizontal, Spacing.s5)
+                                .padding(.top, Spacing.s4)
+                        } else {
+                            // ① 태아 히어로 카드
+                            heroSection
+                                .padding(.horizontal, Spacing.s5)
+                                .padding(.top, Spacing.s3)
+                                .padding(.bottom, Spacing.s3)
 
-                        // ② 세그먼트 선택
-                        segmentBar
-                            .padding(.horizontal, Spacing.s5)
-                            .padding(.bottom, Spacing.s3)
+                            // ② 세그먼트 선택
+                            segmentBar
+                                .padding(.horizontal, Spacing.s5)
+                                .padding(.bottom, Spacing.s3)
 
-                        // ③ 세그먼트 본문
-                        switch selectedSegment {
-                        case .fetus:    fetusGuideSection
-                        case .mom:      momRecordSection
-                        case .checkup:  prenatalCheckupSection
+                            // ③ 세그먼트 본문
+                            switch selectedSegment {
+                            case .fetus:    fetusGuideSection
+                            case .mom:      momRecordSection
+                            case .checkup:  prenatalCheckupSection
+                            }
+
+                            // ④ 기록 멈춤 진입점 (민감영역 — 아주 절제된 텍스트 버튼)
+                            pauseEntryButton
+                                .padding(.horizontal, Spacing.s5)
+                                .padding(.bottom, Spacing.s7)
                         }
                     }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
+            .confirmationDialog(
+                "잠시 멈춰도 괜찮아요",
+                isPresented: $showPauseConfirm,
+                titleVisibility: .visible
+            ) {
+                if let preg = pauseTargetPregnancy {
+                    Button("잠시 멈출게요") {
+                        store.updatePregnancyStatus(pregnancyId: preg.id, to: .paused)
+                    }
+                    Button("기록을 마칠게요", role: .destructive) {
+                        store.updatePregnancyStatus(pregnancyId: preg.id, to: .loss)
+                    }
+                }
+                Button("취소", role: .cancel) {}
+            } message: {
+                Text("기록은 안전히 보관돼요. 언제든 다시 시작할 수 있어요.\n'기록을 마칠게요'를 선택하면 주차 알림이 자동으로 멈춰요.")
+            }
         }
         .sheet(isPresented: $showBirthTransition) {
             BirthTransitionView {
-                // 팀장 통합 시: AppStore.commitBirthTransition 호출 후 모드 전환
                 showBirthTransition = false
             }
+            .environmentObject(store)
         }
+    }
+
+    // ── 멈춤 대상 임신 (active 우선, 없으면 첫 번째) ─────────────────
+    private var pauseTargetPregnancy: Pregnancy? {
+        store.activePregnancy ?? store.pregnancies.first
+    }
+
+    // MARK: - 기록 멈춤 진입점
+
+    private var pauseEntryButton: some View {
+        Button {
+            showPauseConfirm = true
+        } label: {
+            Text("잠시 기록을 멈추고 싶어요")
+                .font(AppFont.caption)
+                .foregroundStyle(AppColors.ink3)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("기록 멈춤 또는 종료")
+        .accessibilityHint("탭하면 기록을 일시 중단하거나 마칠 수 있어요")
+    }
+
+    // MARK: - 상실/일시중단 안내 카드
+
+    private func pausedOrLossCard(pregnancy: Pregnancy) -> some View {
+        VStack(spacing: Spacing.s4) {
+            BLCard(flat: true) {
+                VStack(spacing: Spacing.s4) {
+                    // 아이콘
+                    ZStack {
+                        Circle()
+                            .fill(AppColors.surface2)
+                            .frame(width: 72, height: 72)
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 30, weight: .light))
+                            .foregroundStyle(AppColors.ink3)
+                    }
+                    .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, Spacing.s2)
+
+                    VStack(spacing: Spacing.s2) {
+                        Text("언제든 돌아오세요")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(AppColors.ink)
+                            .multilineTextAlignment(.center)
+
+                        Text("기록은 안전히 보관돼요.\n준비가 될 때 언제든 다시 시작할 수 있어요.")
+                            .font(AppFont.callout)
+                            .foregroundStyle(AppColors.ink2)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                    }
+
+                    // 다시 시작 버튼
+                    Button {
+                        store.updatePregnancyStatus(
+                            pregnancyId: pregnancy.id,
+                            to: .active
+                        )
+                    } label: {
+                        Text("다시 시작하기")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(AppColors.pregnancyPink)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(
+                                Color(hex: 0xFBEAF0),
+                                in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                            )
+                    }
+                    .buttonStyle(LiquidPressStyle(scale: 0.97))
+                    .accessibilityLabel("기록 다시 시작하기")
+                    .accessibilityHint("탭하면 임신 기록이 다시 활성화돼요")
+
+                    Text("기존에 남긴 기록은 모두 그대로 있어요.")
+                        .font(AppFont.micro)
+                        .foregroundStyle(AppColors.ink3)
+                        .multilineTextAlignment(.center)
+                        .padding(.bottom, Spacing.s2)
+                }
+                .padding(.vertical, Spacing.s2)
+            }
+        }
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - 툴바
@@ -87,23 +214,26 @@ struct PregnancyRecordScreen: View {
                 .font(AppFont.h2)
                 .foregroundStyle(AppColors.ink)
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showBirthTransition = true
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "figure.and.child.holdinghands")
-                        .font(.system(size: 14, weight: .bold))
-                    Text("출산했어요")
-                        .font(.system(size: 13, weight: .bold))
+        // .active 상태일 때만 "출산했어요" 버튼 표시 (민감영역)
+        if store.activePregnancy != nil {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showBirthTransition = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "figure.and.child.holdinghands")
+                            .font(.system(size: 14, weight: .bold))
+                        Text("출산했어요")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .foregroundStyle(AppColors.pregnancyPink)
+                    .padding(.horizontal, 13)
+                    .frame(height: 36)
+                    .background(Color(hex: 0xFBEAF0), in: Capsule())
                 }
-                .foregroundStyle(AppColors.pregnancyPink)
-                .padding(.horizontal, 13)
-                .frame(height: 36)
-                .background(Color(hex: 0xFBEAF0), in: Capsule())
+                .accessibilityLabel("출산 전환 시작")
+                .accessibilityHint("탭하면 아이 프로필로 전환하는 시트가 열립니다")
             }
-            .accessibilityLabel("출산 전환 시작")
-            .accessibilityHint("탭하면 아이 프로필로 전환하는 시트가 열립니다")
         }
     }
 
@@ -252,7 +382,7 @@ struct PregnancyRecordScreen: View {
                         .padding(.horizontal, Spacing.s5)
                 }
             }
-            .padding(.bottom, Spacing.s7)
+            .padding(.bottom, Spacing.s4)
         }
     }
 
@@ -313,7 +443,7 @@ struct PregnancyRecordScreen: View {
 
             // 배 사진 D라인 타임라인
             bellyPhotoTimeline
-                .padding(.bottom, Spacing.s7)
+                .padding(.bottom, Spacing.s4)
         }
     }
 
@@ -455,7 +585,7 @@ struct PregnancyRecordScreen: View {
                 .foregroundStyle(AppColors.ink3)
                 .padding(.horizontal, Spacing.s5)
         }
-        .padding(.bottom, Spacing.s7)
+        .padding(.bottom, Spacing.s4)
     }
 
     // MARK: - ③-C 산전 검사
@@ -483,7 +613,7 @@ struct PregnancyRecordScreen: View {
                 .foregroundStyle(AppColors.ink3)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, Spacing.s5)
-                .padding(.bottom, Spacing.s7)
+                .padding(.bottom, Spacing.s4)
         }
     }
 
@@ -877,5 +1007,15 @@ private enum PregnancyData {
 #if DEBUG
 #Preview("임신 기록 스크린") {
     PregnancyRecordScreen()
+        .environmentObject(SampleData.store())
+}
+
+#Preview("임신 기록 — 기록 멈춤 상태") {
+    let store = SampleData.store()
+    if let preg = store.pregnancies.first {
+        store.updatePregnancyStatus(pregnancyId: preg.id, to: .paused)
+    }
+    return PregnancyRecordScreen()
+        .environmentObject(store)
 }
 #endif

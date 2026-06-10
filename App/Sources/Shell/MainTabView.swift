@@ -8,9 +8,12 @@ enum AppMode { case baby, pregnancy }
 struct MainTabView: View {
     @EnvironmentObject private var store: AppStore
     @AppStorage("bl_onboarded") private var onboarded = false
+    @AppStorage("bl_fab_side") private var fabSide = "right"
     @State private var tab: AppTab = .home
     @State private var mode: AppMode = .baby
     @State private var showQuickRecord = false
+
+    private var fabOnLeft: Bool { fabSide == "left" }
 
     var body: some View {
         Group {
@@ -23,7 +26,7 @@ struct MainTabView: View {
     }
 
     private var mainUI: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: fabOnLeft ? .bottomLeading : .bottomTrailing) {
             TabView(selection: $tab) {
                 Group {
                     if mode == .pregnancy { PregnancyHomeView() } else { HomeTab() }
@@ -48,17 +51,21 @@ struct MainTabView: View {
             }
             .tint(AppColors.primary)
 
-            // 우하단 빠른 기록 FAB (홈·기록·동네)
+            // 빠른 기록 FAB (홈·기록·동네) — 위치는 설정(bl_fab_side, 한손 조작)
             if tab == .home || tab == .record || tab == .dongne {
                 QuickRecordFAB(mode: mode, onQuickRecord: { showQuickRecord = true })
-                    .padding(.trailing, Spacing.s5)
+                    .padding(fabOnLeft ? .leading : .trailing, Spacing.s5)
                     .padding(.bottom, 92)
                     .transition(.scale.combined(with: .opacity))
             }
         }
-        // 좌하단 모드 전환 (홈에서만) — iOS26 Liquid Glass 칩
-        .overlay(alignment: .bottomLeading) {
-            if tab == .home { modeToggle.padding(.leading, Spacing.s5).padding(.bottom, 100) }
+        // 모드 전환 칩 (홈에서만, FAB 반대편) — iOS26 Liquid Glass
+        .overlay(alignment: fabOnLeft ? .bottomTrailing : .bottomLeading) {
+            if tab == .home {
+                modeToggle
+                    .padding(fabOnLeft ? .trailing : .leading, Spacing.s5)
+                    .padding(.bottom, 100)
+            }
         }
         .sheet(isPresented: $showQuickRecord) {
             QuickRecordSheet(mode: mode, onSave: {}, onClose: { showQuickRecord = false })

@@ -30,6 +30,9 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # App Group(group.com.babylog.app)는 유료 개발자 계정 + 포털 Capability 등록 필요.
+        # 계정 활성화 후 아래 라인 주석 해제하면 위젯 실데이터(공유 컨테이너)가 켜진다.
+        # CODE_SIGN_ENTITLEMENTS: App/Resources/BabyLog.entitlements
   BabyLogWidget:
     type: app-extension
     platform: iOS
@@ -41,6 +44,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.babylog.app.widget
         INFOPLIST_FILE: Widget/Info.plist
         GENERATE_INFOPLIST_FILE: NO
+        # App Group 활성화 시 주석 해제 (App 타겟과 동일 그룹)
+        # CODE_SIGN_ENTITLEMENTS: Widget/BabyLogWidget.entitlements
   BabyLogTests:
     type: bundle.unit-test
     platform: iOS

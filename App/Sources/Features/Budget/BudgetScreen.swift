@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Charts
+import Foundation
 
 // MARK: - Mock Data
 
@@ -73,6 +74,10 @@ private enum BudgetMockData {
 /// 접근성: 색+아이콘+레이블 3중 인코딩, 44pt 탭 영역, VoiceOver accessibilityLabel 전면 적용.
 struct BudgetScreen: View {
 
+    // MARK: Environment
+
+    @EnvironmentObject private var store: AppStore
+
     // MARK: State
 
     @State private var subsidies: [SubsidyInfo] = []
@@ -80,6 +85,12 @@ struct BudgetScreen: View {
     @State private var selectedMonth: Date = Date()
 
     // MARK: Computed
+
+    /// selectedChild가 있으면 실제 월령, 없으면 0
+    private var childAgeMonths: Int {
+        guard let child = store.selectedChild else { return 0 }
+        return AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: Date()).months
+    }
 
     private var currentMonthExpenses: [Expense] {
         BudgetMockData.expenses.filter { expense in
@@ -105,7 +116,9 @@ struct BudgetScreen: View {
         Array(BudgetMockData.expenses.prefix(6))
     }
 
-    private let guide = BudgetMockData.guideMessage(ageMonths: BudgetMockData.childAgeMonths)
+    private var guide: (title: String, body: String) {
+        BudgetMockData.guideMessage(ageMonths: childAgeMonths)
+    }
 
     // MARK: Body
 
@@ -150,7 +163,7 @@ struct BudgetScreen: View {
                     .accessibilityLabel("가족 공유")
                 }
             }
-            .task {
+            .task(id: store.selectedChild?.id) {
                 await loadSubsidies()
             }
         }
@@ -177,11 +190,11 @@ struct BudgetScreen: View {
             if isLoadingSubsidies {
                 subsidySkeletonView
             } else if subsidies.isEmpty {
-                Text("해당 월령에 신청 가능한 지원금 정보를 불러오는 중이에요.")
-                    .font(AppFont.callout)
-                    .foregroundStyle(AppColors.ink2)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, Spacing.s5)
+                BLEmptyState(
+                    icon: "banknote",
+                    title: "해당 월령에 지원금이 없어요",
+                    message: "아이 등록 후 월령에 맞는 지원금을\n자동으로 안내해드려요."
+                )
             } else {
                 ForEach(subsidies) { subsidy in
                     SubsidyCard(info: subsidy)
@@ -193,13 +206,21 @@ struct BudgetScreen: View {
     private var subsidySkeletonView: some View {
         VStack(spacing: Spacing.s3) {
             ForEach(0..<2, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                    .fill(AppColors.surface3)
-                    .frame(height: 88)
-                    .blShadow(.card)
+                BLCard(padding: Spacing.s4) {
+                    HStack(spacing: Spacing.s3) {
+                        BLSkeleton(width: 46, height: 46, cornerRadius: Radius.sm)
+                        VStack(alignment: .leading, spacing: Spacing.s2) {
+                            BLSkeleton(height: 14, cornerRadius: Radius.xs)
+                                .frame(maxWidth: .infinity)
+                            BLSkeleton(height: 12, cornerRadius: Radius.xs)
+                                .frame(maxWidth: 200)
+                        }
+                        .frame(maxWidth: .infinity)
+                        BLSkeleton(width: 52, height: 36, cornerRadius: 11)
+                    }
+                }
             }
         }
-        .redacted(reason: .placeholder)
     }
 
     // MARK: 2. 도넛 차트 대시보드
@@ -482,8 +503,7 @@ struct BudgetScreen: View {
     private func loadSubsidies() async {
         isLoadingSubsidies = true
         do {
-            let provider = MockSubsidyProvider()
-            let result = try await provider.subsidies(childAgeMonths: BudgetMockData.childAgeMonths)
+            let result = try await ProviderFactory.subsidy().subsidies(childAgeMonths: childAgeMonths)
             subsidies = result
         } catch {
             subsidies = []
@@ -726,6 +746,13 @@ private struct ExpenseRow: View {
 #if DEBUG
 #Preview("가계부 — 라이트") {
     BudgetScreen()
+        .environmentObject(SampleData.store())
+        .preferredColorScheme(.light)
+}
+
+#Preview("가계부 — 아이 없음") {
+    BudgetScreen()
+        .environmentObject(AppStore())
         .preferredColorScheme(.light)
 }
 #endif

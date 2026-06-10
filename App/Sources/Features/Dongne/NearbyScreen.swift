@@ -1,12 +1,16 @@
 // NearbyScreen.swift
 // BabyLog · Features/Dongne
 // DongneTab의 "주변" 세그먼트에 임베드하여 사용합니다.
-// Swift 5 / iOS 17 / SwiftUI + Foundation only
+// Swift 5 / iOS 17 / SwiftUI + MapKit + CoreLocation + Foundation
 
 import SwiftUI
+import MapKit
+import CoreLocation
 import Foundation
 
 // MARK: - Mock Data Models
+// NOTE: NearbyPlace / mockPlaces는 EmergencyScreen이 직접 참조합니다.
+//       시그니처·삭제 금지.
 
 enum PlaceCategory: String, CaseIterable {
     case hospital = "소아과"
@@ -85,41 +89,124 @@ let mockPlaces: [NearbyPlace] = [
     NearbyPlace(id: 8, name: "한강어린이공원",     category: .playground, isOpen: true,  distanceMeters: 310,  rating: 4.2, hasNightCare: false, hasHolidayCare: false, confirmedMinutesAgo: 90,  trustLevel: .medium, phone: "tel://0234568901"),
 ]
 
+// MARK: - Load State
+
+private enum HospitalLoadState {
+    case idle
+    case loading
+    case loaded([HospitalInfo])
+    case empty
+    case failed(Error)
+}
+
+// MARK: - Synthetic Coordinate Helper
+// ⚠️ HospitalInfo에 실제 좌표 필드가 없으므로, 망원동 중심 좌표에서
+//    인덱스 기반으로 소량 오프셋을 합성해 지도 Marker를 배치합니다.
+//    카카오 로컬 API의 x/y 필드 연동 후 이 함수를 교체하세요.
+
+private func syntheticCoordinate(for index: Int, center: CLLocationCoordinate2D) -> CLLocationCoordinate2D {
+    // 방사형 오프셋 — 약 200m~600m 범위, 8방향 균등 배치
+    let angleStep = (Double.pi * 2) / 8.0
+    let angle = angleStep * Double(index % 8)
+    // 위도·경도 1도 ≈ 111km → 0.005도 ≈ 555m
+    let radius = 0.002 + Double(index % 3) * 0.0015   // 0.002 ~ 0.005도
+    return CLLocationCoordinate2D(
+        latitude:  center.latitude  + radius * sin(angle),
+        longitude: center.longitude + radius * cos(angle)
+    )
+}
+
 // MARK: - NearbyScreen
 
 /// DongneTab의 "주변" 세그먼트에 임베드하는 메인 뷰.
-/// 지도 토글 자리(placeholder)를 상단에 포함합니다.
+/// 리스트/지도 토글(실제 동작), ProviderFactory 배선, BLSkeleton·BLEmptyState·BLErrorState 포함.
 struct NearbyScreen: View {
+
+    // 망원동 기준 좌표
+    private static let centerCoord = CLLocationCoordinate2D(latitude: 37.5563, longitude: 126.9101)
+
     @State private var selectedCategory: PlaceCategory = .hospital
     @State private var activeFilters: Set<String> = ["현재 영업중"]
-    @State private var showMapPlaceholder: Bool = false
+    @State private var showMap: Bool = false
+
+    // 병원 로드 상태
+    @State private var hospitalState: HospitalLoadState = .idle
+
+    // 지도 카메라 — 망원동 중심 고정
+    @State private var cameraPosition: MapCameraPosition = .region(
+        MKCoordinateRegion(
+            center: NearbyScreen.centerCoord,
+            span: MKCoordinateSpan(latitudeDelta: 0.025, longitudeDelta: 0.025)
+        )
+    )
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                mapToggleBar
-                emergencyCTA
-                categoryChips
-                filterChips
-                listSection
-                disclaimer
-                    .padding(.horizontal, Spacing.s5)
-                    .padding(.vertical, Spacing.s5)
+        Group {
+            if showMap {
+                // 지도 뷰 — 스크롤 없이 full-height
+                VStack(spacing: 0) {
+                    mapToggleBar
+                    emergencyCTA
+                    categoryChips
+                    filterChips
+                    mapView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    disclaimer
+                        .padding(.horizontal, Spacing.s5)
+                        .padding(.vertical, Spacing.s5)
+                }
+                .background(AppColors.canvas.ignoresSafeArea())
+            } else {
+                // 리스트 뷰
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        mapToggleBar
+                        emergencyCTA
+                        categoryChips
+                        filterChips
+                        listSection
+                        disclaimer
+                            .padding(.horizontal, Spacing.s5)
+                            .padding(.vertical, Spacing.s5)
+                    }
+                }
+                .background(AppColors.canvas.ignoresSafeArea())
             }
         }
-        .background(AppColors.canvas.ignoresSafeArea())
+        .task(id: activeFilters) {
+            await loadHospitals()
+        }
     }
 
-    // MARK: Map Toggle Placeholder
+    // MARK: Load Hospitals
+
+    private func loadHospitals() async {
+        guard selectedCategory == .hospital else { return }
+        hospitalState = .loading
+        let openNow = activeFilters.contains("현재 영업중")
+        do {
+            let results = try await ProviderFactory.hospital()
+                .hospitals(
+                    near: Coordinate(lat: Self.centerCoord.latitude, lng: Self.centerCoord.longitude),
+                    openNow: openNow
+                )
+            hospitalState = results.isEmpty ? .empty : .loaded(results)
+        } catch {
+            hospitalState = .failed(error)
+        }
+    }
+
+    // MARK: Map Toggle Bar
+
     private var mapToggleBar: some View {
         HStack {
             Spacer()
             HStack(spacing: 0) {
-                mapToggleButton(icon: "list.bullet", label: "리스트", isSelected: !showMapPlaceholder) {
-                    showMapPlaceholder = false
+                mapToggleButton(icon: "list.bullet", label: "리스트", isSelected: !showMap) {
+                    withAnimation(.easeInOut(duration: 0.2)) { showMap = false }
                 }
-                mapToggleButton(icon: "map", label: "지도", isSelected: showMapPlaceholder) {
-                    showMapPlaceholder = true
+                mapToggleButton(icon: "map", label: "지도", isSelected: showMap) {
+                    withAnimation(.easeInOut(duration: 0.2)) { showMap = true }
                 }
             }
             .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
@@ -151,6 +238,7 @@ struct NearbyScreen: View {
     }
 
     // MARK: Emergency CTA
+
     private var emergencyCTA: some View {
         NavigationLink {
             EmergencyScreen(onClose: { })
@@ -194,6 +282,7 @@ struct NearbyScreen: View {
     }
 
     // MARK: Category Chips
+
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s2) {
@@ -211,10 +300,10 @@ struct NearbyScreen: View {
     }
 
     // MARK: Filter Chips
+
     private var filterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
-                // 필터 아이콘 버튼 (비인터랙티브 시각 힌트)
                 HStack(spacing: 4) {
                     Image(systemName: "line.3.horizontal.decrease")
                         .font(.system(size: 13, weight: .semibold))
@@ -242,48 +331,138 @@ struct NearbyScreen: View {
         .padding(.bottom, 14)
     }
 
-    // MARK: List Section
-    private var listSection: some View {
-        let filtered = filteredPlaces
-        return VStack(alignment: .leading, spacing: 11) {
-            if showMapPlaceholder {
-                mapPlaceholder
+    // MARK: Map View (iOS 17 Map { })
+
+    @ViewBuilder
+    private var mapView: some View {
+        // ⚠️ 합성 좌표 주의: HospitalInfo에 좌표 필드 없어 인덱스 기반 오프셋 사용.
+        //    카카오 로컬 API x/y 연동 후 syntheticCoordinate() 제거하고 실제 좌표로 교체 필요.
+        let hospitals: [HospitalInfo] = {
+            if case .loaded(let list) = hospitalState { return list }
+            return []
+        }()
+
+        Map(position: $cameraPosition) {
+            // 사용자 현재 위치 표시
+            UserAnnotation()
+
+            // 병원 마커 — 합성 좌표 배치
+            // TODO: 카카오 x/y 연동 후 실 좌표 대체
+            ForEach(Array(hospitals.enumerated()), id: \.element.id) { index, hospital in
+                let coord = syntheticCoordinate(for: index, center: Self.centerCoord)
+                Marker(hospital.name, systemImage: "cross.case.fill", coordinate: coord)
+                    .tint(hospital.isOpenNow ? AppColors.primary : AppColors.ink3)
             }
+        }
+        .mapStyle(.standard(elevation: .realistic))
+        .mapControls {
+            MapUserLocationButton()
+            MapCompass()
+            MapScaleView()
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, Spacing.s5)
+        .padding(.bottom, 14)
+        .accessibilityLabel("주변 병원 지도")
+        .accessibilityHint("병원 위치가 지도에 표시됩니다")
+    }
 
-            Text("현재 영업중 \(filtered.filter(\.isOpen).count)곳 · 거리순")
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(AppColors.ink3)
-                .padding(.horizontal, 2)
+    // MARK: List Section
 
-            ForEach(filtered) { place in
-                PlaceCard(place: place)
+    private var listSection: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            // 소아과 카테고리: ProviderFactory 데이터 사용
+            if selectedCategory == .hospital {
+                hospitalListContent
+            } else {
+                // 소아과 외 카테고리: 기존 mockPlaces 기반
+                let filtered = filteredMockPlaces
+                Group {
+                    Text("현재 영업중 \(filtered.filter(\.isOpen).count)곳 · 거리순")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(AppColors.ink3)
+                        .padding(.horizontal, 2)
+                    if filtered.isEmpty {
+                        BLEmptyState(
+                            icon: "mappin.slash",
+                            title: "주변에 결과가 없어요",
+                            message: "필터를 조정하거나 다른 카테고리를 선택해 보세요."
+                        )
+                    } else {
+                        ForEach(filtered) { place in
+                            PlaceCard(place: place)
+                        }
+                    }
+                }
             }
         }
         .padding(.horizontal, Spacing.s5)
     }
 
-    private var mapPlaceholder: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(
-                    LinearGradient(colors: [Color(hex: 0xE8EDE6), Color(hex: 0xDDE6DC)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
-                .frame(height: 200)
-            VStack(spacing: 8) {
-                Image(systemName: "map.fill")
-                    .font(.system(size: 32, weight: .medium))
-                    .foregroundStyle(AppColors.primary.opacity(0.5))
-                Text("지도 보기 준비 중")
-                    .font(AppFont.caption)
+    // MARK: Hospital List Content (ProviderFactory 배선)
+
+    @ViewBuilder
+    private var hospitalListContent: some View {
+        switch hospitalState {
+        case .idle, .loading:
+            // BLSkeleton 로딩 플레이스홀더
+            VStack(spacing: 11) {
+                Text("불러오는 중...")
+                    .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(AppColors.ink3)
+                    .padding(.horizontal, 2)
+                ForEach(0..<3, id: \.self) { _ in
+                    BLCard(padding: 15) {
+                        HStack(alignment: .center, spacing: 12) {
+                            BLSkeleton(width: 48, height: 48, cornerRadius: 13)
+                            VStack(alignment: .leading, spacing: 6) {
+                                BLSkeleton(height: 14, cornerRadius: Radius.xs)
+                                    .frame(maxWidth: .infinity)
+                                BLSkeleton(width: 140, height: 12, cornerRadius: Radius.xs)
+                                BLSkeleton(width: 80, height: 10, cornerRadius: Radius.xs)
+                            }
+                            .frame(maxWidth: .infinity)
+                            BLSkeleton(width: 44, height: 44, cornerRadius: 13)
+                        }
+                    }
+                }
             }
+
+        case .loaded(let hospitals):
+            let openCount = hospitals.filter(\.isOpenNow).count
+            VStack(alignment: .leading, spacing: 11) {
+                Text("현재 영업중 \(openCount)곳 · 거리순")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(AppColors.ink3)
+                    .padding(.horizontal, 2)
+                ForEach(hospitals) { hospital in
+                    HospitalCard(hospital: hospital)
+                }
+            }
+
+        case .empty:
+            BLEmptyState(
+                icon: "cross.case",
+                title: "주변에 소아과가 없어요",
+                message: "필터를 조정하거나 잠시 후 다시 확인해 보세요.",
+                actionTitle: "필터 초기화",
+                action: {
+                    activeFilters = ["현재 영업중"]
+                }
+            )
+
+        case .failed(let error):
+            BLErrorState(
+                message: error.localizedDescription,
+                retry: {
+                    Task { await loadHospitals() }
+                }
+            )
         }
-        .padding(.bottom, 4)
-        .accessibilityLabel("지도 보기 — 준비 중")
     }
 
     // MARK: Disclaimer
+
     private var disclaimer: some View {
         Text("영업 정보는 공공데이터 기반이며 실시간과 다를 수 있어요. 방문 전 전화 확인을 권장합니다.")
             .font(.system(size: 11.5, weight: .regular))
@@ -292,8 +471,9 @@ struct NearbyScreen: View {
             .frame(maxWidth: .infinity)
     }
 
-    // MARK: Filtering Logic
-    private var filteredPlaces: [NearbyPlace] {
+    // MARK: Filtering Logic (mockPlaces 기반 — 소아과 외 카테고리용)
+
+    private var filteredMockPlaces: [NearbyPlace] {
         mockPlaces
             .filter { $0.category == selectedCategory }
             .filter { place in
@@ -310,7 +490,116 @@ struct NearbyScreen: View {
     }
 }
 
-// MARK: - PlaceCard
+// MARK: - HospitalCard (ProviderFactory HospitalInfo용)
+
+private struct HospitalCard: View {
+    let hospital: HospitalInfo
+
+    var body: some View {
+        BLCard(padding: 15) {
+            HStack(alignment: .center, spacing: 12) {
+                // 카테고리 아이콘
+                ZStack {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(Color(hex: 0xFAECE7))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "cross.case.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0xB45840))
+                }
+                .accessibilityHidden(true)
+
+                // 텍스트 정보
+                VStack(alignment: .leading, spacing: 4) {
+                    // 이름 + 영업 상태 뱃지
+                    HStack(alignment: .center, spacing: 7) {
+                        Text(hospital.name)
+                            .font(.system(size: 15.5, weight: .bold))
+                            .foregroundStyle(AppColors.ink)
+                            .lineLimit(1)
+
+                        if hospital.isOpenNow {
+                            BLBadge(tone: .mint, text: "영업중", systemIcon: nil, dot: true)
+                        } else {
+                            BLBadge(tone: .grey, text: "영업종료", systemIcon: nil, dot: false)
+                        }
+                    }
+
+                    // 거리·평점·진료과목
+                    HStack(spacing: 6) {
+                        Text("\(hospital.distanceM)m")
+                            .font(AppFont.num(12.5))
+                            .foregroundStyle(AppColors.ink2)
+
+                        Text("·").foregroundStyle(AppColors.ink3)
+
+                        HStack(spacing: 2) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(AppColors.gold)
+                            Text(String(format: "%.1f", hospital.rating))
+                                .font(AppFont.num(12.5))
+                                .foregroundStyle(AppColors.ink2)
+                        }
+
+                        Text("·").foregroundStyle(AppColors.ink3)
+
+                        Text(hospital.department)
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(AppColors.ink2)
+                            .lineLimit(1)
+                    }
+
+                    // "○분 전 확인" 뱃지
+                    BLBadge(
+                        tone: hospital.lastCheckedMinutesAgo <= 10 ? .mint : .amber,
+                        text: "\(hospital.lastCheckedMinutesAgo)분 전 확인",
+                        systemIcon: "clock",
+                        dot: false
+                    )
+                    .padding(.top, 2)
+                }
+
+                Spacer(minLength: 0)
+
+                // 전화 버튼 (44pt)
+                phoneButton
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityDescription)
+        .accessibilityHint("전화 버튼을 탭하면 전화를 겁니다")
+    }
+
+    private var phoneButton: some View {
+        Button {
+            let raw = hospital.phone
+                .replacingOccurrences(of: "-", with: "")
+            if let url = URL(string: "tel://\(raw)") {
+                UIApplication.shared.open(url)
+            }
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(AppColors.primary)
+                    .frame(width: 44, height: 44)
+                Image(systemName: "phone.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.94))
+        .accessibilityLabel("전화하기")
+        .accessibilityHint("\(hospital.name)에 전화합니다")
+    }
+
+    private var accessibilityDescription: String {
+        let status = hospital.isOpenNow ? "영업중" : "영업종료"
+        return "\(hospital.name), \(status), \(hospital.distanceM)미터, 평점 \(String(format: "%.1f", hospital.rating)), \(hospital.lastCheckedMinutesAgo)분 전 확인"
+    }
+}
+
+// MARK: - PlaceCard (mockPlaces — 소아과 외 카테고리용, EmergencyScreen 공용)
 
 private struct PlaceCard: View {
     let place: NearbyPlace

@@ -226,5 +226,33 @@
 - **✅ 통합 결과**: build→test → **214/214 PASS** (컴파일 버그 0) · iPhone 재설치
 - **완성**: 빠른기록 → AppStore 저장 → RecordScreen 타임라인/차트 실시간 반영 → 영속화(재실행 유지). 빈 상태=BLEmptyState 권유 톤. 런치스크린 브랜드 적용.
 - 다음: **B**(API 키 실연동) / **C**(CloudKit·App Group 위젯)
+
+### 라운드 11 (진행중 · 2026-06-10) — B: 지도 + 외부 API 배선
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| coder | 주변 Apple MapKit 지도(키불필요) + 병원 ProviderFactory 배선 | `Features/Dongne/NearbyScreen` | 🔵 진행 |
+| coder | 지원금(복지로)·예방접종(질병청) ProviderFactory 배선 | `Features/Budget`·`Record` | 🔵 진행 |
+| qa | ProviderFactory/APIConfig Mock 폴백 테스트 | `Tests` | 🔵 진행 |
+| doc | CHANGELOG | `docs` | 🔵 진행 |
+
+- 지도 = **Apple MapKit**(네이티브·무료) · 검색/POI = **카카오 로컬**(키 필요). 키 없으면 **Mock 자동 폴백**.
+- 🔑 카카오 REST 키: developers.kakao.com → `Info.plist`의 `KAKAO_REST_API_KEY` (주시면 Live 연결)
+- qa: ProviderFactory Mock 폴백 7 테스트 ✅
+
+### 라운드 12 (진행중 · 2026-06-10) — 남은 기능 전체 구현 (오너 지시: 키 제외 전부→리팩토링→UX/UI 고도화)
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| lead | AppStore.updatePregnancyStatus(.loss→알림차단 이벤트) | `Data/AppStore` | ✅ |
+| coder | 임신화면 실데이터 + **출산전환 실연결** + **기록멈춤**(민감영역) | `Features/Pregnancy` | 🔵 진행 |
+| coder | **설정 화면**(테마·야간모드·FAB위치·호칭·알림·데이터) + 내정보 진입 | `Features/Settings`·`Profile` | 🔵 진행 |
+| coder | **마켓 상세+채팅+판매3단계 / 크루 모임 상세+참가** | `Features/Dongne`(Market·Crew) | 🔵 진행 |
+
+### 이후 로드맵 (오너 확정)
+- 라운드 13: 위젯 App Group 실데이터 · 접종 완료체크→store · ShareCard 실측정값 · 테마 적용(셸) · 다크모드 재정비
+- 라운드 14: **리팩토링** (중복·컴포넌트 통합·구조)
+- 라운드 15: **UX/UI 고도화** (DESIGN.md §8 모션 시스템·햅틱·마이크로 인터랙션)
+- 사용자 입력 대기 항목: 카카오 REST 키(B Live 전환) · CloudKit 컨테이너(가족공유)
 - 앱 아이콘 적용 완료(커밋 9107edb)
 - **별도 전용 라운드 권장(무거움/리스크)**: CoreData+CloudKit 실영속화 · App Group 위젯 실데이터 · 외부 API 실키 연동 · SPM 모듈화 · 온보딩→실데이터 흐름

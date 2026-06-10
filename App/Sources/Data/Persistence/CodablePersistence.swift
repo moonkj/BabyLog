@@ -69,6 +69,25 @@ struct LocalPersistence {
         }
     }
 
+    // MARK: - App Group (위젯 공유)
+
+    /// 위젯과 공유하는 App Group 컨테이너의 state.json.
+    /// 엔타이틀먼트가 없으면(containerURL nil) 기본 경로로 안전 폴백.
+    /// 그룹 파일이 없고 구(Application Support) 파일이 있으면 1회 마이그레이션 복사.
+    static func appGroup(_ groupId: String = "group.com.babylog.app") -> LocalPersistence {
+        guard let container = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: groupId) else {
+            return LocalPersistence()   // 엔타이틀먼트 미적용 폴백
+        }
+        let groupURL = container.appendingPathComponent("state.json")
+        let legacy = LocalPersistence().url
+        if !FileManager.default.fileExists(atPath: groupURL.path),
+           FileManager.default.fileExists(atPath: legacy.path) {
+            try? FileManager.default.copyItem(at: legacy, to: groupURL)
+        }
+        return LocalPersistence(url: groupURL)
+    }
+
     // MARK: - Save
 
     /// 상태를 JSON 파일로 저장한다. 디렉토리가 없으면 자동 생성한다.

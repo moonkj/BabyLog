@@ -126,6 +126,18 @@ final class AppStore: ObservableObject {
         selectedChildId = child.id
     }
 
+    /// 임신 상태 변경 (민감 영역 — 상실·일시중단 포함).
+    /// `.loss` 전환 시 `pregnancyEndedInLoss` 이벤트를 발행해 권유 알림을 즉시 자동 차단한다.
+    func updatePregnancyStatus(pregnancyId: UUID, to status: PregnancyStatus) {
+        guard let idx = pregnancies.firstIndex(where: { $0.id == pregnancyId }) else { return }
+        var updated = pregnancies[idx]
+        updated.status = status
+        pregnancies[idx] = updated
+        if status == .loss {
+            bus.publish(.pregnancyEndedInLoss(pregnancyId: pregnancyId))
+        }
+    }
+
     /// 임신 온보딩 — active 임신 생성·추가.
     func startPregnancy(lmp: Date?, edd: Date?, nickname: String?) {
         let preg = Pregnancy(id: UUID(), lmpDate: lmp, eddDate: edd, fetusCount: 1,

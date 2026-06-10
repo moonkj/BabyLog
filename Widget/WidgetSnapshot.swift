@@ -73,11 +73,33 @@ struct BabyLogWidgetData {
     var urgentTaskCount: Int { tasks.filter(\.isUrgent).count }
 }
 
-// MARK: - 목업 데이터 Provider
+// MARK: - App Group 공유 상태 읽기 (앱 모듈 미참조 — 최소 디코딩)
+
+private struct SharedChild: Decodable {
+    let name: String
+    let birthDate: Date
+}
+private struct SharedState: Decodable {
+    let children: [SharedChild]
+}
 
 enum WidgetSnapshotProvider {
 
-    // TODO: App Group 연동 후 이 메서드를 공유 컨테이너 읽기로 교체
+    private static let groupId = "group.com.babylog.app"
+
+    /// App Group 컨테이너의 state.json에서 첫 아이를 읽는다. 실패 시 nil(목업 폴백).
+    private static func loadSharedChild() -> ChildSummary? {
+        guard let container = FileManager.default
+                .containerURL(forSecurityApplicationGroupIdentifier: groupId) else { return nil }
+        let url = container.appendingPathComponent("state.json")
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let state = try? decoder.decode(SharedState.self, from: data),
+              let first = state.children.first else { return nil }
+        return ChildSummary(name: first.name, birthDate: first.birthDate, latestPhotoPath: nil)
+    }
+
     static func load() -> BabyLogWidgetData {
         let today = Date()
         let cal   = Calendar.current
@@ -100,12 +122,12 @@ enum WidgetSnapshotProvider {
             )
         ]
 
-        // 아이 요약 목업 — 생후 120일 아이
+        // 아이 요약 — App Group 실데이터 우선, 없으면 목업 폴백
         let birthDate = cal.date(byAdding: .day, value: -120, to: today) ?? today
-        let child = ChildSummary(
+        let child = loadSharedChild() ?? ChildSummary(
             name: "하준",
             birthDate: birthDate,
-            latestPhotoPath: nil  // App Group 연동 전
+            latestPhotoPath: nil
         )
 
         // 주변 소아과 목업

@@ -15,6 +15,7 @@ struct ProfileScreen: View {
     @State private var showProDetail = false
     @State private var exportURL: URL? = nil
     @State private var showShareSheet = false
+    @State private var showSettings = false
 
     // 샘플 프로필 데이터 (ViewModel 교체 전 하드코딩)
     private let tradeCount   = 18
@@ -97,10 +98,24 @@ struct ProfileScreen: View {
                 ShareSheet(activityItems: [url])
             }
         }
+        // 설정 화면 — NavigationStack 외부일 경우를 대비해 .sheet 사용
+        .sheet(isPresented: $showSettings) {
+            NavigationStack {
+                SettingsScreen()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("닫기") { showSettings = false }
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.ink2)
+                        }
+                    }
+            }
+            .environmentObject(store)
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
-                    // 설정 진입 (팀장 연결)
+                    showSettings = true
                 } label: {
                     Image(systemName: "gearshape")
                         .font(.system(size: 18, weight: .medium))

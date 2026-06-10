@@ -30,7 +30,7 @@ enum CrewPostCategory: String, CaseIterable {
     }
 }
 
-enum CrewMeetupType {
+enum CrewMeetupType: Hashable {
     case park, indoor
 
     var systemIcon: String {
@@ -55,7 +55,7 @@ enum CrewMeetupType {
     }
 }
 
-struct CrewMeetup: Identifiable {
+struct CrewMeetup: Identifiable, Hashable {
     let id: Int
     let place: String
     let when: String
@@ -181,11 +181,17 @@ private struct CrewActiveContent: View {
             .padding(.horizontal, Spacing.s5)
 
             ForEach(crewMeetups) { meetup in
-                CrewMeetupCard(meetup: meetup)
-                    .padding(.horizontal, Spacing.s5)
+                NavigationLink(value: meetup) {
+                    CrewMeetupCard(meetup: meetup)
+                        .padding(.horizontal, Spacing.s5)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(.bottom, Spacing.s6)
+        .navigationDestination(for: CrewMeetup.self) { meetup in
+            CrewMeetupDetail(meetup: meetup)
+        }
     }
 
     // MARK: 비슷한 또래 크루

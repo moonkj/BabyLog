@@ -79,7 +79,7 @@ enum MarketCategory: String, CaseIterable {
     }
 }
 
-struct MarketItem: Identifiable {
+struct MarketItem: Identifiable, Hashable {
     let id: Int
     let title: String
     let category: MarketCategory
@@ -153,8 +153,8 @@ struct MarketScreen: View {
                 .padding(.bottom, Spacing.s6)
         }
         .sheet(isPresented: $showSellSheet) {
-            MkSellSheetPlaceholder()
-                .presentationDetents([.medium])
+            MkSellFlowSheet()
+                .presentationDetents([.large])
         }
         .accessibilityElement(children: .contain)
     }
@@ -232,10 +232,16 @@ struct MarketScreen: View {
                 .padding(.horizontal, 2)
 
             ForEach(filteredItems) { item in
-                MkItemCard(item: item)
+                NavigationLink(value: item) {
+                    MkItemCard(item: item)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(.horizontal, Spacing.s5)
+        .navigationDestination(for: MarketItem.self) { item in
+            MarketItemDetail(item: item)
+        }
     }
 
     // MARK: 팔기 버튼
@@ -410,59 +416,6 @@ private struct MkItemCard: View {
         let recallDesc = item.hasRecall ? ", 리콜 이력 있음" : ""
         let gradDesc = item.isGraduate ? ", 졸업템" : ""
         return "\(item.title), \(gradeDesc), \(item.monthsTag), \(priceDesc), 판매자 \(item.sellerName) \(item.sellerTier.rawValue), \(item.distanceText)\(recallDesc)\(gradDesc)"
-    }
-}
-
-// MARK: - MkSellSheetPlaceholder
-
-private struct MkSellSheetPlaceholder: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // 핸들
-            Capsule()
-                .fill(AppColors.line2)
-                .frame(width: 36, height: 5)
-                .padding(.top, 10)
-                .padding(.bottom, 20)
-                .accessibilityHidden(true)
-
-            VStack(spacing: 16) {
-                ZStack {
-                    PhotoPlaceholder(seed: 0, cornerRadius: 18)
-                        .frame(height: 160)
-                    VStack(spacing: 8) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 30, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                        Text("사진 추가 (최소 2장)")
-                            .font(.system(size: 13.5, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .shadow(radius: 2)
-                    }
-                }
-                .accessibilityLabel("사진 추가 영역")
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("무엇을 정리할까요?")
-                        .font(.system(size: 19, weight: .heavy))
-                        .foregroundStyle(AppColors.ink)
-                    Text("사진을 올리면 AI가 자동 분류해드려요.")
-                        .font(.system(size: 13.5))
-                        .foregroundStyle(AppColors.ink2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                LiquidButton(action: { dismiss() }) {
-                    Text("다음")
-                }
-                .accessibilityLabel("다음")
-            }
-            .padding(.horizontal, Spacing.s5)
-            .padding(.bottom, Spacing.s6)
-        }
-        .background(AppColors.canvas)
     }
 }
 

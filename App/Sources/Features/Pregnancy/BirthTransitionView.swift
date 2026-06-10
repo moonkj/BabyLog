@@ -1,18 +1,18 @@
 // Features/Pregnancy/BirthTransitionView.swift
 // BabyLog · 출산 전환 시트
 // SwiftUI / Foundation only
-// 팀장 통합 시: onComplete 클로저에서 AppStore.commitBirthTransition 호출
 
 import SwiftUI
 
 // MARK: - 출산 전환 뷰
 
 /// 임신 기록 → 아이 프로필 전환 시트.
-/// `onComplete` 는 부모(팀장)가 연결. 여기선 호출만 수행.
-/// 목업 태명은 팀장 통합 시 `Pregnancy.nickname` 으로 교체.
+/// `onComplete` 는 부모가 시트 dismiss 처리용으로 연결. 저장은 AppStore.commitBirthTransition 담당.
 struct BirthTransitionView: View {
 
-    /// 전환 완료 후 부모에게 알림 (저장은 AppStore 담당)
+    @EnvironmentObject private var store: AppStore
+
+    /// 전환 완료 후 부모에게 알림
     var onComplete: () -> Void
 
     // ── 입력 상태 ────────────────────────────────────────────────────
@@ -20,15 +20,21 @@ struct BirthTransitionView: View {
     @State private var birthDate: Date = Date()
     @State private var showDatePicker: Bool = false
     @State private var nameError: String? = nil
+    @State private var transitionError: String? = nil
 
     // ── 화면 단계 ────────────────────────────────────────────────────
     @State private var step: TransitionStep = .input
-
-    // ── 목업 태명 (팀장 통합 시 외부 주입) ──────────────────────────
-    private let mockNickname: String = "튼튼이"
+    @State private var createdChildName: String = ""
 
     // ── 환경 ─────────────────────────────────────────────────────────
     @Environment(\.dismiss) private var dismiss
+
+    // ── 태명 (실데이터 우선, 없으면 목업) ───────────────────────────
+    private var displayNickname: String {
+        store.activePregnancy?.nickname?.isEmpty == false
+            ? store.activePregnancy!.nickname!
+            : "튼튼이"
+    }
 
     var body: some View {
         NavigationStack {
@@ -101,7 +107,7 @@ struct BirthTransitionView: View {
                     .foregroundStyle(AppColors.ink)
                     .multilineTextAlignment(.center)
 
-                Text("\(mockNickname)의 임신 기록을\n아이 프로필로 이어드릴게요.")
+                Text("\(displayNickname)의 임신 기록을\n아이 프로필로 이어드릴게요.")
                     .font(AppFont.callout)
                     .foregroundStyle(AppColors.ink2)
                     .multilineTextAlignment(.center)
@@ -113,7 +119,7 @@ struct BirthTransitionView: View {
                 VStack(spacing: Spacing.s3) {
                     // 아이 이름
                     fieldGroup(label: "아이 이름") {
-                        TextField("\(mockNickname) (태명 또는 이름)", text: $childName)
+                        TextField("\(displayNickname) (태명 또는 이름)", text: $childName)
                             .font(AppFont.body)
                             .foregroundStyle(AppColors.ink)
                             .padding(.horizontal, Spacing.s4)
@@ -125,15 +131,29 @@ struct BirthTransitionView: View {
                             }
                             .onChange(of: childName) { _ in
                                 nameError = nil
+                                transitionError = nil
                             }
                             .submitLabel(.done)
                             .accessibilityLabel("아이 이름 입력칸")
-                            .accessibilityHint("태명 \(mockNickname) 또는 실제 이름을 입력하세요")
+                            .accessibilityHint("태명 \(displayNickname) 또는 실제 이름을 입력하세요")
                     }
 
                     if let error = nameError {
                         HStack(spacing: Spacing.s1) {
                             Image(systemName: "exclamationmark.circle")
+                                .font(.system(size: 13))
+                                .accessibilityHidden(true)
+                            Text(error)
+                                .font(AppFont.caption)
+                        }
+                        .foregroundStyle(AppColors.danger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    if let error = transitionError {
+                        HStack(spacing: Spacing.s1) {
+                            Image(systemName: "exclamationmark.triangle")
                                 .font(.system(size: 13))
                                 .accessibilityHidden(true)
                             Text(error)
@@ -193,6 +213,7 @@ struct BirthTransitionView: View {
                 .padding(.top, Spacing.s5)
                 .animation(.easeInOut(duration: 0.22), value: showDatePicker)
                 .animation(.easeInOut(duration: 0.2), value: nameError)
+                .animation(.easeInOut(duration: 0.2), value: transitionError)
 
                 // CTA 버튼
                 LiquidButton(
@@ -244,8 +265,7 @@ struct BirthTransitionView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
 
-                let trimmedName = childName.trimmingCharacters(in: .whitespacesAndNewlines)
-                Text("'\(trimmedName.isEmpty ? mockNickname : trimmedName)'의 태아 시절 기록은\n그대로 보존했어요. 이제 성장 기록으로 함께 이어가요.")
+                Text("'\(createdChildName)'의 태아 시절 기록은\n그대로 보존했어요. 이제 성장 기록으로 함께 이어가요.")
                     .font(AppFont.callout)
                     .foregroundStyle(AppColors.ink2)
                     .multilineTextAlignment(.center)
@@ -347,7 +367,7 @@ struct BirthTransitionView: View {
         }
     }
 
-    // MARK: - 전환 시도 (검증)
+    // MARK: - 전환 시도 (검증 + AppStore 연결)
 
     private func attemptTransition() {
         let trimmed = childName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -355,9 +375,40 @@ struct BirthTransitionView: View {
             withAnimation { nameError = "이름을 입력해 주세요" }
             return
         }
-        // 팀장 통합 시: AppStore.commitBirthTransition 결과로 분기
-        withAnimation(.easeInOut(duration: 0.35)) {
-            step = .celebration
+
+        // AppStore.activePregnancy가 있으면 실데이터 commitBirthTransition 호출
+        if let preg = store.activePregnancy {
+            let input = BirthTransitionInput(
+                childName: trimmed,
+                birthDate: birthDate,
+                gender: nil
+            )
+            let result = store.commitBirthTransition(pregnancyId: preg.id, input: input)
+            switch result {
+            case .success(let child):
+                store.selectedChildId = child.id
+                createdChildName = child.name
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    step = .celebration
+                }
+            case .failure(let error):
+                withAnimation {
+                    switch error {
+                    case .emptyName:
+                        nameError = "이름을 입력해 주세요"
+                    case .notActive:
+                        transitionError = "진행 중인 임신 기록을 찾을 수 없어요"
+                    case .birthDateBeforeLMP:
+                        transitionError = "출생일이 마지막 생리일보다 이전이에요. 날짜를 다시 확인해 주세요"
+                    }
+                }
+            }
+        } else {
+            // activePregnancy 없음 — 목업 모드(프리뷰/테스트)에서 동작
+            createdChildName = trimmed
+            withAnimation(.easeInOut(duration: 0.35)) {
+                step = .celebration
+            }
         }
     }
 }
@@ -374,9 +425,10 @@ private enum TransitionStep: Equatable {
 #if DEBUG
 #Preview("출산 전환 — 입력") {
     BirthTransitionView { }
+        .environmentObject(SampleData.store())
 }
-#Preview("출산 전환 — 완료") {
-    // 축하 단계는 BirthTransitionView를 열고 이름 입력 후 버튼 탭으로 진입
+#Preview("출산 전환 — 임신 없음") {
     BirthTransitionView { }
+        .environmentObject(AppStore())
 }
 #endif

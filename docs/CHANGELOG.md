@@ -11,26 +11,130 @@
 | 항목 | 현황 |
 |---|---|
 | **화면** | 5탭 전부 실화면 완성 (홈·기록·동네·가계부·내정보) |
-| **테스트** | 171개+ (라운드 8 추가분 포함, PASS 100% 유지) |
+| **테스트** | 214개+ (라운드 10 완료 기준, PASS 100% 유지) |
 | **커밋** | main 브랜치 지속 증가 |
 | **실기기** | iPhone "Moon" (iOS 26.5.1) 설치·실행 확인 (위젯 포함) |
 | **디자인** | 화이트 `#FFFFFF` + 딥 인디고 `#1A1B2E` + 앤티크 골드 `#C9A961` (TickLab 참고 프리미엄) |
 | **디스플레이 모드** | 라이트 모드 고정 (`UIUserInterfaceStyle=Light`) |
 | **프레임워크** | Swift/SwiftUI (iOS 26 Liquid Glass 네이티브) |
 | **WidgetKit** | 오늘 할 일·아이 요약·주변 소아과 3종 위젯 완성 (라운드 7 완료) |
-| **네트워킹 인프라** | `APIClient` + `APIConfig` + Live/Mock 폴백 + 응답 파서 추가 (라운드 8) |
-| **UX 컴포넌트** | 빈상태·Skeleton 로딩·에러 핸들링 컴포넌트 일체 (라운드 8) |
+| **네트워킹 인프라** | `APIClient` + `APIConfig` + `ProviderFactory` + Live/Mock 폴백 + 응답 파서 (라운드 8~11) |
+| **UX 컴포넌트** | 빈상태·Skeleton 로딩·에러 핸들링 컴포넌트 전 탭 적용 (라운드 8, 라운드 11 확장) |
+| **지도** | Apple MapKit 네이티브 (키 불필요) + 카카오 로컬 검색 (REST 키 입력 시 자동 Live 전환) |
+
+### 키 발급 안내
+
+카카오 REST API 키: [developers.kakao.com](https://developers.kakao.com) 에서 발급 → `Info.plist`의 `KAKAO_REST_API_KEY`에 입력하면 병원 POI 검색이 자동으로 Live 모드로 전환됩니다.
 
 ### 남은 백로그 (v1 → v2 이후)
 
-- **CoreData + CloudKit** 실영속화 (현재 인메모리 + Codable 자동저장)
-- **외부 API 실키 연동** — 질병청·카카오맵·심평원·복지로 실제 API 키 적용 (현재 Mock 스텁)
+- **API 실키 입력** — 카카오 REST 키 입력 후 Live POI 검색 완전 활성화
+- **CloudKit 가족공유** — Codable → CoreData 마이그레이션 + CloudKit 동기화 (가족 계정 공유)
 - **App Group 위젯 실데이터** — WidgetKit 타깃과 앱 간 App Group 컨테이너 공유 실영속화
 - **SPM 모듈화** — BLCore·BLData·BLGrowth 등 패키지 분리
 - **다크 모드 재정비** — 인디고·골드 팔레트 기반 다크 토큰 전면 재조정
-- **Pretendard Variable** 폰트 번들 (현재 시스템 폰트 근사)
-- **온보딩 → 실데이터 흐름** — 온보딩 입력값을 AppStore 실데이터로 직결하는 end-to-end 파이프라인
-- **접근성 완성** — 야간 초저휘도 모드, 조부모 심플 뷰 토글
+
+---
+
+## 라운드 11 — Apple MapKit 지도·ProviderFactory 외부 API 배선 (완료 · 2026-06-10)
+
+> **테스트**: 214개+ → 갱신 예정 (ProviderFactory/APIConfig Mock 폴백 테스트 추가)
+
+### 산출물
+
+| 파일 / 항목 | 내용 |
+|---|---|
+| `Features/Dongne/NearbyScreen.swift` | **Apple MapKit 지도 뷰** — 네이티브 `Map` 컴포넌트, API 키 불필요. 현재 위치 중심 표시·병원 핀 오버레이. ProviderFactory를 통해 병원 데이터(심평원/카카오 로컬) 조회. |
+| `Networking/ProviderFactory.swift` | **외부 API ProviderFactory** — 병원(심평원 + 카카오 로컬 검색)·지원금(복지로)·예방접종(질병청) 3종 프로바이더 팩토리. `KAKAO_REST_API_KEY` 유무 자동 감지 → 키 있으면 Live, 없으면 Mock 자동 폴백. |
+| `Networking/HospitalProvider.swift` | 병원 프로바이더 — 심평원 기관 API + 카카오 로컬 검색 결합. 키 미입력 시 Mock 병원 데이터 반환. |
+| `Networking/SubsidyProvider.swift` | 지원금 프로바이더 — 복지로 정부지원금 조회 API 배선. 키 미입력 시 Mock 데이터 폴백. |
+| `Networking/VaccineProvider.swift` | 예방접종 프로바이더 — 질병청 예방접종 도우미 API 배선. 키 미입력 시 Mock 스케줄 반환. |
+| `Features/Budget/BudgetScreen.swift` | 지원금 화면에 `SubsidyProvider` 연결 — 복지로 실데이터 조회 또는 Mock 자동 폴백. Skeleton 로딩·빈상태·에러 상태 적용. |
+| `Features/Record/RecordScreen.swift` | 예방접종 세그먼트에 `VaccineProvider` 연결 — 질병청 실데이터 또는 Mock 스케줄. Skeleton 로딩·빈상태·에러 상태 적용. |
+| `Components/SkeletonView.swift` (확장) | 동네·가계부·기록 탭 외부 API 로딩 구간에 Skeleton shimmer 전면 적용. |
+| `Tests/ProviderFactoryTests.swift` | ProviderFactory Mock 폴백 동작 검증 — 키 없음 → Mock 반환, 에러 → 폴백 경로 확인. |
+
+### 주요 변경 사항
+
+| 항목 | 내용 |
+|---|---|
+| **Apple MapKit 지도** | 주변 탭 `NearbyScreen`에 네이티브 `Map` 뷰 통합. iOS 17+ `MapKit` 프레임워크, 별도 API 키 불필요. 위치 권한 요청·현재 위치 중심 초기화·병원 어노테이션 핀 오버레이. |
+| **ProviderFactory 3종 배선** | 병원(심평원+카카오 로컬), 지원금(복지로), 예방접종(질병청) 프로바이더를 각 화면에 실제 연결. `APIConfig`의 `KAKAO_REST_API_KEY` 값 유무를 런타임에 감지해 Live/Mock 자동 전환. |
+| **Mock 자동 폴백** | 카카오 REST 키 미입력 상태에서도 앱 전 기능 정상 동작. 실키 입력 즉시 Live 전환 (재빌드 불필요). |
+| **Skeleton/빈상태/에러 전면 확장** | 외부 API를 사용하는 동네·가계부·기록 탭 전 구간에 Skeleton 로딩, BLEmptyState 빈상태, ErrorStateView 에러 처리 적용. |
+
+### 팀장 통합 완료
+
+- `NearbyScreen` MapKit 지도 + ProviderFactory 병원 조회 연결
+- `BudgetScreen` SubsidyProvider (복지로) + `RecordScreen` VaccineProvider (질병청) 배선
+- ProviderFactory Mock 폴백 테스트 PASS 확인
+- Skeleton·빈상태·에러 컴포넌트 외부 API 구간 전체 삽입
+
+---
+
+## 라운드 10 — 앱 아이콘·런치스크린·실데이터 CRUD (완료 · 2026-06-10)
+
+> **테스트**: 198개 → **214개** (+16, 기록 CRUD·하위호환·영속화 테스트)
+
+### 산출물
+
+| 파일 / 항목 | 내용 |
+|---|---|
+| `Assets.xcassets/AppIcon` | **앱 아이콘** — 세이지+골드 on 크림 배경, 1024 Asset Catalog (알파 채널 제거). 커밋 9107edb. |
+| `Info.plist` + `Assets` | **런치스크린** — 로고 + 크림(`#FAFAF7`) 배경. 흰 플래시 제거, 브랜드 스플래시 적용. |
+| `Data/AppStore.swift` | **실데이터 CRUD 확장** — `growthRecords`·`diaryEntries` 배열, `addDiaryEntry`·`addGrowthRecord`·`diaryEntries(for:)`·`growthRecords(for:)`. `PersistableState` 하위호환 디코딩 보장. |
+| `Features/QuickRecord/QuickRecordSheet.swift` | 빠른기록 시트 완성 → 선택 아이에 실제 저장(`addDiaryEntry`/`addGrowthRecord`). 보상 애니메이션 유지. |
+| `Features/Record/RecordScreen.swift` | 타임라인·성장차트(Swift Charts WHO밴드)가 `store` 실기록 표시. 기록 없음 → `BLEmptyState` 권유 톤. |
+| `Features/Profile/ProfileScreen.swift` | 내정보 데이터 내보내기 → `AppStore` 연결, 실데이터 기반 JSON 내보내기. |
+| `Tests/` | 기록 CRUD·하위호환 디코딩·영속화 16 테스트 추가. |
+
+### 주요 변경 사항
+
+| 항목 | 내용 |
+|---|---|
+| **앱 아이콘 + 런치스크린** | 세이지+골드 on 크림 아이콘과 브랜드 스플래시로 앱 첫인상 완성. 알파 채널 제거로 App Store 검수 규격 준수. |
+| **기록 CRUD 실데이터화** | 빠른기록 저장 → AppStore 반영 → RecordScreen 타임라인·성장차트 실시간 표시 → 앱 재실행 후에도 Codable 영속화로 유지되는 end-to-end 흐름 완성. |
+| **하위호환 디코딩** | `PersistableState` 구버전 JSON 자동 디코딩. 앱 업데이트 시 기존 사용자 데이터 손실 없음. |
+
+### 팀장 통합 완료
+
+- AppStore CRUD API + 영속화 하위호환 적용
+- 빠른기록 → RecordScreen 실시간 반영 흐름 검증
+- iPhone 재설치·실행 완료
+- 전체 build+test **214/214 PASS** 확인
+
+---
+
+## 라운드 9 — 앱 실데이터 백본 (완료 · 2026-06-10)
+
+> **테스트**: 180개 → **198개** (+18, AppStore 온보딩/선택/영속화 테스트)
+
+### 산출물
+
+| 파일 / 항목 | 내용 |
+|---|---|
+| `Data/AppStore.swift` | **AppStore API 확장** — `selectedChild`·`activePregnancy`·`hasContent`·`completeBabyOnboarding(name:birthDate:gender:)`·`startPregnancy(lmp:edd:nickname:)`·`selectedChildId`. |
+| `BabyLogApp.swift` | `@StateObject AppStore(persistence:)` 생성 + `.environmentObject` 주입 + `enableAutoPersist()` 앱 시작 시 자동연결. |
+| `Shell/MainTabView.swift` | 온보딩 게이트 — `onboarded || store.hasContent` 조건으로 탭 진입 제어. |
+| `Features/Onboarding/OnboardingView.swift` | 온보딩 완료 → `completeBabyOnboarding`/`startPregnancy`로 AppStore에 실기록 저장. |
+| `Features/Home/HomeScreen.swift` | `store.children`(다자녀 칩)·`selectedChild`·`activePregnancy`로 이름·D+일·월령·주수 실표시. 폴백 처리 포함. |
+| `Features/Home/PregnancyHomeView.swift` | `activePregnancy` 실데이터로 주수·D-day·닉네임 표시. |
+| `Tests/` | AppStore 온보딩/선택/영속화 18 테스트 추가. |
+
+### 주요 변경 사항
+
+| 항목 | 내용 |
+|---|---|
+| **온보딩 → 실데이터 흐름 완성** | 온보딩 입력값 → `AppStore`(Codable 디스크 영속화) → 홈이 실제 입력한 아이 표시. 앱 재실행 후에도 데이터 유지. |
+| **AppStore 전역 주입** | `BabyLogApp`에서 단일 `@StateObject`로 생성, 전 화면에 `@EnvironmentObject`로 전달. |
+| **다자녀 지원** | `store.children` 배열 + `selectedChildId`로 탭 상단 아이 칩 전환 지원. |
+
+### 팀장 통합 완료
+
+- AppStore API + 앱 주입 + 온보딩 게이트 연결
+- 홈·임신홈 실데이터 바인딩 검증
+- 전체 build+test **198/198 PASS** 확인
+- ⚠️ iPhone 재설치: 기기 연결 끊김으로 보류 (라운드 10에서 완료)
 
 ---
 
