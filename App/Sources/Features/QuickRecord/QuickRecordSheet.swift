@@ -75,6 +75,10 @@ struct QuickRecordSheet: View {
             mainContent
             if savedOverlay {
                 saveRewardOverlay
+                // 이정표 동반 저장이면 축하 버스트 (§8.3 감정 피크)
+                if !selectedMilestones.isEmpty {
+                    MilestoneBurst()
+                }
             }
         }
         // 애니메이션: 완료 오버레이 진입

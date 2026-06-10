@@ -246,7 +246,7 @@ struct BirthTransitionView: View {
     private var celebrationStep: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // 아기 아이콘
+                // 아기 아이콘 + 출산 축하 버스트 (§8.3, 상실 흐름은 이 단계에 도달하지 않음)
                 ZStack {
                     Circle()
                         .fill(AppColors.primaryTint)
@@ -254,6 +254,7 @@ struct BirthTransitionView: View {
                     Text("👶")
                         .font(.system(size: 48))
                 }
+                .overlay { MilestoneBurst() }
                 .accessibilityHidden(true)
                 .padding(.top, Spacing.s6)
                 .padding(.bottom, Spacing.s4)
@@ -388,6 +389,7 @@ struct BirthTransitionView: View {
             case .success(let child):
                 store.selectedChildId = child.id
                 createdChildName = child.name
+                Haptics.success()
                 withAnimation(.easeInOut(duration: 0.35)) {
                     step = .celebration
                 }
