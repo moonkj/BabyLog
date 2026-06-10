@@ -10,27 +10,35 @@ struct TimelineSection: View {
     @EnvironmentObject private var store: AppStore
     let child: Child
 
-    // store에서 실데이터 (date 내림차순)
-    private var diaryEntries: [DiaryEntry] {
-        store.diaryEntries
+    // store에서 실데이터 (일기 + 성장, date 내림차순 통합)
+    private var allItems: [(date: Date, item: TimelineItem)] {
+        let diaries = store.diaryEntries
             .filter { $0.childId == child.id }
-            .sorted { $0.date > $1.date }
+            .map { (date: $0.date, item: TimelineItem.diary($0)) }
+        let growth = store.growthRecords
+            .filter { $0.childId == child.id }
+            .map { (date: $0.date, item: TimelineItem.growth($0)) }
+        return (diaries + growth).sorted { $0.date > $1.date }
     }
 
-    // 날짜별 그룹
+    private var totalCount: Int { allItems.count }
+
+    // 날짜별 그룹 (최신일 우선, 일자 내 최신순)
     private var groupedItems: [(String, [TimelineItem])] {
-        var map: [String: [TimelineItem]] = [:]
         let df = DateFormatter(); df.locale = Locale(identifier: "ko_KR")
         df.dateFormat = "yyyy년 M월 d일 EEEE"
-        for e in diaryEntries {
-            let key = df.string(from: e.date)
-            map[key, default: []].append(.diary(e))
+        var order: [String] = []
+        var map: [String: [TimelineItem]] = [:]
+        for entry in allItems {   // 이미 내림차순
+            let key = df.string(from: entry.date)
+            if map[key] == nil { order.append(key) }
+            map[key, default: []].append(entry.item)
         }
-        return map.sorted { $0.key > $1.key }
+        return order.map { ($0, map[$0] ?? []) }
     }
 
     var body: some View {
-        if diaryEntries.isEmpty {
+        if allItems.isEmpty {
             BLEmptyState(
                 icon: "book.closed.fill",
                 title: "첫 기록을 남겨볼까요?",
@@ -54,7 +62,7 @@ struct TimelineSection: View {
                     }
                 }
                 // 하단 안내
-                Text("\(child.name)의 \(diaryEntries.count)개 순간이 기록되었어요 💛")
+                Text("\(child.name)의 \(totalCount)개 순간이 기록되었어요 💛")
                     .font(AppFont.caption)
                     .foregroundStyle(AppColors.ink3)
                     .frame(maxWidth: .infinity)
