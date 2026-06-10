@@ -17,6 +17,7 @@ struct SettingsScreen: View {
     @AppStorage("bl_night_dim")        private var nightDim: Bool          = false
     @AppStorage("bl_fab_side")         private var fabSide: String         = "right"
     @AppStorage("bl_caregiver_title")  private var caregiverTitle: String  = "양육자"
+    @AppStorage("bl_nickname")         private var nickname: String        = "양육자님"
 
     // MARK: Environment
 
@@ -230,6 +231,22 @@ struct SettingsScreen: View {
                 iconFg: Color(hex: 0xB5478A)
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
+                    // 프로필에 표시되는 이름 (내정보 헤더와 실연동)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("프로필 이름")
+                            .font(.system(size: 14.5, weight: .semibold))
+                            .foregroundStyle(AppColors.ink)
+                        TextField("양육자님", text: $nickname)
+                            .font(AppFont.body)
+                            .padding(.horizontal, Spacing.s3)
+                            .frame(height: 44)
+                            .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                            .submitLabel(.done)
+                            .accessibilityLabel("프로필 이름 입력")
+                    }
+
+                    Divider().background(AppColors.line)
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("나를 부르는 호칭")
                             .font(.system(size: 14.5, weight: .semibold))
