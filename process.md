@@ -1,0 +1,44 @@
+# BabyLog 구현 프로세스 로그 (process.md)
+
+> 팀장(lead)이 구현 단계가 진행될 때마다 갱신하고 git 커밋한다.
+
+---
+
+## 2026-06-10 — Phase 0: 팀 세팅 & 스펙 확인
+
+**상태:** ✅ 완료 (디자인 파일 수령 대기)
+
+### 수행 내용
+- 작업 환경 확인: 작업 폴더 비어 있음, git 미초기화, tmux 3.6a / claude CLI / git 2.52.0 사용 가능 확인
+- git 저장소 초기화 (branch: `main`)
+- 팀 조정 인프라 구축:
+  - `team/TEAM.md` — 팀 헌장 (구성·작업 사이클·협업 프로토콜·절대 원칙·기술 스택)
+  - `Tasklist.md` — 전체 진행 추적 보드 + 토론/교차영향/가설 로그
+  - `process.md` — 본 프로세스 로그
+- 스펙 정독 (팀장): `CLAUDE.md`(제품 철학·절대 원칙·민감 영역·아키텍처 규칙) + `SPEC.md`(기능 1~14 + 부록 A/B/C + 수익 로드맵)
+
+### 핵심 확인 사항 (팀장 요약)
+- 제품 한 줄: "우리 둘다 육아의 모든 것" — 임신부터 졸업까지 끊김 없는 하나의 서사
+- v1 MVP 범위: **성장 기록(기능2) + 주변 인프라(기능3)**, 8주 타임박스
+- 핵심 연결 가치: 임신기록(기능1) → 출산 전환 → 성장기록(기능2)의 데이터 연속성
+- 데이터 모델 연속성이 설계 최우선 (Pregnancy → Child 승계)
+
+### 팀원 스펙 확인 완료 (병렬, Sonnet)
+- 원본 `CLAUDE.md`/`SPEC.md`를 `/Users/kjmoon/Downloads/`에서 작업 폴더로 복사(정상 인코딩 확인)
+- tmux 대시보드 세션 `babylog` 가동 (`team/dashboard.sh`)
+- Teammate 1~4가 각자 `team/confirmations/{coder,debugger,qa,perf-doc}.md` 작성 후 보고:
+  - **Coder**: 8개 엔티티 정리, Pregnancy→Child는 `Child.pregnancyId` 외래키 승계, 상실 시 `status=.loss` 즉시 예약알림 취소. SPM: BLCore→BLData→BLGrowth/BLInfra/BLPregnancy 제안.
+  - **Debugger**: 최고위험 ①Pregnancy→Child 전환 원자성(partial migration) ②'기록 멈춤' 트리거 미정(동기화 지연 중 가족 기기 알림 도달이 가장 치명적) ③CloudKit 동시편집 무음소실.
+  - **QA**: 최우선 테스트 ①데이터 승계 ②주수/월령 계산 ③WHO 백분위+예방접종 스케줄. 원칙 충돌 2건 발견(광고/뱃지명).
+  - **Perf/Doc**: 핫스팟 ①사진 타임라인 스크롤(썸네일 캐시) ②카드 합성(2단계) ③외부 API 과호출(디바운싱·캐시). 문서 `docs/` 5분할 제안.
+
+### 팀장(아키텍트) 통합 판단
+- 수렴 발견을 `Tasklist.md` 토론/교차영향 로그 + 오픈 질문 보드(A/B/C/D)로 통합
+- **A(원칙)**: 오너 결정 대기 — v1 비차단. **B(아키텍처)**: Phase 2 팀장 확정 예정 — v1 코드 선결. **C(디자인)**: 파일 수령 후. **D(계산 컨벤션)**: 기본값 제안 + 오너 확인.
+- 핵심 선결: B1(SPM/CoreData 경계) → B2(status enum) 순으로 Phase 2 착수 시 즉시 확정 필요
+
+### 대기 중
+- **디자인 파일 수령** (사용자가 이어서 전달 예정) → Phase 1 UX 설계 착수 트리거
+
+### 다음 단계
+- 디자인 파일 수령 시 Phase 1(UX 설계) 진입 → Phase 2(아키텍처 B1~B4 확정) → Phase 3 v1 MVP 구현
