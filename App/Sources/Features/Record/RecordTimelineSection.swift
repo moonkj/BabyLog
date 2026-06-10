@@ -137,7 +137,9 @@ private struct GrowthTimelineCard: View {
 
 // 일기/이정표 카드
 private struct DiaryTimelineCard: View {
+    @EnvironmentObject private var store: AppStore
     var entry: DiaryEntry
+    @State private var showFullPhoto = false
     private var isMilestone: Bool { entry.milestone != nil }
 
     var body: some View {
@@ -155,6 +157,8 @@ private struct DiaryTimelineCard: View {
                         .frame(height: photoHeight)
                         .clipped()
                         .overlay(alignment: .topLeading) { milestoneBadge }
+                        .contentShape(Rectangle())
+                        .onTapGesture { showFullPhoto = true }
                 } else if isMilestone {
                     PhotoPlaceholder(seed: 2, cornerRadius: 0)
                         .frame(height: 180)
@@ -180,6 +184,18 @@ private struct DiaryTimelineCard: View {
             }
         }
         .accessibilityElement(children: .combine)
+        .contextMenu {
+            Button(role: .destructive) {
+                store.deleteDiaryEntry(id: entry.id)
+            } label: {
+                Label("기록 삭제", systemImage: "trash")
+            }
+        }
+        .fullScreenCover(isPresented: $showFullPhoto) {
+            if let photo {
+                FullScreenPhotoView(image: photo, onClose: { showFullPhoto = false })
+            }
+        }
     }
 
     @ViewBuilder

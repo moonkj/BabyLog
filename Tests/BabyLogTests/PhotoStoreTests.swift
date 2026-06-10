@@ -46,4 +46,13 @@ final class PhotoStoreTests: XCTestCase {
         let decoded = try JSONDecoder().decode(DiaryEntry.self, from: data)
         XCTAssertEqual(decoded.photoRef, "abc.jpg")
     }
+
+    func test_deleteDiaryEntry_removesEntry() {
+        let store = AppStore()
+        let cid = UUID()
+        store.addDiaryEntry(childId: cid, content: "오늘", milestone: nil, photoRef: nil)
+        let id = store.diaryEntries.first!.id
+        store.deleteDiaryEntry(id: id)
+        XCTAssertTrue(store.diaryEntries.isEmpty)
+    }
 }

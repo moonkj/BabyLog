@@ -340,6 +340,19 @@ final class AppStore: ObservableObject {
             .sorted { $0.date < $1.date }
     }
 
+    /// 다이어리 항목을 삭제한다. 연결된 로컬 사진도 함께 정리한다.
+    func deleteDiaryEntry(id: UUID) {
+        if let entry = diaryEntries.first(where: { $0.id == id }) {
+            PhotoStore.delete(entry.photoRef)
+        }
+        diaryEntries.removeAll { $0.id == id }
+    }
+
+    /// 성장 기록을 삭제한다.
+    func deleteGrowthRecord(id: UUID) {
+        growthRecords.removeAll { $0.id == id }
+    }
+
     // MARK: - 기록 조회
 
     /// 특정 아이의 다이어리 항목을 날짜 내림차순으로 반환한다.
