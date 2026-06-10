@@ -1,6 +1,6 @@
 // EmergencyScreen.swift
 // BabyLog · Features/Dongne
-// 응급 모드 — 다크 풀스크린, 고대비·큰 터치타깃, 새벽·불안한 부모 최적화
+// 응급 모드 — 라이트 풀스크린, 고대비·큰 터치타깃. (앱 전역 라이트 정책에 맞춰 라이트 테마)
 // Swift 5 / iOS 17 / SwiftUI + Foundation only
 
 import SwiftUI
@@ -30,7 +30,7 @@ struct EmergencyScreen: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            AppColors.emergencyBg
+            AppColors.canvas
                 .ignoresSafeArea()
 
             ScrollView(.vertical, showsIndicators: false) {
@@ -43,7 +43,6 @@ struct EmergencyScreen: View {
                 .padding(.bottom, Spacing.s8)
             }
         }
-        .preferredColorScheme(.dark)
         .accessibilityElement(children: .contain)
     }
 
@@ -57,18 +56,18 @@ struct EmergencyScreen: View {
                     Text("응급 모드")
                         .font(.system(size: 13, weight: .bold))
                         .tracking(0.6)
-                        .foregroundStyle(AppColors.emergencyAccent)
+                        .foregroundStyle(AppColors.danger)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("응급 모드 활성")
 
                 Text("지금 갈 수 있는 곳")
                     .font(.system(size: 27, weight: .heavy))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(AppColors.ink)
 
                 Text("현재 영업중 · 거리순 · 마지막 확인 \(lastCheckedAt)")
                     .font(.system(size: 13.5, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.55))
+                    .foregroundStyle(AppColors.ink3)
             }
 
             Spacer()
@@ -77,11 +76,11 @@ struct EmergencyScreen: View {
             Button(action: onClose) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(AppColors.surface2)
                         .frame(width: 44, height: 44)
                     Image(systemName: "xmark")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(AppColors.ink2)
                 }
             }
             .buttonStyle(LiquidPressStyle(scale: 0.93))
@@ -111,10 +110,10 @@ struct EmergencyScreen: View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 36))
-                .foregroundStyle(AppColors.emergencyAccent)
+                .foregroundStyle(AppColors.danger)
             Text("현재 영업 중인 소아과를 찾을 수 없어요.\n아래 119 상담 버튼을 이용하세요.")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.8))
+                .foregroundStyle(AppColors.ink2)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -132,16 +131,17 @@ struct EmergencyScreen: View {
             HStack(spacing: 10) {
                 Image(systemName: "phone.fill")
                     .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(AppColors.danger)
                 Text("119 구급 상담")
                     .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(AppColors.ink)
             }
-            .foregroundStyle(Color.white.opacity(0.9))
             .frame(maxWidth: .infinity, minHeight: 56)
-            .background(Color.white.opacity(0.08),
+            .background(AppColors.surface,
                         in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    .stroke(AppColors.danger.opacity(0.35), lineWidth: 1.5)
             }
         }
         .buttonStyle(LiquidPressStyle(scale: 0.97))
@@ -155,7 +155,7 @@ struct EmergencyScreen: View {
     private var disclaimerView: some View {
         Text("위급 상황 시 망설이지 말고 119에 연락하세요. 영업 정보는 실시간과 다를 수 있어 전화 확인이 가장 정확합니다.")
             .font(.system(size: 12, weight: .regular))
-            .foregroundStyle(Color.white.opacity(0.4))
+            .foregroundStyle(AppColors.ink3)
             .multilineTextAlignment(.center)
             .padding(.horizontal, Spacing.s5)
             .padding(.top, Spacing.s2)
@@ -175,23 +175,23 @@ private struct EmergencyPlaceCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(place.name)
                         .font(.system(size: 21, weight: .heavy))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(AppColors.ink)
 
                     HStack(spacing: 10) {
                         Label {
                             Text("\(place.distanceMeters)m")
                                 .font(AppFont.num(15))
-                                .foregroundStyle(Color.white.opacity(0.75))
+                                .foregroundStyle(AppColors.ink2)
                         } icon: {
                             Image(systemName: "figure.walk")
                                 .font(.system(size: 13))
-                                .foregroundStyle(Color.white.opacity(0.6))
+                                .foregroundStyle(AppColors.ink3)
                         }
 
                         if place.hasNightCare {
                             Text("야간진료")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Color(hex: 0xA9C8FF))
+                                .foregroundStyle(Color(hex: 0x3B6FA8))
                         }
                     }
 
@@ -202,11 +202,10 @@ private struct EmergencyPlaceCard: View {
                         Text("\(place.confirmedMinutesAgo)분 전 확인 · 전화로 다시 확인하세요")
                             .font(.system(size: 12.5, weight: .medium))
                     }
-                    .foregroundStyle(Color.white.opacity(0.65))
+                    .foregroundStyle(AppColors.ink2)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.08),
-                                in: Capsule())
+                    .background(AppColors.surface2, in: Capsule())
                     .accessibilityLabel("\(place.confirmedMinutesAgo)분 전 확인. 전화로 다시 확인하세요.")
                 }
 
@@ -215,10 +214,10 @@ private struct EmergencyPlaceCard: View {
                 if isNearest {
                     Text("가장 가까움")
                         .font(.system(size: 11, weight: .heavy))
-                        .foregroundStyle(Color(hex: 0x15110E))
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
-                        .background(AppColors.emergencyAccent, in: Capsule())
+                        .background(AppColors.danger, in: Capsule())
                         .accessibilityLabel("가장 가까운 병원")
                 }
             }
@@ -256,11 +255,11 @@ private struct EmergencyPlaceCard: View {
                 } label: {
                     ZStack {
                         RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                            .fill(Color.white.opacity(0.12))
+                            .fill(AppColors.surface2)
                             .frame(width: 64, height: 64)
                         Image(systemName: "map.fill")
                             .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(Color.white)
+                            .foregroundStyle(AppColors.ink2)
                     }
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.93))
@@ -271,19 +270,20 @@ private struct EmergencyPlaceCard: View {
         .padding(18)
         .background(
             isNearest
-                ? Color(hex: 0xFF5C42).opacity(0.12)
-                : Color.white.opacity(0.06),
+                ? AppColors.danger.opacity(0.08)
+                : AppColors.surface,
             in: RoundedRectangle(cornerRadius: 22, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(
                     isNearest
-                        ? AppColors.emergencyAccent.opacity(0.4)
-                        : Color.white.opacity(0.1),
+                        ? AppColors.danger.opacity(0.35)
+                        : AppColors.line,
                     lineWidth: isNearest ? 1.5 : 1
                 )
         }
+        .blShadow(.card)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(place.name), \(place.distanceMeters)미터\(isNearest ? ", 가장 가까운 병원" : "")")
     }
@@ -298,13 +298,13 @@ private struct PulseDot: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(AppColors.emergencyAction.opacity(0.25))
+                .fill(AppColors.danger.opacity(0.25))
                 .frame(width: 18, height: 18)
                 .scaleEffect(pulsing ? 1 : 0.6)
                 .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: pulsing)
 
             Circle()
-                .fill(AppColors.emergencyAction)
+                .fill(AppColors.danger)
                 .frame(width: 9, height: 9)
         }
         .onAppear { pulsing = true }

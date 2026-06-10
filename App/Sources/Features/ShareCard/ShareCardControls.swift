@@ -17,7 +17,7 @@ struct DarkControlGroup<Content: View>: View {
             Text(label.uppercased())
                 .font(.system(size: 11, weight: .bold))
                 .tracking(0.8)
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(AppColors.ink3)
 
             _WrappingHStack(spacing: 7, content: content)
         }
@@ -97,11 +97,11 @@ struct DarkChip: View {
         Button(action: action) {
             Text(text)
                 .font(.system(size: 13.5, weight: .semibold))
-                .foregroundStyle(isOn ? Color(hex: 0x15110E) : Color.white.opacity(0.7))
+                .foregroundStyle(isOn ? Color.white : AppColors.ink2)
                 .padding(.horizontal, 15)
                 .frame(height: 36)
                 .background(
-                    isOn ? Color.white : Color.white.opacity(0.08),
+                    isOn ? AppColors.primary : AppColors.surface2,
                     in: Capsule()
                 )
         }
@@ -125,7 +125,7 @@ struct DarkToggleRow: View {
                 // 아이콘 박스
                 ZStack {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(AppColors.surface2)
                         .frame(width: 36, height: 36)
                     Image(systemName: systemIcon)
                         .font(.system(size: 17, weight: .medium))
@@ -137,7 +137,7 @@ struct DarkToggleRow: View {
                     HStack(spacing: 6) {
                         Text(label)
                             .font(.system(size: 14.5, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppColors.ink)
                         if isPro {
                             Text("PRO")
                                 .font(.system(size: 9.5, weight: .heavy))
@@ -154,7 +154,7 @@ struct DarkToggleRow: View {
                     }
                     Text(subtitle)
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(AppColors.ink3)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -171,7 +171,7 @@ struct DarkToggleRow: View {
     private var togglePill: some View {
         ZStack(alignment: isOn ? .trailing : .leading) {
             Capsule()
-                .fill(isOn ? AppColors.primary : Color.white.opacity(0.18))
+                .fill(isOn ? AppColors.primary : AppColors.surface3)
                 .frame(width: 46, height: 28)
             Circle()
                 .fill(Color.white)

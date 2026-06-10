@@ -12,6 +12,7 @@ struct MainTabView: View {
     @State private var tab: AppTab = .home
     @State private var mode: AppMode = .baby
     @State private var showQuickRecord = false
+    @State private var showAddChild = false
 
     private var fabOnLeft: Bool { fabSide == "left" }
 
@@ -53,7 +54,15 @@ struct MainTabView: View {
 
             // 빠른 기록 FAB (홈·기록·동네) — 위치는 설정(bl_fab_side, 한손 조작)
             if tab == .home || tab == .record || tab == .dongne {
-                QuickRecordFAB(mode: mode, onQuickRecord: { Haptics.light(); showQuickRecord = true })
+                QuickRecordFAB(mode: mode, onQuickRecord: {
+                    Haptics.light()
+                    // 아이 없으면 빠른기록 대신 등록부터 (육아 모드)
+                    if mode == .baby && store.children.isEmpty {
+                        showAddChild = true
+                    } else {
+                        showQuickRecord = true
+                    }
+                })
                     .padding(fabOnLeft ? .leading : .trailing, Spacing.s5)
                     .padding(.bottom, 92)
                     .transition(.scale.combined(with: .opacity))
@@ -66,6 +75,9 @@ struct MainTabView: View {
                     .padding(fabOnLeft ? .trailing : .leading, Spacing.s5)
                     .padding(.bottom, 100)
             }
+        }
+        .sheet(isPresented: $showAddChild) {
+            AddChildSheet().environmentObject(store)
         }
         .sheet(isPresented: $showQuickRecord) {
             QuickRecordSheet(mode: mode, onSave: {}, onClose: { showQuickRecord = false })

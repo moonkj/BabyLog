@@ -9,6 +9,7 @@ struct RecordScreen: View {
     @State private var growthMetric: GrowthMetric = .weight
     @State private var expandAssurance = false
     @State private var showShareCard = false
+    @State private var showAddChild = false
 
     var body: some View {
         ScrollView {
@@ -39,7 +40,9 @@ struct RecordScreen: View {
                         BLEmptyState(
                             icon: "person.crop.circle.badge.plus",
                             title: "아이를 먼저 등록해주세요",
-                            message: "아이 정보를 등록하면\n성장 기록과 추억을 함께 모아볼 수 있어요."
+                            message: "아이 정보를 등록하면\n성장 기록과 추억을 함께 모아볼 수 있어요.",
+                            actionTitle: "아이 등록하기",
+                            action: { showAddChild = true }
                         )
                     }
                 }
@@ -53,6 +56,9 @@ struct RecordScreen: View {
             if let child = store.selectedChild {
                 ShareCardView(child: child)
             }
+        }
+        .sheet(isPresented: $showAddChild) {
+            AddChildSheet().environmentObject(store)
         }
     }
 

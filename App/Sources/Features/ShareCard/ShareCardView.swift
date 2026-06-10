@@ -134,7 +134,7 @@ struct ShareCardView: View {
         )
     }
 
-    private let editorBg = Color(hex: 0x15110E)
+    private let editorBg = AppColors.canvas
     private let previewWidth: CGFloat = 300
 
     var body: some View {
@@ -162,8 +162,6 @@ struct ShareCardView: View {
         }
         .navigationTitle("성장 카드")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .preferredColorScheme(.dark)
         .sheet(isPresented: $showShareSheet) {
             if let img = shareImage {
                 ShareActivityView(image: img)
@@ -181,7 +179,7 @@ struct ShareCardView: View {
                 ShareCardCanvas(vm: vm)
                     .frame(width: previewWidth, height: h)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .shadow(color: .black.opacity(0.5), radius: 24, x: 0, y: 12)
+                    .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 10)
             }
 
             // 배경 사진 변경 버튼 (PhotoPickerButton 연결)
@@ -196,21 +194,21 @@ struct ShareCardView: View {
                         .font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundStyle(vm.backgroundPhoto == nil
-                                 ? Color.white.opacity(0.75)
+                                 ? AppColors.ink2
                                  : AppColors.primary)
                 .padding(.horizontal, Spacing.s5)
                 .frame(height: 44)   // 44pt 터치영역
                 .background(
                     vm.backgroundPhoto == nil
-                        ? Color.white.opacity(0.08)
-                        : AppColors.primary.opacity(0.18),
+                        ? AppColors.surface2
+                        : AppColors.primary.opacity(0.12),
                     in: Capsule()
                 )
                 .overlay {
                     Capsule()
                         .strokeBorder(
                             vm.backgroundPhoto == nil
-                                ? Color.white.opacity(0.15)
+                                ? AppColors.line
                                 : AppColors.primary.opacity(0.4),
                             lineWidth: 1
                         )
@@ -278,7 +276,7 @@ struct ShareCardView: View {
             )
 
             Divider()
-                .background(Color.white.opacity(0.08))
+                .background(AppColors.line)
                 .padding(.horizontal, Spacing.s4)
 
             // 워터마크: 무료는 항상 ON (잠금 표시), Pro는 토글 가능
@@ -299,7 +297,7 @@ struct ShareCardView: View {
                 locked: !vm.isPro   // 잠금 아이콘
             )
         }
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
         .padding(.top, Spacing.s2)
     }
 
@@ -317,7 +315,7 @@ struct ShareCardView: View {
         Text("워터마크가 곧 자연 바이럴이 돼요.\n친구가 보고 \"이 앱 뭐야?\" → 동네 유입")
             .font(AppFont.micro)
             .multilineTextAlignment(.center)
-            .foregroundStyle(Color.white.opacity(0.4))
+            .foregroundStyle(AppColors.ink3)
             .padding(.top, Spacing.s3)
     }
 
