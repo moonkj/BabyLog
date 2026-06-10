@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - 홈 레이아웃 열거형
 enum HomeLayout: String, CaseIterable {
@@ -54,6 +55,12 @@ struct HomeTab: View {
     private var recordCount: Int {
         guard let id = selectedChild?.id else { return 0 }
         return store.diaryEntries(for: id).count + store.growthRecords(for: id).count
+    }
+    /// 선택 아이의 가장 최근 사진 (감정 진입점 — 홈 히어로)
+    private var heroPhoto: UIImage? {
+        guard let id = selectedChild?.id else { return nil }
+        let withPhoto = store.diaryEntries(for: id).first { $0.photoRef != nil }
+        return PhotoStore.image(withPhoto?.photoRef)
     }
     /// 금액 축약 표기 (만원/원)
     private func amountShort(_ amount: Int) -> String {
@@ -320,8 +327,17 @@ struct HomeTab: View {
             accessLabel = "아직 등록된 아이가 없어요"
         }
 
-        return PhotoPlaceholder(seed: 1, cornerRadius: Radius.lg)
+        return Group {
+            if let img = heroPhoto {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else {
+                PhotoPlaceholder(seed: 1, cornerRadius: Radius.lg)
+            }
+        }
             .frame(height: 188)
+            .frame(maxWidth: .infinity)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             .overlay {
                 LinearGradient(
                     colors: [.clear, .black.opacity(0.55)],
