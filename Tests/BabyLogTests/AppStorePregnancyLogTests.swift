@@ -49,6 +49,19 @@ final class AppStorePregnancyLogTests: XCTestCase {
         XCTAssertEqual(weights.last?.value, 58.4)
     }
 
+    func test_bellyPhoto_addSortDelete() {
+        let store = AppStore()
+        let pid = UUID()
+        store.addBellyPhoto(pregnancyId: pid, week: 30, photoRef: "a.jpg")
+        store.addBellyPhoto(pregnancyId: pid, week: 12, photoRef: "b.jpg")
+        let photos = store.bellyPhotos(pregnancyId: pid)
+        XCTAssertEqual(photos.count, 2)
+        XCTAssertEqual(photos.first?.value, 12)   // 주차 오름차순
+        XCTAssertEqual(photos.last?.value, 30)
+        store.deleteBellyPhoto(id: photos.first!.id)
+        XCTAssertEqual(store.bellyPhotos(pregnancyId: pid).count, 1)
+    }
+
     func test_pregnancyLogs_persistRoundTrip() throws {
         var state = PersistableState()
         state.pregnancyLogs = [

@@ -5,6 +5,7 @@
 
 import SwiftUI
 import Charts
+import UIKit
 
 // MARK: - ③-A 태아 가이드
 
@@ -117,8 +118,28 @@ struct PregnancyMomRecordSection: View {
     @EnvironmentObject private var store: AppStore
     @State private var showWeightEntry = false
     @State private var weightText = ""
+    @State private var bellyPicked: UIImage? = nil
 
     private var pregnancyId: UUID? { store.activePregnancy?.id }
+
+    /// 현재 임신 주차 (LMP 우선, 없으면 EDD 역산)
+    private var currentWeek: Int {
+        let cal = Calendar.current
+        if let lmp = store.activePregnancy?.lmpDate {
+            let days = cal.dateComponents([.day], from: lmp, to: Date()).day ?? 0
+            return max(0, min(42, days / 7))
+        }
+        if let edd = store.activePregnancy?.eddDate {
+            let daysToEdd = cal.dateComponents([.day], from: Date(), to: edd).day ?? 0
+            return max(0, min(42, 40 - daysToEdd / 7))
+        }
+        return 0
+    }
+
+    /// 배 사진 (store 영속)
+    private var bellyLogs: [PregnancyLog] {
+        pregnancyId.map { store.bellyPhotos(pregnancyId: $0) } ?? []
+    }
 
     /// 오늘 태동 횟수 (store 영속)
     private var movementCount: Int {
@@ -331,12 +352,34 @@ struct PregnancyMomRecordSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.s3) {
-                    // 목업 배 사진 데이터
-                    ForEach(PregnancyData.bellyPhotos, id: \.week) { photo in
-                        BellyPhotoCell(week: photo.week, seed: photo.seed)
+                    // 사진 추가 셀 (로컬 저장)
+                    PhotoPickerButton(image: $bellyPicked) {
+                        VStack(spacing: 6) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundStyle(AppColors.pregnancyPink)
+                            Text("\(currentWeek)주차")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(AppColors.ink3)
+                        }
+                        .frame(width: 96, height: 128)
+                        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                                .strokeBorder(AppColors.pregnancyPink.opacity(0.4),
+                                              style: StrokeStyle(lineWidth: 1.5, dash: [5]))
+                        }
                     }
-                    // 성장사진 연속 암시 셀
-                    BellyPhotoContinuationCell()
+                    .accessibilityLabel("배 사진 추가, 현재 \(currentWeek)주차")
+
+                    // 실제 배 사진들
+                    ForEach(bellyLogs) { log in
+                        bellyCell(log)
+                    }
+
+                    if !bellyLogs.isEmpty {
+                        BellyPhotoContinuationCell()
+                    }
                 }
                 .padding(.horizontal, Spacing.s5)
                 .padding(.bottom, 4)
@@ -349,6 +392,43 @@ struct PregnancyMomRecordSection: View {
                 .padding(.horizontal, Spacing.s5)
         }
         .padding(.bottom, Spacing.s4)
+        .onChange(of: bellyPicked) { _, img in
+            if let img, let pid = pregnancyId, let name = PhotoStore.save(img) {
+                store.addBellyPhoto(pregnancyId: pid, week: currentWeek, photoRef: name)
+                Haptics.success()
+            }
+            bellyPicked = nil
+        }
+    }
+
+    @ViewBuilder
+    private func bellyCell(_ log: PregnancyLog) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            if let img = PhotoStore.image(log.photoRef) {
+                Image(uiImage: img)
+                    .resizable().scaledToFill()
+                    .frame(width: 96, height: 128)
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            } else {
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                    .fill(AppColors.surface2)
+                    .frame(width: 96, height: 128)
+            }
+            Text("\(Int(log.value))주차")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(.black.opacity(0.45), in: Capsule())
+                .padding(8)
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                store.deleteBellyPhoto(id: log.id)
+            } label: {
+                Label("사진 삭제", systemImage: "trash")
+            }
+        }
+        .accessibilityLabel("\(Int(log.value))주차 배 사진")
     }
 }
 

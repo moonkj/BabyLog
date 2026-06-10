@@ -340,6 +340,27 @@ final class AppStore: ObservableObject {
             .sorted { $0.date < $1.date }
     }
 
+    /// 배 사진을 추가한다(로컬 파일명 필요). week는 주차.
+    func addBellyPhoto(pregnancyId: UUID, week: Int, photoRef: String) {
+        pregnancyLogs.append(PregnancyLog(pregnancyId: pregnancyId, date: Date(),
+                                          kind: .belly, value: Double(week), photoRef: photoRef))
+    }
+
+    /// 특정 임신의 배 사진을 주차 오름차순으로 반환한다.
+    func bellyPhotos(pregnancyId: UUID) -> [PregnancyLog] {
+        pregnancyLogs
+            .filter { $0.pregnancyId == pregnancyId && $0.kind == .belly }
+            .sorted { $0.value < $1.value }
+    }
+
+    /// 배 사진 삭제(사진 파일도 정리).
+    func deleteBellyPhoto(id: UUID) {
+        if let log = pregnancyLogs.first(where: { $0.id == id }) {
+            PhotoStore.delete(log.photoRef)
+        }
+        pregnancyLogs.removeAll { $0.id == id }
+    }
+
     /// 다이어리 항목을 삭제한다. 연결된 로컬 사진도 함께 정리한다.
     func deleteDiaryEntry(id: UUID) {
         if let entry = diaryEntries.first(where: { $0.id == id }) {
