@@ -171,9 +171,12 @@ struct PregnancyMomRecordSection: View {
                 // 헤더
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("오늘의 태동")
-                            .font(.system(size: 14.5, weight: .bold))
-                            .foregroundStyle(AppColors.ink)
+                        HStack(spacing: 5) {
+                            HeartbeatView(size: 13)
+                            Text("오늘의 태동")
+                                .font(.system(size: 14.5, weight: .bold))
+                                .foregroundStyle(AppColors.ink)
+                        }
                         Text("10회 목표 · 말기 건강 체크")
                             .font(AppFont.caption)
                             .foregroundStyle(AppColors.ink3)

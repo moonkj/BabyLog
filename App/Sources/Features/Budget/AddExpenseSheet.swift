@@ -13,6 +13,7 @@ struct AddExpenseSheet: View {
     @State private var category: ExpenseCategory = .diaper
     @State private var date: Date = Date()
     @State private var memo: String = ""
+    @State private var shakeTrigger = 0
 
     private var amount: Int { Int(amountText.filter(\.isNumber)) ?? 0 }
     private var canSave: Bool { amount > 0 }
@@ -36,6 +37,7 @@ struct AddExpenseSheet: View {
                         .padding(.horizontal, Spacing.s4)
                         .frame(height: 64)
                         .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        .blShake(shakeTrigger)
                     }
 
                     // 카테고리 (색+아이콘+레이블 3중)
@@ -71,7 +73,10 @@ struct AddExpenseSheet: View {
 
                     LiquidButton(fill: canSave ? AppColors.primary : AppColors.ink3,
                                  cornerRadius: Radius.md) {
-                        guard canSave else { return }
+                        guard canSave else {
+                            shakeTrigger += 1   // 금액 미입력 시 흔들림 + 경고 햅틱
+                            return
+                        }
                         store.addExpense(amount: amount, category: category, date: date,
                                          memo: memo.isEmpty ? nil : memo)
                         Haptics.success()
@@ -79,7 +84,6 @@ struct AddExpenseSheet: View {
                     } label: {
                         Text("저장하기").frame(maxWidth: .infinity)
                     }
-                    .disabled(!canSave)
                     .accessibilityLabel("지출 저장하기")
                 }
                 .padding(Spacing.s4)

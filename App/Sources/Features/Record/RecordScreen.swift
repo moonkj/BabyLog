@@ -92,6 +92,8 @@ struct RecordScreen: View {
         HStack(spacing: Spacing.s1) {
             ForEach(RecordSegment.allCases) { seg in
                 BLChip(text: seg.label, on: segment == seg) {
+                    guard segment != seg else { return }
+                    Haptics.selection()
                     withAnimation(.easeOut(duration: 0.18)) { segment = seg }
                 }
                 .frame(maxWidth: .infinity)

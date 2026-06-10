@@ -305,6 +305,8 @@ struct PregnancyRecordScreen: View {
         HStack(spacing: Spacing.s1) {
             ForEach(PregnancyRecordSegment.allCases) { seg in
                 Button {
+                    guard selectedSegment != seg else { return }
+                    Haptics.selection()
                     withAnimation(.easeInOut(duration: 0.18)) {
                         selectedSegment = seg
                     }

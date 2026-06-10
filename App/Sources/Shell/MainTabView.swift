@@ -76,6 +76,7 @@ struct MainTabView: View {
 
     private var modeToggle: some View {
         Button {
+            Haptics.selection()
             withAnimation(.easeOut(duration: 0.25)) { mode = (mode == .baby ? .pregnancy : .baby) }
         } label: {
             HStack(spacing: 5) {

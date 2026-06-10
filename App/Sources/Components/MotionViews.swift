@@ -42,7 +42,76 @@ struct CheckDrawView: View {
     }
 }
 
+// MARK: - 태동 하트비트 (계층 3, 기능 진입) — DESIGN.md §8.4
+
+/// 임신 태동/심박을 표현하는 작은 하트 펄스. 화면 진입 시 잠깐 뛰고 멈춘다(상시 아님).
+/// scale만 애니메이션(60fps). reduce motion 시 정적.
+struct HeartbeatView: View {
+    var size: CGFloat = 16
+    var color: Color = AppColors.pregnancyPink
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var beat = false
+
+    var body: some View {
+        Image(systemName: "heart.fill")
+            .font(.system(size: size))
+            .foregroundStyle(color)
+            .scaleEffect(beat ? 1.18 : 1.0)
+            .onAppear {
+                guard !reduceMotion else { return }
+                // 진입 시 몇 번만 뛰고 정지 ("진입했을 때만 잠깐")
+                withAnimation(.easeInOut(duration: 0.5).repeatCount(6, autoreverses: true)) {
+                    beat = true
+                }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - 에러 가벼운 흔들림 (계층 4) — DESIGN.md §8.5
+
+/// 입력 검증 실패 시 가벼운 좌우 흔들림 (비난 없이). translation만 사용(60fps).
+private struct ShakeEffect: GeometryEffect {
+    var shakes: CGFloat = 3
+    var travel: CGFloat = 6
+    var animatableData: CGFloat
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let dx = travel * sin(animatableData * .pi * shakes)
+        return ProjectionTransform(CGAffineTransform(translationX: dx, y: 0))
+    }
+}
+
+private struct ShakeModifier: ViewModifier {
+    let trigger: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var amount: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(ShakeEffect(animatableData: amount))
+            .onChange(of: trigger) { _, newValue in
+                guard newValue > 0 else { return }
+                Haptics.warning()
+                guard !reduceMotion else { return }
+                amount = 0
+                withAnimation(.linear(duration: 0.4)) { amount = 1 }
+            }
+    }
+}
+
+extension View {
+    /// 검증 실패 흔들림. `trigger`(>0, 증가)를 바꾸면 한 번 흔들리고 경고 햅틱이 울린다.
+    func blShake(_ trigger: Int) -> some View {
+        modifier(ShakeModifier(trigger: trigger))
+    }
+}
+
 #Preview {
-    CheckDrawView(isOn: true, size: 40)
-        .padding()
+    VStack(spacing: 40) {
+        CheckDrawView(isOn: true, size: 40)
+        HeartbeatView(size: 28)
+    }
+    .padding()
 }

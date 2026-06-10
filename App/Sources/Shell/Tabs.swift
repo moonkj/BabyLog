@@ -239,6 +239,8 @@ struct HomeTab: View {
                 let isSelected = child.id == (selectedChild?.id)
                 chip(child.name, on: isSelected)
                     .onTapGesture {
+                        guard child.id != selectedChildId else { return }
+                        Haptics.selection()
                         withAnimation(.easeOut(duration: 0.15)) {
                             selectedChildId = child.id
                         }
@@ -797,7 +799,11 @@ struct DongneTab: View {
 
                 HStack(spacing: 4) {
                     ForEach(segs.indices, id: \.self) { i in
-                        Button { withAnimation(.easeOut(duration: 0.15)) { seg = i } } label: {
+                        Button {
+                            guard seg != i else { return }
+                            Haptics.selection()
+                            withAnimation(.easeOut(duration: 0.15)) { seg = i }
+                        } label: {
                             Text(segs[i]).font(.system(size: 14, weight: .bold))
                                 .foregroundStyle(seg == i ? .white : AppColors.ink2)
                                 .frame(maxWidth: .infinity).frame(height: 38)
