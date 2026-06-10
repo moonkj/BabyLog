@@ -12,6 +12,7 @@ import Foundation
 /// `onComplete` 는 팀장이 MainTabView 에서 연결 — 내부에서는 단계 전환만 담당.
 struct OnboardingView: View {
     var onComplete: () -> Void
+    @EnvironmentObject private var store: AppStore
 
     // 현재 단계 (0 스플래시 → 4 프리퍼미션)
     @State private var step: Int = 0
@@ -596,12 +597,12 @@ struct OnboardingView: View {
 
             // CTA
             VStack(spacing: Spacing.s1) {
-                LiquidButton(action: { onComplete() }) {
+                LiquidButton(action: { finish() }) {
                     Text("BabyLog 시작하기")
                 }
                 .accessibilityLabel("BabyLog 시작하기")
 
-                skipButton(title: "나중에 설정할게요") { onComplete() }
+                skipButton(title: "나중에 설정할게요") { finish() }
             }
             .padding(.bottom, Spacing.s8)
         }
@@ -645,9 +646,22 @@ struct OnboardingView: View {
             if step < totalSteps - 1 {
                 step += 1
             } else {
-                onComplete()
+                finish()
             }
         }
+    }
+
+    /// 완료 — 입력한 아이/임신을 AppStore에 기록한 뒤 onComplete.
+    private func finish() {
+        let name = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty {
+            if phase == .baby {
+                store.completeBabyOnboarding(name: name, birthDate: dueOrBirthDate, gender: nil)
+            } else {
+                store.startPregnancy(lmp: nil, edd: dueOrBirthDate, nickname: name)
+            }
+        }
+        onComplete()
     }
 }
 
@@ -666,5 +680,6 @@ private enum BabyPhase: Equatable {
 #if DEBUG
 #Preview("온보딩") {
     OnboardingView(onComplete: { print("온보딩 완료") })
+        .environmentObject(SampleData.store())
 }
 #endif

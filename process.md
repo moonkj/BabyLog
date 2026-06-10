@@ -229,3 +229,21 @@
 
 ### 남은 백로그 (별도 전용 라운드 권장)
 - CoreData+CloudKit 실영속화 · App Group 위젯 실데이터 · 외부 API 실키 연동 · 온보딩→실데이터 흐름 · SPM 모듈화 · 다크모드 재정비 · Pretendard 폰트
+
+---
+
+## 2026-06-10 — Phase 3 라운드 9 통합 (앱 실데이터 백본 · 옵션 A)
+
+**상태:** ✅ build+test **198/198 PASS** · GitHub 푸시 · iPhone 재설치 보류(기기 연결 끊김)
+
+- **AppStore API**(lead): `selectedChild`·`activePregnancy`·`hasContent`·`completeBabyOnboarding(name:birthDate:gender:)`·`startPregnancy(lmp:edd:nickname:)` + `selectedChildId`
+- **앱 주입**(lead): `BabyLogApp`에 `@StateObject AppStore(persistence:)` + `.environmentObject` + `enableAutoPersist()`. MainTabView 게이트 = `onboarded || store.hasContent`
+- **온보딩→실데이터**(lead): OnboardingView가 완료 시 입력값을 `completeBabyOnboarding`/`startPregnancy`로 AppStore에 기록
+- **홈·임신홈 실데이터**(coder): `store.children`(다자녀 칩)·`selectedChild`·`activePregnancy`로 이름·D+일·월령·주수 표시, 폴백 포함
+- qa: AppStore 온보딩/선택/영속화 18 테스트
+- **흐름 완성**: 온보딩 입력 → AppStore(Codable 디스크 영속화) → 홈이 실제 아이 표시, 앱 재실행해도 유지
+- 검증: **198/198 PASS**, 컴파일 버그 0
+
+### 비고 / 남은 실데이터
+- iPhone 연결 끊김으로 재설치 보류(재연결 시 `devicectl` 설치) — 코드 무관
+- RecordScreen·ProfileScreen의 store 연결, 기록(GrowthRecord/DiaryEntry) CRUD는 후속

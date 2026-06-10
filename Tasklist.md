@@ -197,4 +197,19 @@
 
 - **✅ 통합 결과**: build→test → **180/180 PASS** · iPhone 재설치(잠금 해제 후 실행)
 - **과학적 토론(해소)**: 네트워킹 파서 계약 불일치(QA 루트배열 가정 ↔ 코더 공공API 래퍼+컨텍스트 인자) → 코더 현실적 파서 채택, QA 테스트 포맷-무관 재작성
+
+### 라운드 9 (✅ 완료 · 2026-06-10) — 앱 실데이터 백본 (옵션 A)
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| lead | AppStore API(selectedChild·activePregnancy·hasContent·completeBabyOnboarding·startPregnancy) | `Data/AppStore` | ✅ |
+| lead | 앱 스토어 주입 + 영속화 자동연결 + 온보딩 게이트 | `BabyLogApp`·`MainTabView` | ✅ |
+| lead | 온보딩 완료 → AppStore 기록(아이/임신) | `OnboardingView` | ✅ |
+| coder | 홈·임신홈 실데이터(store.children/activePregnancy) | `Tabs` HomeTab·`PregnancyHomeView` | ✅ |
+| qa | AppStore 온보딩/선택/영속화 테스트 18개 | `Tests` | ✅ |
+
+- **✅ 통합 결과**: build→test → **198/198 PASS** (컴파일 버그 0)
+- **흐름 완성**: 온보딩 입력 → AppStore(Codable 영속화) → 홈이 **실제 입력한 아이** 표시 (재실행해도 유지)
+- ⚠️ iPhone 재설치는 **기기 연결 끊김**(disconnected)으로 보류 — 재연결 시 설치
+- 남은 실데이터: RecordScreen·ProfileScreen store 연결 · 기록(GrowthRecord/DiaryEntry) CRUD
 - **별도 전용 라운드 권장(무거움/리스크)**: CoreData+CloudKit 실영속화 · App Group 위젯 실데이터 · 외부 API 실키 연동 · SPM 모듈화 · 온보딩→실데이터 흐름

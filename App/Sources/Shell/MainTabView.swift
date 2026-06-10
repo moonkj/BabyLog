@@ -6,6 +6,7 @@ enum AppMode { case baby, pregnancy }
 /// 5탭 하단 네비게이션 (기능 8) — iOS 26에서 TabView는 시스템 Liquid Glass 탭바로 렌더.
 /// 온보딩 게이트 → 메인. 우하단 빠른 기록 FAB → 빠른기록 시트. 좌하단 모드 전환(임신/육아).
 struct MainTabView: View {
+    @EnvironmentObject private var store: AppStore
     @AppStorage("bl_onboarded") private var onboarded = false
     @State private var tab: AppTab = .home
     @State private var mode: AppMode = .baby
@@ -13,7 +14,7 @@ struct MainTabView: View {
 
     var body: some View {
         Group {
-            if onboarded {
+            if onboarded || store.hasContent {
                 mainUI
             } else {
                 OnboardingView { withAnimation(.easeOut) { onboarded = true } }

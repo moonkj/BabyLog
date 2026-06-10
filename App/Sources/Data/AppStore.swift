@@ -13,6 +13,7 @@ final class AppStore: ObservableObject {
 
     @Published private(set) var pregnancies: [Pregnancy]
     @Published private(set) var children: [Child]
+    @Published var selectedChildId: UUID?
 
     // MARK: - Private
 
@@ -80,6 +81,40 @@ final class AppStore: ObservableObject {
     func restore(_ state: PersistableState) {
         pregnancies = state.pregnancies
         children = state.children
+    }
+
+    // MARK: - 선택 아이 / 온보딩
+
+    /// 현재 선택된 아이 (selectedChildId 우선, 없으면 첫 아이).
+    var selectedChild: Child? {
+        if let id = selectedChildId, let c = children.first(where: { $0.id == id }) { return c }
+        return children.first
+    }
+
+    /// 진행 중인 임신 (status == .active 첫 항목).
+    var activePregnancy: Pregnancy? {
+        pregnancies.first(where: { $0.status == .active })
+    }
+
+    /// 아이 또는 임신 기록 존재 여부 (온보딩 게이트).
+    var hasContent: Bool { !children.isEmpty || !pregnancies.isEmpty }
+
+    /// 출산 온보딩 — 아이 생성·추가·선택. 빈 이름은 무시.
+    func completeBabyOnboarding(name: String, birthDate: Date, gender: Gender?) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let child = Child(id: UUID(), name: trimmed, birthDate: birthDate, gender: gender,
+                          profileImageRef: nil, caregiverRole: nil, pregnancyId: nil)
+        children.append(child)
+        selectedChildId = child.id
+    }
+
+    /// 임신 온보딩 — active 임신 생성·추가.
+    func startPregnancy(lmp: Date?, edd: Date?, nickname: String?) {
+        let preg = Pregnancy(id: UUID(), lmpDate: lmp, eddDate: edd, fetusCount: 1,
+                             nickname: nickname?.trimmingCharacters(in: .whitespacesAndNewlines),
+                             clinic: nil, status: .active)
+        pregnancies.append(preg)
     }
 
     // MARK: - Atomic Birth Transition

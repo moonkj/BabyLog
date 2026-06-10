@@ -2,11 +2,17 @@ import SwiftUI
 
 @main
 struct BabyLogApp: App {
+    @StateObject private var store = AppStore(persistence: LocalPersistence())
+
     var body: some Scene {
         WindowGroup {
             MainTabView()
+                .environmentObject(store)
                 .tint(AppColors.primary)
-                .task { await setupNotifications() }
+                .task {
+                    store.enableAutoPersist()
+                    await setupNotifications()
+                }
         }
     }
 

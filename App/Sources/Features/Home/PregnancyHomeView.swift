@@ -9,31 +9,48 @@ import Foundation
 // MARK: - 진입점
 
 /// 임신 모드 홈 뷰.
-/// 내부에 `PregnancyMockData` 목업 데이터를 보유하며 단독 실행 가능.
-/// 팀장 통합 시 `AppStore` / `Pregnancy` 모델로 교체.
+/// `AppStore` EnvironmentObject에서 activePregnancy를 읽는다.
+/// store가 없거나 activePregnancy가 nil일 경우 목업 폴백으로 동작한다.
 struct PregnancyHomeView: View {
-    // 목업 LMP: 오늘 기준 약 24주 전 (168일 전)
+
+    // MARK: AppStore — 실데이터
+    @EnvironmentObject private var store: AppStore
+
+    // MARK: 목업 폴백 (store 없거나 activePregnancy nil 시)
     private let mockLMP: Date = Calendar.current.date(
         byAdding: .day,
         value: -168,
         to: Calendar.current.startOfDay(for: Date())
     ) ?? Date()
 
-    // 목업 EDD: 오늘 기준 약 112일 후 (40주 - 24주 = 16주 후)
     private let mockEDD: Date = Calendar.current.date(
         byAdding: .day,
         value: 112,
         to: Calendar.current.startOfDay(for: Date())
     ) ?? Date()
 
-    // 계산된 주수 (AgeCalculator 사용)
-    private var pregnancyWeek: (weeks: Int, days: Int) {
-        AgeCalculator.pregnancyWeeks(lmp: mockLMP, edd: mockEDD, asOf: Date()) ?? (24, 0)
+    // MARK: 실데이터 — activePregnancy
+    private var activePregnancy: Pregnancy? {
+        store.pregnancies.first(where: { $0.status == .active })
     }
 
-    // D-day
+    // 계산된 주수: activePregnancy 우선, 없으면 목업 폴백
+    private var pregnancyWeek: (weeks: Int, days: Int) {
+        if let p = activePregnancy {
+            return AgeCalculator.pregnancyWeeks(lmp: p.lmpDate, edd: p.eddDate, asOf: Date()) ?? (24, 0)
+        }
+        return AgeCalculator.pregnancyWeeks(lmp: mockLMP, edd: mockEDD, asOf: Date()) ?? (24, 0)
+    }
+
+    // D-day: activePregnancy.eddDate 우선, 없으면 목업 폴백
     private var dDayToBirth: Int {
-        AgeCalculator.dDayToBirth(edd: mockEDD, asOf: Date())
+        let edd = activePregnancy?.eddDate ?? mockEDD
+        return AgeCalculator.dDayToBirth(edd: edd, asOf: Date())
+    }
+
+    // 태명: activePregnancy.nickname 우선, 없으면 "튼튼이"
+    private var fetusNickname: String {
+        activePregnancy?.nickname ?? "튼튼이"
     }
 
     var body: some View {
@@ -81,14 +98,14 @@ struct PregnancyHomeView: View {
                 .foregroundStyle(AppColors.ink3)
                 .fontWeight(.semibold)
 
-            // 제목
-            Text("튼튼이를 기다리며")
+            // 제목 — 태명 반영
+            Text("\(fetusNickname)를 기다리며")
                 .font(AppFont.h1)
                 .foregroundStyle(AppColors.ink)
         }
         .padding(.top, Spacing.s5)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("좋은 하루예요. 튼튼이를 기다리며")
+        .accessibilityLabel("좋은 하루예요. \(fetusNickname)를 기다리며")
     }
 
     // MARK: - 태아 히어로 카드
@@ -586,5 +603,6 @@ struct PregnancyHomeView: View {
 #if DEBUG
 #Preview("임신 홈") {
     PregnancyHomeView()
+        .environmentObject(SampleData.store())
 }
 #endif

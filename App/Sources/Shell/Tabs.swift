@@ -26,6 +26,20 @@ enum HomeLayout: String, CaseIterable {
 // MARK: - 홈 (오늘의 한 장면) — 스크린샷 01-home 재현
 struct HomeTab: View {
 
+    // MARK: AppStore — 실데이터
+    @EnvironmentObject private var store: AppStore
+
+    // MARK: 선택 아이 상태 — nil이면 children.first를 사용
+    @State private var selectedChildId: UUID? = nil
+
+    /// 현재 선택된 아이. selectedChildId가 없으면 첫 번째 아이.
+    private var selectedChild: Child? {
+        if let id = selectedChildId {
+            return store.children.first(where: { $0.id == id })
+        }
+        return store.children.first
+    }
+
     // MARK: Priority Engine — 목업 입력 (PriorityEngine 연결)
     /// scheduledDate가 오늘로부터 4일 뒤인 미완료 VaccineRecord 1건
     private static let mockVaccines: [VaccineRecord] = {
@@ -139,8 +153,15 @@ struct HomeTab: View {
     // MARK: - 다자녀 칩
     private var childChips: some View {
         HStack(spacing: 8) {
-            chip("지호", on: true)
-            chip("하늘", on: false)
+            ForEach(store.children) { child in
+                let isSelected = child.id == (selectedChild?.id)
+                chip(child.name, on: isSelected)
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            selectedChildId = child.id
+                        }
+                    }
+            }
             Image(systemName: "plus").font(.system(size: 14, weight: .bold))
                 .foregroundStyle(AppColors.ink3)
                 .frame(width: 34, height: 34)
@@ -177,7 +198,23 @@ struct HomeTab: View {
     }
 
     private var heroCard: some View {
-        PhotoPlaceholder(seed: 1, cornerRadius: Radius.lg)
+        let childName: String
+        let dPlusLabel: String
+        let accessLabel: String
+        if let child = selectedChild {
+            let now = Date()
+            let dPlus = AgeCalculator.dPlusDays(birthDate: child.birthDate, asOf: now)
+            let age = AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: now)
+            childName = child.name
+            dPlusLabel = "D+\(dPlus) · \(age.months)개월"
+            accessLabel = "\(child.name) 최근 사진. D+\(dPlus), \(age.months)개월"
+        } else {
+            childName = "우리 아기"
+            dPlusLabel = ""
+            accessLabel = "아직 등록된 아이가 없어요"
+        }
+
+        return PhotoPlaceholder(seed: 1, cornerRadius: Radius.lg)
             .frame(height: 188)
             .overlay {
                 LinearGradient(
@@ -190,20 +227,24 @@ struct HomeTab: View {
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
-                        Text("지호").font(.system(size: 18, weight: .heavy)).foregroundStyle(.white)
-                        Text("D+491 · 16개월")
-                            .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
-                            .padding(.horizontal, 8).frame(height: 22)
-                            .background(.black.opacity(0.22), in: Capsule())
+                        Text(childName).font(.system(size: 18, weight: .heavy)).foregroundStyle(.white)
+                        if !dPlusLabel.isEmpty {
+                            Text(dPlusLabel)
+                                .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 8).frame(height: 22)
+                                .background(.black.opacity(0.22), in: Capsule())
+                        }
                     }
-                    Text("드디어 혼자 세 걸음! 너무 대견해 😊")
-                        .font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.95))
+                    if selectedChild == nil {
+                        Text("아이를 등록하면 성장 기록이 시작돼요")
+                            .font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.85))
+                    }
                 }
                 .padding(16)
             }
             .blShadow(.card)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("지호 최근 사진. D+491, 16개월. 드디어 혼자 세 걸음! 너무 대견해")
+            .accessibilityLabel(accessLabel)
     }
 
     // MARK: - 우선순위 카드 (PriorityEngine 연결 — A·B·C 공용)
@@ -291,14 +332,15 @@ struct HomeTab: View {
 
     // MARK: 기록 권유 카드
     private var nudgeCard: some View {
-        HStack(spacing: 12) {
+        let name = selectedChild?.name ?? "우리 아기"
+        return HStack(spacing: 12) {
             Image(systemName: "camera.fill").font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(AppColors.primary)
                 .frame(width: 44, height: 44)
                 .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("지호의 오늘이 궁금해요").font(.system(size: 14, weight: .bold)).foregroundStyle(AppColors.ink)
+                Text("\(name)의 오늘이 궁금해요").font(.system(size: 14, weight: .bold)).foregroundStyle(AppColors.ink)
                 Text("사진 한 장이면 기록 끝 — 2탭이면 돼요").font(AppFont.caption).foregroundStyle(AppColors.ink2)
             }
             Spacer()
@@ -313,7 +355,7 @@ struct HomeTab: View {
         .padding(14)
         .background(AppColors.primaryTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("지호의 오늘이 궁금해요. 사진 한 장이면 기록 끝")
+        .accessibilityLabel("\(name)의 오늘이 궁금해요. 사진 한 장이면 기록 끝")
     }
 
     // MARK: 또래 이야기 카드
@@ -383,19 +425,35 @@ struct HomeTab: View {
     }
 
     private var dashboardChildHeader: some View {
-        HStack(spacing: 12) {
+        let childName: String
+        let statLine: String
+        let accessLabel: String
+        if let child = selectedChild {
+            let now = Date()
+            let dPlus = AgeCalculator.dPlusDays(birthDate: child.birthDate, asOf: now)
+            let age = AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: now)
+            childName = child.name
+            statLine = "D+\(dPlus) · \(age.months)개월"
+            accessLabel = "\(child.name). D+\(dPlus), \(age.months)개월"
+        } else {
+            childName = "우리 아기"
+            statLine = "아이를 등록해주세요"
+            accessLabel = "등록된 아이가 없어요"
+        }
+
+        return HStack(spacing: 12) {
             PhotoPlaceholder(seed: 2, cornerRadius: Radius.md)
                 .frame(width: 56, height: 56)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("지호").font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
-                Text("D+491 · 16개월 · 10.2kg")
+                Text(childName).font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
+                Text(statLine)
                     .font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
             }
             Spacer()
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("지호. D+491, 16개월, 10.2킬로그램")
+        .accessibilityLabel(accessLabel)
     }
 
     private var dashTileBudget: some View {
@@ -669,6 +727,14 @@ struct BudgetTab: View {
 struct ProfileTab: View {
     var body: some View { ProfileScreen() }
 }
+
+// MARK: - Preview
+#if DEBUG
+#Preview("홈 탭") {
+    HomeTab()
+        .environmentObject(SampleData.store())
+}
+#endif
 
 // MARK: - 공용 탭 스캐폴드
 struct TabScaffold<Content: View>: View {
