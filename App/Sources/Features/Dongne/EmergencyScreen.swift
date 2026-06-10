@@ -247,9 +247,12 @@ private struct EmergencyPlaceCard: View {
                 .accessibilityLabel("\(place.name) 전화하기")
                 .accessibilityHint("탭하면 \(place.name)에 전화를 겁니다")
 
-                // 지도 버튼
+                // 지도 버튼 — Apple 지도 앱에서 장소명 검색
                 Button {
-                    // TODO: 지도 앱 연동
+                    let q = place.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                    if let url = URL(string: "http://maps.apple.com/?q=\(q)") {
+                        UIApplication.shared.open(url)
+                    }
                 } label: {
                     ZStack {
                         RoundedRectangle(cornerRadius: Radius.md, style: .continuous)

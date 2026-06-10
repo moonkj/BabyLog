@@ -15,6 +15,9 @@ final class AppStore: ObservableObject {
     @Published private(set) var children: [Child]
     @Published private(set) var growthRecords: [GrowthRecord]
     @Published private(set) var diaryEntries: [DiaryEntry]
+    @Published private(set) var expenses: [Expense]
+    /// 접종 완료 키 집합 (키 = "childId|vaccineId").
+    @Published private(set) var vaccineCompletions: Set<String>
     @Published var selectedChildId: UUID?
 
     // MARK: - Private
@@ -38,6 +41,8 @@ final class AppStore: ObservableObject {
         children: [Child] = [],
         growthRecords: [GrowthRecord] = [],
         diaryEntries: [DiaryEntry] = [],
+        expenses: [Expense] = [],
+        vaccineCompletions: Set<String> = [],
         bus: EventBus = .shared,
         persistence: LocalPersistence? = nil
     ) {
@@ -45,16 +50,20 @@ final class AppStore: ObservableObject {
         self.children = children
         self.growthRecords = growthRecords
         self.diaryEntries = diaryEntries
+        self.expenses = expenses
+        self.vaccineCompletions = vaccineCompletions
         self.bus = bus
         self.persistence = persistence
 
         // persistence가 주입된 경우 저장된 상태로 복원 (파일 없으면 무시)
         if let persistence = persistence,
            let saved = try? persistence.load() {
-            self.pregnancies    = saved.pregnancies
-            self.children       = saved.children
-            self.growthRecords  = saved.growthRecords
-            self.diaryEntries   = saved.diaryEntries
+            self.pregnancies        = saved.pregnancies
+            self.children           = saved.children
+            self.growthRecords      = saved.growthRecords
+            self.diaryEntries       = saved.diaryEntries
+            self.expenses           = saved.expenses
+            self.vaccineCompletions = saved.vaccineCompletions
         }
     }
 
@@ -67,13 +76,13 @@ final class AppStore: ObservableObject {
     func enableAutoPersist() {
         guard persistence != nil else { return }
 
-        // pregnancies·children·growthRecords·diaryEntries 네 Publisher를 combineLatest로 묶어
-        // 어느 한 쪽이 바뀌어도 저장이 트리거되도록 한다.
-        $pregnancies
-            .combineLatest($children, $growthRecords, $diaryEntries)
-            .dropFirst()                          // init 시 초기값 방출 무시
+        // 모든 @Published 변경(objectWillChange)을 단일 신호로 받아 0.5s debounce 후 저장한다.
+        // combineLatest 4-arity 한계 없이 상태 종류가 늘어나도 그대로 확장된다.
+        // objectWillChange는 willSet 시점에 방출되지만 debounce 지연 동안 값이 갱신되므로
+        // 지연 후 snapshot()은 최신 상태를 담는다.
+        objectWillChange
             .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
-            .sink { [weak self] _, _, _, _ in
+            .sink { [weak self] in
                 guard let self else { return }
                 try? self.persistence?.save(self.snapshot())
             }
@@ -88,16 +97,20 @@ final class AppStore: ObservableObject {
             pregnancies:   pregnancies,
             children:      children,
             growthRecords: growthRecords,
-            diaryEntries:  diaryEntries
+            diaryEntries:  diaryEntries,
+            expenses:      expenses,
+            vaccineCompletions: vaccineCompletions
         )
     }
 
     /// 저장된 스냅샷으로 상태를 복원한다.
     func restore(_ state: PersistableState) {
-        pregnancies    = state.pregnancies
-        children       = state.children
-        growthRecords  = state.growthRecords
-        diaryEntries   = state.diaryEntries
+        pregnancies        = state.pregnancies
+        children           = state.children
+        growthRecords      = state.growthRecords
+        diaryEntries       = state.diaryEntries
+        expenses           = state.expenses
+        vaccineCompletions = state.vaccineCompletions
     }
 
     // MARK: - 선택 아이 / 온보딩
@@ -234,6 +247,45 @@ final class AppStore: ObservableObject {
         )
         growthRecords.append(record)
         bus.publish(.recordSaved(childId: childId))
+    }
+
+    // MARK: - 가계부 CRUD
+
+    /// 지출 항목을 추가한다. 금액이 0 이하이면 무시.
+    func addExpense(amount: Int, category: ExpenseCategory, date: Date = Date(),
+                    memo: String? = nil, autoCollected: Bool = false) {
+        guard amount > 0 else { return }
+        let trimmed = memo?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let expense = Expense(amount: amount, category: category, date: date,
+                              memo: (trimmed?.isEmpty ?? true) ? nil : trimmed,
+                              autoCollected: autoCollected)
+        expenses.append(expense)
+    }
+
+    /// 지출 항목을 삭제한다.
+    func deleteExpense(id: UUID) {
+        expenses.removeAll { $0.id == id }
+    }
+
+    // MARK: - 접종 완료 (안정 키 영속)
+
+    /// 접종 완료 안정 키. provider UUID가 매 로드 달라지므로 childId+vaccineId로 식별한다.
+    static func vaccineKey(childId: UUID, vaccineId: String) -> String {
+        "\(childId.uuidString)|\(vaccineId)"
+    }
+
+    func isVaccineDone(childId: UUID, vaccineId: String) -> Bool {
+        vaccineCompletions.contains(Self.vaccineKey(childId: childId, vaccineId: vaccineId))
+    }
+
+    /// 접종 완료 상태를 토글한다.
+    func toggleVaccine(childId: UUID, vaccineId: String) {
+        let key = Self.vaccineKey(childId: childId, vaccineId: vaccineId)
+        if vaccineCompletions.contains(key) {
+            vaccineCompletions.remove(key)
+        } else {
+            vaccineCompletions.insert(key)
+        }
     }
 
     // MARK: - 기록 조회

@@ -29,6 +29,10 @@ struct HomeTab: View {
     // MARK: AppStore — 실데이터
     @EnvironmentObject private var store: AppStore
 
+    /// 홈 카드(요약·진입점) 탭 시 해당 탭으로 이동시키는 콜백. MainTabView가 주입.
+    var onNavigate: (AppTab) -> Void = { _ in }
+    @State private var showEmergency = false
+
     // MARK: 선택 아이 상태 — nil이면 children.first를 사용
     @State private var selectedChildId: UUID? = nil
 
@@ -38,6 +42,26 @@ struct HomeTab: View {
             return store.children.first(where: { $0.id == id })
         }
         return store.children.first
+    }
+
+    // MARK: 실데이터 요약 값
+    /// 이번 달 육아비 (store 영속 지출)
+    private var monthlyBudgetTotal: Int {
+        BudgetSummary.monthlyTotal(store.expenses, in: Date())
+    }
+    /// 선택 아이의 전체 기록 수 (다이어리 + 성장)
+    private var recordCount: Int {
+        guard let id = selectedChild?.id else { return 0 }
+        return store.diaryEntries(for: id).count + store.growthRecords(for: id).count
+    }
+    /// 금액 축약 표기 (만원/원)
+    private func amountShort(_ amount: Int) -> String {
+        guard amount > 0 else { return "0원" }
+        if amount >= 10_000 {
+            let man = Double(amount) / 10_000
+            return man == man.rounded() ? "\(Int(man))만원" : String(format: "%.1f만원", man)
+        }
+        return "\(amount)원"
     }
 
     // MARK: Priority Engine — 목업 입력 (PriorityEngine 연결)
@@ -83,6 +107,9 @@ struct HomeTab: View {
             .padding(Spacing.s5)
         }
         .background(AppColors.canvas)
+        .fullScreenCover(isPresented: $showEmergency) {
+            EmergencyScreen(onClose: { showEmergency = false })
+        }
     }
 
     // MARK: 레이아웃별 콘텐츠
@@ -110,7 +137,7 @@ struct HomeTab: View {
             // 레이아웃 전환 메뉴
             layoutMenu
             // 응급 버튼
-            Button {} label: {
+            Button { Haptics.light(); showEmergency = true } label: {
                 Label("응급", systemImage: "cross.case.fill")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.white)
@@ -271,15 +298,15 @@ struct HomeTab: View {
                     }
                 }
                 HStack(spacing: 10) {
-                    LiquidButton(fill: AppColors.gold, action: {}) { Text("접종 예약하기") }
-                    Button {} label: {
+                    LiquidButton(fill: AppColors.gold, action: { onNavigate(.record) }) { Text("접종 확인하기") }
+                    Button { onNavigate(.record) } label: {
                         Image(systemName: "bell.fill").font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.gold)
                             .frame(width: 52, height: 52)
                             .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                     }
                     .buttonStyle(LiquidPressStyle())
-                    .accessibilityLabel("알림 설정")
+                    .accessibilityLabel("접종 일정 보기")
                     .fixedSize()
                 }
             }
@@ -311,13 +338,13 @@ struct HomeTab: View {
                     VStack(spacing: 0) {
                         Text("D-\(dDay)")
                             .font(.system(size: 26, weight: .heavy)).foregroundStyle(AppColors.gold)
-                        Button {} label: {
-                            Text("예약").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                        Button { onNavigate(.record) } label: {
+                            Text("확인").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 12).frame(height: 30)
                                 .background(AppColors.gold, in: Capsule())
                         }
                         .buttonStyle(LiquidPressStyle())
-                        .accessibilityLabel("접종 예약하기")
+                        .accessibilityLabel("접종 일정 확인하기")
                     }
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("디데이 \(dDay)일 전")
@@ -346,7 +373,7 @@ struct HomeTab: View {
                 Text("사진 한 장이면 기록 끝 — 2탭이면 돼요").font(AppFont.caption).foregroundStyle(AppColors.ink2)
             }
             Spacer()
-            Button {} label: {
+            Button { onNavigate(.record) } label: {
                 Text("기록").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 16).frame(height: 38)
                     .background(AppColors.primary, in: Capsule())
@@ -463,9 +490,10 @@ struct HomeTab: View {
             icon: "creditcard.fill",
             iconColor: Color(hex: 0x3B6FA8),
             bg: AppColors.surface,
-            title: "48만원",
+            title: amountShort(monthlyBudgetTotal),
             sub: "이번 달 육아비",
-            accessLabel: "가계부 타일: 이번 달 육아비 48만원"
+            accessLabel: "가계부 타일: 이번 달 육아비 \(amountShort(monthlyBudgetTotal))",
+            action: { onNavigate(.budget) }
         )
     }
 
@@ -476,7 +504,8 @@ struct HomeTab: View {
             bg: AppColors.surface,
             title: "또래 이야기",
             sub: "오늘의 발달 팁",
-            accessLabel: "또래 이야기 타일: 오늘의 발달 팁"
+            accessLabel: "또래 이야기 타일: 오늘의 발달 팁",
+            action: { onNavigate(.record) }
         )
     }
 
@@ -486,8 +515,9 @@ struct HomeTab: View {
             iconColor: Color(hex: 0xB5478A),
             bg: AppColors.surface,
             title: "1년 전 오늘",
-            sub: "배밀이 시작한 날",
-            accessLabel: "추억 타일: 1년 전 오늘 배밀이 시작한 날"
+            sub: "추억 돌아보기",
+            accessLabel: "추억 타일: 1년 전 오늘",
+            action: { onNavigate(.record) }
         )
     }
 
@@ -496,14 +526,15 @@ struct HomeTab: View {
             icon: "camera.fill",
             iconColor: AppColors.primary,
             bg: AppColors.surface,
-            title: "152개",
-            sub: "성장 기록",
-            accessLabel: "성장 기록 타일: 152개 기록"
+            title: "\(recordCount)개",
+            sub: "전체 기록",
+            accessLabel: "기록 타일: \(recordCount)개 기록",
+            action: { onNavigate(.record) }
         )
     }
 
     private var dashTileNudge: some View {
-        Button {} label: {
+        Button { onNavigate(.record) } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "plus.circle.fill")
@@ -536,9 +567,10 @@ struct HomeTab: View {
         bg: Color,
         title: String,
         sub: String,
-        accessLabel: String
+        accessLabel: String,
+        action: @escaping () -> Void = {}
     ) -> some View {
-        Button {} label: {
+        Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: icon)
@@ -573,7 +605,7 @@ struct HomeTab: View {
             // 또래 이야기
             peerCard
             // 최근 기록 섹션
-            BLSectionHead(title: "최근 기록", action: "전체")
+            BLSectionHead(title: "최근 기록", action: "전체", onAction: { onNavigate(.record) })
             VStack(spacing: 10) {
                 timelineRecord(seed: 1, badge: "첫 걸음마", caption: "드디어 혼자 세 걸음!", day: "오늘", tone: .mint, icon: nil)
                 timelineRecord(seed: 2, badge: nil, caption: "키 79cm · 몸무게 10.2kg", day: "어제", tone: .blue, icon: "ruler")
@@ -591,7 +623,7 @@ struct HomeTab: View {
         tone: BadgeTone,
         icon: String?
     ) -> some View {
-        Button {} label: {
+        Button { onNavigate(.record) } label: {
             HStack(spacing: 12) {
                 Group {
                     if let icon {

@@ -16,6 +16,7 @@ struct QuickRecordSheet: View {
     // MARK: Internal state
     @State private var showDetail = false
     @State private var savedOverlay = false
+    @State private var showProInfo = false
 
     // 이정표 선택 (다중)
     @State private var selectedMilestones: Set<String> = []
@@ -28,8 +29,11 @@ struct QuickRecordSheet: View {
     @State private var heightText: String = ""
     @State private var weightText: String = ""
 
-    // 저장 완료 순간 카운터 (목업 고정값: 153)
-    private let momentCount = 153
+    // 저장 완료 순간 카운터 — 선택 아이의 실제 기록(다이어리) 수 (저장 후 호출되어 방금 항목 포함)
+    private var momentCount: Int {
+        guard let id = store.selectedChild?.id else { return 1 }
+        return max(1, store.diaryEntries(for: id).count)
+    }
 
     // MARK: 모드별 콘텐츠
     private var sheetTitle: String {
@@ -75,6 +79,11 @@ struct QuickRecordSheet: View {
         }
         // 애니메이션: 완료 오버레이 진입
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: savedOverlay)
+        .alert("AI 캡션 — 곧 제공돼요", isPresented: $showProInfo) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("사진을 보고 캡션 초안을 만들어주는 프리미엄 기능이에요. 다음 업데이트에서 만나요.")
+        }
     }
 
     // MARK: Main scroll content
@@ -281,7 +290,8 @@ struct QuickRecordSheet: View {
 
             // AI 캡션 초안 잠금 버튼 (Pro)
             Button {
-                // Pro 업그레이드 목업
+                Haptics.light()
+                showProInfo = true
             } label: {
                 HStack(spacing: Spacing.s2) {
                     Image(systemName: "sparkles")

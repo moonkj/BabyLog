@@ -11,7 +11,9 @@ struct VaccineSection: View {
 
     @State private var vaccines: [VaccineRecord] = []
     @State private var isLoading = false
-    @State private var completedSet: Set<UUID> = []
+
+    /// 현재 선택 아이 ID (접종 완료 영속 키 구성용)
+    private var childId: UUID? { store.selectedChild?.id }
 
     // vaccineId → 한국어 표시명 매핑
     private func displayName(for vaccineId: String) -> String {
@@ -45,7 +47,7 @@ struct VaccineSection: View {
 
     // D-day 계산: 미래 예정일만 표시 (완료 여부와 무관하게 날짜 기반)
     private func dDayLabel(for record: VaccineRecord) -> String? {
-        guard record.completedDate == nil, !completedSet.contains(record.id) else { return nil }
+        guard !isDone(record) else { return nil }
         guard let scheduled = record.scheduledDate else { return nil }
         let diff = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: Date()),
                                                    to: Calendar.current.startOfDay(for: scheduled)).day ?? 0
@@ -55,7 +57,10 @@ struct VaccineSection: View {
     }
 
     private func isDone(_ record: VaccineRecord) -> Bool {
-        completedSet.contains(record.id) || record.completedDate != nil
+        if let cid = childId, store.isVaccineDone(childId: cid, vaccineId: record.vaccineId) {
+            return true
+        }
+        return record.completedDate != nil
     }
 
     // 가장 임박한 미래 예정 접종
@@ -111,11 +116,7 @@ struct VaccineSection: View {
                         dDay: dDayLabel(for: v),
                         onToggle: {
                             withAnimation(.easeOut(duration: 0.18)) {
-                                if isDone(v) {
-                                    completedSet.remove(v.id)
-                                } else {
-                                    completedSet.insert(v.id)
-                                }
+                                store.toggleVaccine(childId: child.id, vaccineId: v.vaccineId)
                             }
                         }
                     )

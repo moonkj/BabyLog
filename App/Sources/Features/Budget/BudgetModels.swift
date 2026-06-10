@@ -76,7 +76,7 @@ enum ExpenseCategory: String, CaseIterable, Codable {
 
 /// 단일 지출 항목.
 /// `autoCollected == true`이면 마켓/구독에서 자동 수집된 항목.
-struct Expense: Identifiable, Equatable {
+struct Expense: Identifiable, Equatable, Codable {
     let id: UUID
     var amount: Int              // 단위: 원 (원화)
     var category: ExpenseCategory

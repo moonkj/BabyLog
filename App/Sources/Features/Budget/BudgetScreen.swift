@@ -13,33 +13,7 @@ import Foundation
 
 private enum BudgetMockData {
 
-    /// 이번 달 기준 목업 지출 (현재 월 데이터 포함)
-    static let expenses: [Expense] = {
-        let cal = Calendar.current
-        let now = Date()
-
-        func date(daysAgo: Int) -> Date {
-            cal.date(byAdding: .day, value: -daysAgo, to: now) ?? now
-        }
-
-        return [
-            Expense(amount: 87_000,  category: .diaper,    date: date(daysAgo: 1),  memo: "팸퍼스 하기스 50매",   autoCollected: true),
-            Expense(amount: 43_000,  category: .clothing,  date: date(daysAgo: 3),  memo: "바디수트 3종",          autoCollected: true),
-            Expense(amount: 25_000,  category: .medical,   date: date(daysAgo: 5),  memo: "소아과 진료비",         autoCollected: false),
-            Expense(amount: 68_000,  category: .education, date: date(daysAgo: 6),  memo: "그림책 세트",           autoCollected: true),
-            Expense(amount: 35_000,  category: .play,      date: date(daysAgo: 8),  memo: "스태킹 링 장난감",      autoCollected: false),
-            Expense(amount: 120_000, category: .transport, date: date(daysAgo: 10), memo: "유모차 부품 교체",       autoCollected: false),
-            Expense(amount: 52_000,  category: .diaper,    date: date(daysAgo: 12), memo: "물티슈 대용량",         autoCollected: true),
-            Expense(amount: 33_000,  category: .etc,       date: date(daysAgo: 14), memo: "아기 세제",             autoCollected: true),
-            Expense(amount: 15_000,  category: .medical,   date: date(daysAgo: 15), memo: "영양제",                autoCollected: false),
-            Expense(amount: 29_000,  category: .clothing,  date: date(daysAgo: 18), memo: "양말·모자",             autoCollected: true),
-        ]
-    }()
-
-    /// 아동 개월 수 (목업: 16개월)
-    static let childAgeMonths: Int = 16
-
-    /// 월령별 예상 지출 가이드 (개월 수 → 메시지)
+    /// 월령별 예상 지출 가이드 (개월 수 → 메시지). 콘텐츠성 안내 — 실 월령으로 호출됨.
     static func guideMessage(ageMonths: Int) -> (title: String, body: String) {
         switch ageMonths {
         case 0..<3:
@@ -83,6 +57,7 @@ struct BudgetScreen: View {
     @State private var subsidies: [SubsidyInfo] = []
     @State private var isLoadingSubsidies = true
     @State private var selectedMonth: Date = Date()
+    @State private var showAddExpense = false
 
     // MARK: Computed
 
@@ -92,14 +67,30 @@ struct BudgetScreen: View {
         return AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: Date()).months
     }
 
+    /// 실데이터 — store에 영속된 지출 전체
+    private var allExpenses: [Expense] { store.expenses }
+
     private var currentMonthExpenses: [Expense] {
-        BudgetMockData.expenses.filter { expense in
+        allExpenses.filter { expense in
             Calendar.current.isDate(expense.date, equalTo: selectedMonth, toGranularity: .month)
         }
     }
 
+    private var hasMonthExpenses: Bool { !currentMonthExpenses.isEmpty }
+
     private var monthlyTotal: Int {
-        BudgetSummary.monthlyTotal(BudgetMockData.expenses, in: selectedMonth)
+        BudgetSummary.monthlyTotal(allExpenses, in: selectedMonth)
+    }
+
+    private var previousMonthTotal: Int {
+        guard let prev = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) else { return 0 }
+        return BudgetSummary.monthlyTotal(allExpenses, in: prev)
+    }
+
+    /// 전월 대비 증감 % (이전 달 지출 0이면 nil)
+    private var monthOverMonthPct: Int? {
+        guard previousMonthTotal > 0 else { return nil }
+        return Int((Double(monthlyTotal - previousMonthTotal) / Double(previousMonthTotal) * 100).rounded())
     }
 
     private var categoryBreakdown: [(category: ExpenseCategory, amount: Int)] {
@@ -113,7 +104,7 @@ struct BudgetScreen: View {
     }
 
     private var recentExpenses: [Expense] {
-        Array(BudgetMockData.expenses.prefix(6))
+        Array(allExpenses.sorted { $0.date > $1.date }.prefix(6))
     }
 
     private var guide: (title: String, body: String) {
@@ -130,14 +121,18 @@ struct BudgetScreen: View {
                     // 1. 정부지원금 전면 배치
                     subsidySection
 
-                    // 2. 도넛 차트 대시보드
-                    donutDashboard
+                    // 2~3. 지출 대시보드 (이번 달 지출 있을 때만)
+                    if hasMonthExpenses {
+                        donutDashboard
+                        categoryListSection
+                    } else {
+                        budgetEmptyCard
+                    }
 
-                    // 3. 카테고리 분해 리스트
-                    categoryListSection
-
-                    // 4. 최근 지출 거래 리스트
-                    recentExpensesSection
+                    // 4. 최근 지출 거래 리스트 (전체 지출 있을 때만)
+                    if !allExpenses.isEmpty {
+                        recentExpensesSection
+                    }
 
                     // 5. 월령별 예상 지출 가이드
                     guideCard
@@ -151,18 +146,6 @@ struct BudgetScreen: View {
             .background(AppColors.canvas.ignoresSafeArea())
             .navigationTitle("가계부")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        // 가족 공유 — 팀장 연결 예정
-                    } label: {
-                        Image(systemName: "person.2.fill")
-                            .foregroundStyle(AppColors.ink2)
-                    }
-                    .frame(width: 44, height: 44)
-                    .accessibilityLabel("가족 공유")
-                }
-            }
             .task(id: store.selectedChild?.id) {
                 await loadSubsidies()
             }
@@ -170,6 +153,19 @@ struct BudgetScreen: View {
         .overlay(alignment: .bottomTrailing) {
             addExpenseFAB
         }
+        .sheet(isPresented: $showAddExpense) {
+            AddExpenseSheet().environmentObject(store)
+        }
+    }
+
+    // MARK: 지출 없음 빈 상태
+
+    private var budgetEmptyCard: some View {
+        BLEmptyState(
+            icon: "wonsign.circle",
+            title: "이번 달 지출 기록이 없어요",
+            message: "오른쪽 아래 + 버튼으로 큰 지출을 추가해보세요.\n마켓 거래·구독은 자동으로 기록돼요."
+        )
     }
 
     // MARK: - Subviews
@@ -263,12 +259,20 @@ struct BudgetScreen: View {
                 HStack(spacing: 0) {
                     miniStat(value: amountFull(monthlyTotal), label: "이번 달 총 지출")
                     Divider().frame(height: 32)
-                    miniStat(value: "-8%", label: "전월 대비", valueTone: AppColors.primary)
+                    if let pct = monthOverMonthPct {
+                        miniStat(value: "\(pct > 0 ? "+" : "")\(pct)%",
+                                 label: "전월 대비",
+                                 valueTone: pct <= 0 ? AppColors.primary : AppColors.danger)
+                    } else {
+                        miniStat(value: "—", label: "전월 대비")
+                    }
                     Divider().frame(height: 32)
-                    miniStat(value: "5.2만원", label: "또래보다 ↓")
+                    miniStat(value: "\(currentMonthExpenses.count)건", label: "이번 달 기록")
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("이번 달 총 지출 \(amountFull(monthlyTotal)), 전월 대비 8% 감소")
+                .accessibilityLabel("이번 달 총 지출 \(amountFull(monthlyTotal))"
+                    + (monthOverMonthPct.map { ", 전월 대비 \($0)%" } ?? "")
+                    + ", \(currentMonthExpenses.count)건 기록")
             }
         }
     }
@@ -381,13 +385,8 @@ struct BudgetScreen: View {
 
     private var recentExpensesSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            BLSectionHead(
-                eyebrow: nil,
-                title: "최근 지출",
-                action: "전체",
-                onAction: { /* 전체 보기 — 팀장 연결 예정 */ }
-            )
-            .accessibilityAddTraits(.isHeader)
+            BLSectionHead(eyebrow: nil, title: "최근 지출")
+                .accessibilityAddTraits(.isHeader)
 
             BLCard(padding: 0) {
                 VStack(spacing: 0) {
@@ -399,6 +398,13 @@ struct BudgetScreen: View {
                         }
 
                         ExpenseRow(expense: expense)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    store.deleteExpense(id: expense.id)
+                                } label: {
+                                    Label("삭제", systemImage: "trash")
+                                }
+                            }
                     }
                 }
             }
@@ -459,7 +465,8 @@ struct BudgetScreen: View {
 
     private var addExpenseFAB: some View {
         Button {
-            // 지출 추가 — 팀장이 연결 예정
+            Haptics.light()
+            showAddExpense = true
         } label: {
             ZStack {
                 Circle()

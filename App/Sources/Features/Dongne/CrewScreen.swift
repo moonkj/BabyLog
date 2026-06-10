@@ -431,6 +431,7 @@ private struct CrewPostRow: View {
 
 private struct CrewColdStartContent: View {
     var onJoinWaitlist: () -> Void
+    @AppStorage("crew_open_notify") private var crewNotifyRequested = false
 
     private let progressPercent: Double = 0.78
     private let remainingCount: Int = 22
@@ -539,33 +540,44 @@ private struct CrewColdStartContent: View {
     // MARK: 액션 버튼들
     private var actionButtons: some View {
         VStack(spacing: 10) {
-            // 친구 초대 — LiquidButton
-            LiquidButton(fill: AppColors.ink, action: { }) {
+            // 친구 초대 — 시스템 공유 시트(ShareLink)
+            ShareLink(
+                item: URL(string: "https://babylog.app")!,
+                subject: Text("BabyLog 초대"),
+                message: Text("우리 동네 육아 앱 BabyLog, 같이 써요! 🌱")
+            ) {
                 HStack(spacing: 8) {
                     Image(systemName: "person.badge.plus.fill")
                         .font(.system(size: 17, weight: .bold))
                     Text("친구 초대하고 빨리 열기")
                         .font(.system(size: 16, weight: .bold))
                 }
+                .foregroundStyle(AppColors.onPrimary)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                .blShadow(.chip)
             }
             .accessibilityLabel("친구 초대하고 빨리 열기")
-            .accessibilityHint("친구를 초대하면 크루 오픈이 빨라집니다")
+            .accessibilityHint("공유 시트로 친구를 초대합니다")
 
-            // 오픈 알림 신청
-            Button { } label: {
+            // 오픈 알림 신청 — 로컬 신청 토글
+            Button {
+                crewNotifyRequested.toggle()
+                Haptics.success()
+            } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "bell.badge.fill")
+                    Image(systemName: crewNotifyRequested ? "bell.fill" : "bell.badge.fill")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("오픈 알림 신청")
+                    Text(crewNotifyRequested ? "오픈 알림 신청됨" : "오픈 알림 신청")
                         .font(.system(size: 15, weight: .bold))
                 }
-                .foregroundStyle(AppColors.ink)
+                .foregroundStyle(crewNotifyRequested ? AppColors.primary : AppColors.ink)
                 .frame(maxWidth: .infinity, minHeight: 50)
                 .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                 .blShadow(.chip)
             }
             .buttonStyle(LiquidPressStyle(scale: 0.975))
-            .accessibilityLabel("오픈 알림 신청")
+            .accessibilityLabel(crewNotifyRequested ? "오픈 알림 신청됨" : "오픈 알림 신청")
             .accessibilityHint("크루가 오픈되면 알림을 받습니다")
         }
     }
