@@ -405,12 +405,16 @@ struct NearbyScreen: View {
     private var hospitalListContent: some View {
         switch hospitalState {
         case .idle, .loading:
-            // BLSkeleton 로딩 플레이스홀더
+            // 레이더 스윕 로딩 (§8.4 기능 진입 — 주변 훑기) + BLSkeleton
             VStack(spacing: 11) {
-                Text("불러오는 중...")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
-                    .padding(.horizontal, 2)
+                VStack(spacing: 6) {
+                    RadarSweepView(size: 72, color: AppColors.primary)
+                    Text("주변을 살펴보는 중...")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(AppColors.ink3)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.s2)
                 ForEach(0..<3, id: \.self) { _ in
                     BLCard(padding: 15) {
                         HStack(alignment: .center, spacing: 12) {

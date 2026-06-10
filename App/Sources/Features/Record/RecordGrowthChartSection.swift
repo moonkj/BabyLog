@@ -105,6 +105,8 @@ struct GrowthChartSection: View {
                 HStack(spacing: Spacing.s2) {
                     ForEach(GrowthMetric.allCases) { m in
                         BLChip(text: m.label, on: metric == m) {
+                            guard metric != m else { return }
+                            Haptics.selection()
                             withAnimation(.easeOut(duration: 0.18)) { metric = m }
                         }
                         .accessibilityAddTraits(metric == m ? .isSelected : [])
@@ -163,12 +165,15 @@ struct GrowthChartSection: View {
     private var assuranceCard: some View {
         BLCard(padding: 16, flat: true) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(AppColors.primary)
-                    .frame(width: 44, height: 44)
-                    .background(AppColors.primarySoft, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                    .accessibilityHidden(true)
+                // 성장 링 (§8.4 기능 진입) — 차오름 + 호흡
+                ZStack {
+                    GrowthRingView(size: 44, lineWidth: 3, color: AppColors.primary)
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.primary)
+                }
+                .frame(width: 44, height: 44)
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("또래와 비슷하게 잘 크고 있어요")
