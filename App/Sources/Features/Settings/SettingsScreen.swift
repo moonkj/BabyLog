@@ -13,7 +13,6 @@ struct SettingsScreen: View {
 
     // MARK: AppStorage
 
-    @AppStorage("bl_theme")            private var theme: String           = "system"
     @AppStorage("bl_night_dim")        private var nightDim: Bool          = false
     @AppStorage("bl_fab_side")         private var fabSide: String         = "right"
     @AppStorage("bl_caregiver_title")  private var caregiverTitle: String  = "양육자"
@@ -54,7 +53,6 @@ struct SettingsScreen: View {
             Text("BabyLog는 Apple 시스템 프레임워크(SwiftUI·Swift Charts·WidgetKit 등)로 제작되었습니다. 추가 서드파티 오픈소스를 도입하면 이 화면에 라이선스를 명시합니다.")
         }
         // 설정 변경 미세 피드백 (§8.5)
-        .sensoryFeedback(.selection, trigger: theme)
         .sensoryFeedback(.selection, trigger: fabSide)
         .sensoryFeedback(.selection, trigger: caregiverTitle)
         .sensoryFeedback(.impact(weight: .light), trigger: nightDim)
@@ -73,26 +71,7 @@ struct SettingsScreen: View {
     // MARK: - 화면 섹션
 
     private var displaySection: some View {
-        settingsSection(eyebrow: "화면", title: "테마 · 야간 모드") {
-            // 테마 선택
-            settingsRow(
-                icon: "paintpalette.fill",
-                iconBg: Color(hex: 0xEEEDFE),
-                iconFg: Color(hex: 0x5B53B0)
-            ) {
-                HStack {
-                    Text("테마")
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(AppColors.ink)
-                    Spacer()
-                    themePickerMenu
-                }
-            }
-
-            Divider()
-                .overlay(AppColors.line)
-                .padding(.leading, 62)
-
+        settingsSection(eyebrow: "화면", title: "야간 모드") {
             // 야간 초저휘도 모드
             settingsRow(
                 icon: "moon.fill",
@@ -120,48 +99,6 @@ struct SettingsScreen: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("야간 초저휘도 모드. 22시~06시 자동 적용. \(nightDim ? "켜짐" : "꺼짐")")
             .accessibilityAddTraits(.isToggle)
-        }
-    }
-
-    // 테마 피커 — Picker(segmented) 대신 Menu로 콤팩트하게
-    private var themePickerMenu: some View {
-        Menu {
-            Button {
-                theme = "system"
-            } label: {
-                Label("시스템 기본", systemImage: theme == "system" ? "checkmark" : "")
-            }
-            Button {
-                theme = "light"
-            } label: {
-                Label("라이트", systemImage: theme == "light" ? "checkmark" : "")
-            }
-            Button {
-                theme = "dark"
-            } label: {
-                Label("다크", systemImage: theme == "dark" ? "checkmark" : "")
-            }
-        } label: {
-            HStack(spacing: Spacing.s1) {
-                Text(themeDisplayName)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppColors.ink2)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
-            }
-            .padding(.horizontal, Spacing.s3)
-            .frame(height: 32)
-            .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-        }
-        .accessibilityLabel("테마 선택. 현재 \(themeDisplayName)")
-    }
-
-    private var themeDisplayName: String {
-        switch theme {
-        case "light":  return "라이트"
-        case "dark":   return "다크"
-        default:       return "시스템"
         }
     }
 

@@ -32,6 +32,7 @@ struct HomeTab: View {
     /// 홈 카드(요약·진입점) 탭 시 해당 탭으로 이동시키는 콜백. MainTabView가 주입.
     var onNavigate: (AppTab) -> Void = { _ in }
     @State private var showEmergency = false
+    @State private var showAddChild = false
 
     // MARK: 선택 아이 상태 — nil이면 children.first를 사용
     @State private var selectedChildId: UUID? = nil
@@ -165,6 +166,9 @@ struct HomeTab: View {
         .fullScreenCover(isPresented: $showEmergency) {
             EmergencyScreen(onClose: { showEmergency = false })
         }
+        .sheet(isPresented: $showAddChild) {
+            AddChildSheet().environmentObject(store)
+        }
     }
 
     // MARK: 레이아웃별 콘텐츠
@@ -246,12 +250,18 @@ struct HomeTab: View {
                         }
                     }
             }
-            Image(systemName: "plus").font(.system(size: 14, weight: .bold))
-                .foregroundStyle(AppColors.ink3)
-                .frame(width: 34, height: 34)
-                .background(AppColors.surface, in: Circle())
-                .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
-                .accessibilityLabel("아이 추가")
+            Button {
+                Haptics.light()
+                showAddChild = true
+            } label: {
+                Image(systemName: "plus").font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppColors.ink3)
+                    .frame(width: 34, height: 34)
+                    .background(AppColors.surface, in: Circle())
+                    .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.92))
+            .accessibilityLabel("아이 추가")
         }
     }
 

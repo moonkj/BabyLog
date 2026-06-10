@@ -3,25 +3,16 @@ import SwiftUI
 @main
 struct BabyLogApp: App {
     @StateObject private var store = AppStore(persistence: .appGroup())
-    @AppStorage("bl_theme") private var theme = "system"
 
     /// 상실 이벤트 → 임신 알림 자동 차단 구독 (민감영역, 앱 생존 동안 유지)
     private let notifications = NotificationService(scheduler: UNNotificationScheduler())
-
-    private var colorScheme: ColorScheme? {
-        switch theme {
-        case "light": return .light
-        case "dark":  return .dark
-        default:      return nil
-        }
-    }
 
     var body: some Scene {
         WindowGroup {
             MainTabView()
                 .environmentObject(store)
                 .tint(AppColors.primary)
-                .preferredColorScheme(colorScheme)
+                .preferredColorScheme(.light)   // 무조건 라이트(데이) 모드 고정
                 .task {
                     store.enableAutoPersist()
                     notifications.start()
