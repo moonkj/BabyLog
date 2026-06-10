@@ -180,3 +180,18 @@
 
 ### 현재 앱 상태 (judgeable)
 온보딩 → 홈(육아/임신 모드) → 기록(타임라인·성장차트·예방접종 / 임신: 태아가이드·태동·배사진) → 동네(주변·응급·마켓·크루) → 가계부(지원금·도넛) → 내정보(티어·뱃지·Pro). + 빠른기록 시트, 성장카드 공유, 상실 알림 차단, 로컬 영속화, 외부 API 스텁. 라이트 모드. **테스트 111개.**
+
+---
+
+## 2026-06-10 — Phase 3 라운드 6 통합 (알림 스케줄링·엔진 3종·데이터 주권)
+
+**상태:** ✅ build+test **171/171 PASS** · iPhone 재설치 · GitHub 푸시
+
+- **알림 스케줄러**(NotificationScheduler vaccineReminders + UNPendingScheduler 권한/등록) → **앱 런치 연결**(권한 다이얼로그 + D-7/D-1/당일 등록)
+- **홈 우선순위 엔진**(PriorityEngine), **뱃지 자동부여**(BadgeEngine), **데이터 내보내기**(DataExporter JSON 주권) — 테스트 완료·available
+- qa: 엔진 4종 60 테스트 / doc: `docs/CHANGELOG.md`
+- **과학적 토론(해소)**: PriorityItem.referenceId 추가 · DataExport 테스트 수정 · vaccineReminders fireDate 전역 정렬(QA 예측 적중)
+- 검증: **171/171 PASS**
+
+### 남은 UI 연결 (엔진은 ready)
+- PriorityEngine→홈 카드 · BadgeEngine→뱃지 그리드 · DataExporter→내정보 내보내기 버튼

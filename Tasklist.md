@@ -154,3 +154,18 @@
 - **팀장 통합(Shell)**: BudgetTab→BudgetScreen · ProfileTab→ProfileScreen · DongneTab(마켓→MarketScreen·크루→CrewScreen) · 임신모드 기록탭→PregnancyRecordScreen
 - **✅ 통합 결과**: build→test → **111/111 PASS** (컴파일 버그 0) · iPhone 재설치·실행 완료
 - 5탭 전부 실화면 완성 → 전체 기능 판단 가능 상태
+
+### 라운드 6 (진행중 · 2026-06-10) — 실데이터화 + 알림
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| coder | 알림 스케줄링(예방접종 D-7/D-1/당일 + 권한) | `Notifications` | ✅ |
+| coder | 홈 우선순위 엔진(PriorityEngine) | `Features/Home` | ✅ |
+| coder | 뱃지 자동부여 엔진(BadgeEngine) | `Features/Profile` | ✅ |
+| coder | 데이터 내보내기/주권(DataExporter JSON) | `Data` | ✅ |
+| qa | 엔진 4종 테스트 60개 | `Tests` | ✅ |
+| doc | CHANGELOG | `docs/CHANGELOG.md` | ✅ |
+
+- **팀장 통합**: 알림 권한 + 예방접종 리마인더 **앱 런치 연결**(UNPendingScheduler). PriorityEngine·BadgeEngine·DataExporter는 테스트 완료·available(UI 진입 점진 연결).
+- **✅ 통합 결과**: build→test → **171/171 PASS** · iPhone 재설치·실행
+- **과학적 토론(해소)**: PriorityItem `referenceId` 추가 · DataExport 테스트 UUID 코드 수정 · `vaccineReminders` fireDate 전역 정렬(QA 예측 적중)
