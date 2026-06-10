@@ -90,3 +90,18 @@
 - **✅ 통합 결과**: test 타깃 추가 → `xcodegen` → `xcodebuild test` → **27/27 PASS**
 - **과학적 토론(해소)**: QA 테스트가 이름 검증 결함(`"\n"` 통과) 적발 → `.whitespacesAndNewlines` 수정 → 녹색
 - **디버거 후속 과제**: 상실 알림 차단 · 전환 원자성(B2) · AgeCalculator UTC 정규화 · ink3 대비 → Phase 3 본구현 트래킹
+
+### 라운드 2 (✅ 완료 · 2026-06-10)
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| coder-data | 🔴 상실 알림 차단(NotificationService) + 원자적 전환(AppStore) | `App/Sources/Notifications`·`Data/AppStore` | ✅ |
+| coder-ui | 기록 화면(타임라인·성장차트 Swift Charts·예방접종) + 셸 연결 | `App/Sources/Features/Record`·`Shell` | ✅ |
+| qa | 알림차단·원자성 테스트 16개 | `Tests/BabyLogTests` | ✅ |
+| perf-doc | 데이터·테스트 문서 | `docs/` | ✅ |
+
+- **계약**: coder-data↔qa `NotificationService`/`AppStore.commitBirthTransition` 시그니처 공유 → 정합 ✅
+- **✅ 통합 결과**: `xcodegen`→build→test → **43/43 PASS** (라운드1 27 + 라운드2 16)
+- **과학적 토론(해소)**: 통합 빌드 시 `AppStore` guard else fall-through 컴파일 에러 → switch 문으로 정리(팀장 통합 수정)
+- **디버거 후속과제 충족**: 상실 알림 자동 차단(1위험) ✅ · 전환 원자성(B2, 무변경 보장) ✅ — 테스트로 교차검증
+- **남은 디버거 과제**: AgeCalculator UTC 정규화·입력검증 / ink3 WCAG 대비 / EventBus 테스트 격리(주입) / CoreData+CloudKit 영속화

@@ -15,7 +15,7 @@ struct MainTabView: View {
                 HomeTab()
                     .tabItem { Label("홈", systemImage: "house.fill") }
                     .tag(AppTab.home)
-                RecordTab()
+                RecordScreen()
                     .tabItem { Label("기록", systemImage: "book.closed.fill") }
                     .tag(AppTab.record)
                 DongneTab()

@@ -110,3 +110,24 @@
 - Pregnancy→Child CoreData 트랜잭션 원자성/복구 (B2)
 - AgeCalculator UTC 정규화 + LMP>오늘/미래 birthDate 입력 검증
 - ink3-on-canvas WCAG AA 대비 재검토
+
+---
+
+## 2026-06-10 — Phase 3 라운드 2 통합 (상실 알림 차단·원자 전환·기록 화면)
+
+**상태:** ✅ 통합 build + test 성공 (**43/43 PASS**)
+
+- **coder-data**: `NotificationService`(상실→알림 자동 취소, `preg-<id>` prefix) + `AppStore`(원자적 전환)
+- **coder-ui**: `RecordScreen`(타임라인·성장차트 Swift Charts WHO밴드+안심메시지·예방접종) + `MainTabView` 연결
+- **qa**: 알림차단·원자성 테스트 16개 (상실/실패 시 store 무변경 검증)
+- **perf-doc**: `docs/data-and-persistence.md`, `docs/testing.md`
+
+### 과학적 토론(해소)
+- 통합 빌드 시 `AppStore.commitBirthTransition`의 guard else fall-through 컴파일 에러 → switch 문으로 정리(팀장 수정)
+
+### 디버거 후속과제 충족
+- 상실 알림 자동 차단(민감영역 1위험) ✅ 구현+테스트
+- Pregnancy→Child 전환 원자성(B2) ✅ 도메인 레벨(무변경 보장)+테스트 — CoreData+CloudKit 영속화는 후속 인프라
+
+### 남은 과제
+- AgeCalculator UTC 정규화 / 입력검증 · ink3 WCAG 대비 · EventBus 테스트 격리(주입) · CoreData 영속화 · 화면(온보딩·동네·홈 임신모드)
