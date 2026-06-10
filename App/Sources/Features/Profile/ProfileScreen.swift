@@ -332,20 +332,24 @@ struct ProfileScreen: View {
             showProDetail = true
         } label: {
             ZStack(alignment: .topTrailing) {
-                // 배경 — 다크 카드
+                // 배경 — 라이트 프리미엄(크림+골드)
                 RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: 0x2A2520), Color(hex: 0x1C1814)],
+                            colors: [Color(hex: 0xFBF3DF), Color(hex: 0xF5E8C8)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                            .stroke(AppColors.gold.opacity(0.35), lineWidth: 1)
+                    }
 
                 // 장식 아이콘
                 Image(systemName: "sparkles")
                     .font(.system(size: 90, weight: .thin))
-                    .foregroundStyle(AppColors.gold.opacity(0.18))
+                    .foregroundStyle(AppColors.gold.opacity(0.28))
                     .offset(x: 10, y: -10)
                     .accessibilityHidden(true)
 
@@ -355,7 +359,7 @@ struct ProfileScreen: View {
 
                     Text("사진 무제한 · AI 일지 · 또래 비교")
                         .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(AppColors.ink)
 
                     // 기능 리스트
                     VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -408,10 +412,10 @@ struct ProfileScreen: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(label)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(AppColors.ink)
                 Text(sub)
                     .font(.system(size: 11.5, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .foregroundStyle(AppColors.ink3)
             }
         }
         .accessibilityElement(children: .combine)
@@ -422,17 +426,17 @@ struct ProfileScreen: View {
         VStack(spacing: 3) {
             Text(label)
                 .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.55))
+                .foregroundStyle(AppColors.ink3)
             Text(price)
                 .font(AppFont.num(18, weight: .bold))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(AppColors.ink)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.s3)
         .background(
             highlighted
-                ? AppColors.gold.opacity(0.15)
-                : Color.white.opacity(0.06),
+                ? AppColors.gold.opacity(0.22)
+                : Color.white.opacity(0.55),
             in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
         )
         .overlay {
