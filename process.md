@@ -63,3 +63,27 @@
 
 ### 대기
 - 디자인 파일 수령 대기 (수령 시 Phase 1 착수, 5탭 셸 + FAB부터 설계)
+
+---
+
+## 2026-06-10 — Flutter→Swift 전환 · 디자인 검토 · 파운데이션 구현
+
+**상태:** ✅ 파운데이션 BUILD SUCCEEDED (iOS26 SDK, arm64+x86_64 시뮬)
+
+### 프레임워크
+- Flutter 스캐폴드 생성 후 오너 지시로 **Swift/SwiftUI 확정** → Flutter 산출물 전량 제거
+- 근거: 리퀴드 글래스(iOS26) = SwiftUI 네이티브 `.glassEffect`/`TabView`가 가장 충실. Xcode 26.5 환경.
+
+### 디자인 검토 (화면 구성)
+- Downloads/BabyLog 디자인 핸드오프(React/JSX + DS CSS + 스크린샷) + DESIGN.md(v1.0) 정독
+- 검토 결과 → [DESIGN_REVIEW.md](team/DESIGN_REVIEW.md) (IA 5탭 확정, 화면별 검토, 리스크 R1~R4, 토큰→Swift 매핑)
+- 디자인 레퍼런스를 `design/handoff/`로 반입(대용량 standalone html 제외)
+
+### 구현 (Phase 3 파운데이션, 빌드 검증)
+- XcodeGen `project.yml` — App 단일 타깃, iOS 17+ 배포, iOS26 기능 @available 게이트
+- 디자인 시스템: AppColors(라이트·다크)·AppTypography·AppMetrics·**LiquidGlass(네이티브)**·**LiquidButton(.bl-liquid)**
+- 컴포넌트: BLCard/BLBadge/BLChip/BLSectionHead/PhotoPlaceholder
+- 셸: MainTabView(5탭, 시스템 Liquid Glass 탭바) + QuickRecordFAB(스피드다이얼) + 홈(스크린샷 재현)·동네(세그먼트)·기록·가계부·내정보
+
+### 다음
+- 병렬 워크플로우로 Phase 3 본구현 (데이터 레이어 · 테스트 · 문서 · 리스크 감사)

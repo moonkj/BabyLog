@@ -1,0 +1,197 @@
+/* ============================================================
+   BabyLog Design System  ·  v0.1
+   "Warm Ivory · Ink · Sage · Gold"
+   Premium / luxury direction for an ad-free, trust-first baby app.
+   Shared by every feature team. Tokens only — no layout.
+   ============================================================ */
+
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css");
+
+:root {
+  /* ---- Surfaces (warm ivory base) ---- */
+  --canvas:      #F4EFE6;  /* app background */
+  --surface:     #FFFFFF;  /* cards, sheets */
+  --surface-2:   #FBF7F0;  /* subtle raised / inset */
+  --surface-3:   #F0EADE;  /* pressed / track */
+  --overlay:     rgba(28, 24, 19, 0.42);
+
+  /* ---- Ink (warm near-black, never pure) ---- */
+  --ink:    #211D17;
+  --ink-2:  #6B6256;
+  --ink-3:  #A89D8C;
+  --ink-on: #FFFFFF;       /* text on primary/dark */
+
+  /* ---- Hairlines ---- */
+  --line:   #E9E1D3;
+  --line-2: #DBD1BF;
+
+  /* ---- Brand primary: deepened sage (ties to mint badge) ---- */
+  --primary:        #4E8268;
+  --primary-press:  #3F6B55;
+  --primary-soft:   #DCEFE6;
+  --primary-tint:   #E1F5EE;
+  --on-primary:     #FFFFFF;
+
+  /* ---- Gold accent: premium / Pro / golden tier ---- */
+  --gold:        #B0832E;
+  --gold-press:  #936C22;
+  --gold-soft:   #F4E6C8;
+  --gold-tint:   #FAEEDA;
+
+  /* ---- Danger: emergency / recall (warm clay-red) ---- */
+  --danger:      #BE4D38;
+  --danger-soft: #F6DDD5;
+  --danger-tint: #FAE2DB;
+
+  /* ---- Categorical badge palette (from spec) ---- */
+  --badge-grey:   #F1EFE8;  --badge-grey-ink:   #877E6B;
+  --badge-mint:   #E1F5EE;  --badge-mint-ink:   #2E7A5C;
+  --badge-purple: #EEEDFE;  --badge-purple-ink: #5B53B0;
+  --badge-amber:  #FAEEDA;  --badge-amber-ink:  #98711E;
+  --badge-coral:  #FAECE7;  --badge-coral-ink:  #B45840;
+  --badge-pink:   #FBEAF0;  --badge-pink-ink:   #B5478A;
+  --badge-blue:   #E6F1FB;  --badge-blue-ink:   #3B6FA8;
+
+  /* ---- Radius ---- */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* ---- Spacing (4-base) ---- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 20px; --s6: 24px; --s7: 32px; --s8: 40px; --s9: 56px;
+
+  /* ---- Shadows (warm-tinted, soft) ---- */
+  --sh-1: 0 1px 2px rgba(40,33,24,.05), 0 1px 1px rgba(40,33,24,.04);
+  --sh-2: 0 2px 4px rgba(40,33,24,.05), 0 8px 20px rgba(40,33,24,.06);
+  --sh-3: 0 4px 8px rgba(40,33,24,.06), 0 18px 40px rgba(40,33,24,.10);
+  --sh-fab: 0 6px 16px rgba(78,130,104,.32), 0 2px 5px rgba(40,33,24,.12);
+
+  /* ---- Type ---- */
+  --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+          system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --num: "Pretendard Variable", "SF Pro Display", -apple-system, sans-serif;
+
+  /* ---- Motion ---- */
+  --ease: cubic-bezier(.22,.61,.36,1);
+  --ease-out: cubic-bezier(.16,1,.3,1);
+}
+
+/* ============================================================
+   Reset-ish base
+   ============================================================ */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--canvas);
+  font-feature-settings: "ss01", "tnum";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button { font-family: inherit; cursor: pointer; border: 0; background: none; }
+img { display: block; max-width: 100%; }
+
+/* ============================================================
+   Type utilities
+   ============================================================ */
+.t-display { font-size: 34px; line-height: 40px; font-weight: 800; letter-spacing: -.02em; }
+.t-h1 { font-size: 27px; line-height: 34px; font-weight: 700; letter-spacing: -.018em; }
+.t-h2 { font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: -.014em; }
+.t-title { font-size: 18px; line-height: 24px; font-weight: 600; letter-spacing: -.01em; }
+.t-body { font-size: 16px; line-height: 24px; font-weight: 400; }
+.t-callout { font-size: 15px; line-height: 22px; font-weight: 400; }
+.t-subhead { font-size: 14px; line-height: 20px; font-weight: 500; }
+.t-caption { font-size: 13px; line-height: 18px; font-weight: 500; }
+.t-micro { font-size: 11px; line-height: 14px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.t-num { font-family: var(--num); font-feature-settings: "tnum"; }
+.ink-2 { color: var(--ink-2); }
+.ink-3 { color: var(--ink-3); }
+
+/* ============================================================
+   Core components (shared)
+   ============================================================ */
+
+/* Cards */
+.bl-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
+.bl-card--flat { box-shadow: none; border: 1px solid var(--line); }
+
+/* Buttons */
+.bl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 52px; padding: 0 22px; border-radius: var(--r-md);
+  font-size: 16px; font-weight: 600; letter-spacing: -.01em;
+  transition: transform .12s var(--ease), background .15s, box-shadow .15s;
+}
+.bl-btn:active { transform: scale(.975); }
+.bl-btn--primary { background: var(--primary); color: var(--on-primary); box-shadow: var(--sh-1); }
+.bl-btn--primary:active { background: var(--primary-press); }
+.bl-btn--gold { background: var(--gold); color: #fff; }
+.bl-btn--ghost { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); }
+.bl-btn--quiet { background: transparent; color: var(--ink-2); height: 44px; }
+.bl-btn--danger { background: var(--danger); color: #fff; }
+.bl-btn--block { display: flex; width: 100%; }
+
+/* Badge / tier chip */
+.bl-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 10px; border-radius: var(--r-pill);
+  font-size: 12.5px; font-weight: 700; letter-spacing: -.01em;
+  white-space: nowrap;
+}
+.bl-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .85; }
+.bl-badge--grey   { background: var(--badge-grey);   color: var(--badge-grey-ink); }
+.bl-badge--mint   { background: var(--badge-mint);   color: var(--badge-mint-ink); }
+.bl-badge--purple { background: var(--badge-purple); color: var(--badge-purple-ink); }
+.bl-badge--amber  { background: var(--badge-amber);  color: var(--badge-amber-ink); }
+.bl-badge--coral  { background: var(--badge-coral);  color: var(--badge-coral-ink); }
+.bl-badge--pink   { background: var(--badge-pink);   color: var(--badge-pink-ink); }
+.bl-badge--blue   { background: var(--badge-blue);   color: var(--badge-blue-ink); }
+
+/* Pills / chips (filters) */
+.bl-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px;
+  border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--line);
+  font-size: 14px; font-weight: 500; color: var(--ink-2);
+  transition: all .15s var(--ease);
+}
+.bl-chip--on { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* Section label */
+.bl-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+
+/* Divider */
+.bl-hr { height: 1px; background: var(--line); border: 0; margin: 0; }
+
+/* ============================================================
+   Liquid button — TickLab-style "flowing water" sheen
+   Glossy meniscus + a slow light band that flows across.
+   Add class .bl-liquid to any filled CTA (button/div).
+   Pseudo layers sit at z-index:-1 so content stays crisp.
+   ============================================================ */
+.bl-liquid { position: relative; overflow: hidden; isolation: isolate; }
+.bl-liquid::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(130% 70% at 50% -16%, rgba(255,255,255,.34), rgba(255,255,255,0) 62%),
+    linear-gradient(180deg, rgba(255,255,255,.12), rgba(0,0,0,.05) 90%);
+  mix-blend-mode: screen;
+}
+.bl-liquid::after {
+  content: ''; position: absolute; top: -30%; bottom: -30%; left: -50%; width: 50%; z-index: -1; pointer-events: none;
+  background: linear-gradient(118deg, transparent 0%, rgba(255,255,255,0) 28%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 72%, transparent 100%);
+  transform: skewX(-14deg); filter: blur(3px);
+  animation: blFlow 4.6s cubic-bezier(.55,.06,.2,1) infinite;
+}
+.bl-liquid:active::after { animation-duration: 1.1s; }
+@keyframes blFlow { 0% { left: -50%; } 56%, 100% { left: 128%; } }
+@media (prefers-reduced-motion: reduce) { .bl-liquid::after { animation: none; opacity: 0; } }

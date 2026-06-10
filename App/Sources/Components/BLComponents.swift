@@ -1,0 +1,119 @@
+import SwiftUI
+
+/// 카드 — DESIGN.md §5 (용도별 변주, 기본 radius 22)
+struct BLCard<Content: View>: View {
+    var padding: CGFloat = 18
+    var flat: Bool = false
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+        content()
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppColors.surface, in: shape)
+            .overlay { if flat { shape.stroke(AppColors.line, lineWidth: 1) } }
+            .modifier(CardShadow(flat: flat))
+    }
+}
+
+private struct CardShadow: ViewModifier {
+    var flat: Bool
+    func body(content: Content) -> some View {
+        if flat { content } else { content.blShadow(.card) }
+    }
+}
+
+/// 뱃지/티어 칩 — 색+아이콘(옵션)+레이블 3중 인코딩 (DESIGN.md §11.1)
+struct BLBadge: View {
+    var tone: BadgeTone
+    var text: String
+    var systemIcon: String? = nil
+    var dot: Bool = true
+
+    var body: some View {
+        HStack(spacing: dot || systemIcon != nil ? 5 : 4) {
+            if let systemIcon {
+                Image(systemName: systemIcon).font(.system(size: 11, weight: .bold))
+            } else if dot {
+                Circle().fill(tone.ink.opacity(0.85)).frame(width: 6, height: 6)
+            }
+            Text(text).font(.system(size: 12.5, weight: .bold))
+        }
+        .foregroundStyle(tone.ink)
+        .padding(.horizontal, 10)
+        .frame(height: 25)
+        .background(tone.bg, in: Capsule())
+    }
+}
+
+/// 필터 칩 — 온/오프 (DESIGN.md §5.1)
+struct BLChip: View {
+    var text: String
+    var on: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(text)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(on ? Color.white : AppColors.ink2)
+                .padding(.horizontal, 14)
+                .frame(height: 36)
+                .background(on ? AppColors.ink : AppColors.surface, in: Capsule())
+                .overlay { Capsule().stroke(on ? AppColors.ink : AppColors.line, lineWidth: 1) }
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.96))
+    }
+}
+
+/// 섹션 헤더 (아이브로/타이틀 + 액션)
+struct BLSectionHead: View {
+    var eyebrow: String? = nil
+    var title: String
+    var action: String? = nil
+    var onAction: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                if let eyebrow {
+                    Text(eyebrow.uppercased())
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1)
+                        .foregroundStyle(AppColors.ink3)
+                }
+                Text(title).font(AppFont.title).foregroundStyle(AppColors.ink)
+            }
+            Spacer()
+            if let action, let onAction {
+                Button(action: onAction) {
+                    HStack(spacing: 2) {
+                        Text(action).font(.system(size: 13.5, weight: .semibold))
+                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(AppColors.ink3)
+                }
+            }
+        }
+    }
+}
+
+/// 따뜻한 그라데이션 사진 플레이스홀더 (DESIGN.md §13.3 / ui.jsx Photo)
+struct PhotoPlaceholder: View {
+    var seed: Int = 0
+    var cornerRadius: CGFloat = Radius.md
+    private static let grads: [[Color]] = [
+        [Color(hex: 0xF3E4D2), Color(hex: 0xE7CDB6)],
+        [Color(hex: 0xDCEFE6), Color(hex: 0xBFE0D0)],
+        [Color(hex: 0xEDEBFB), Color(hex: 0xD8D4F2)],
+        [Color(hex: 0xFBE6EE), Color(hex: 0xF4C9DA)],
+        [Color(hex: 0xE6F1FB), Color(hex: 0xC7DDF2)],
+        [Color(hex: 0xFBF0D8), Color(hex: 0xF2DCA9)],
+    ]
+    var body: some View {
+        LinearGradient(colors: Self.grads[seed % Self.grads.count],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}

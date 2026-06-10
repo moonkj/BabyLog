@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BabyLog · Design System</title>
+<link rel="stylesheet" href="babylog-ds.css">
+<style>
+  body { background: #E8E3D9; padding: 0 0 120px; }
+  .studio { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---- Masthead ---- */
+  .mast { padding: 72px 0 40px; text-align: center; }
+  .wordmark {
+    display: inline-flex; align-items: center; gap: 12px; margin-bottom: 22px;
+  }
+  .wordmark .glyph {
+    width: 54px; height: 54px; border-radius: 17px;
+    background: linear-gradient(150deg, var(--primary), #3F6B55);
+    box-shadow: var(--sh-2); position: relative;
+    display: grid; place-items: center;
+  }
+  .wordmark .glyph svg { width: 30px; height: 30px; }
+  .wordmark .name { font-size: 38px; font-weight: 800; letter-spacing: -.03em; }
+  .wordmark .name b { color: var(--primary); font-weight: 800; }
+  .mast .tagline { font-size: 20px; color: var(--ink-2); letter-spacing: -.01em; margin: 0 0 6px; }
+  .mast .meta { font-size: 13px; color: var(--ink-3); letter-spacing: .02em; }
+
+  /* ---- Team strip ---- */
+  .team { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 34px 0 8px; }
+  .team .role {
+    background: var(--surface); border-radius: var(--r-md); padding: 14px 14px 16px;
+    box-shadow: var(--sh-1); border: 1px solid rgba(0,0,0,.02);
+  }
+  .team .role .tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ink-3); text-transform: uppercase; }
+  .team .role .who { font-size: 14px; font-weight: 700; margin: 7px 0 3px; }
+  .team .role .what { font-size: 12px; line-height: 16px; color: var(--ink-2); }
+  .team .role.lead { background: var(--ink); }
+  .team .role.lead .tag { color: rgba(255,255,255,.5); }
+  .team .role.lead .who { color: #fff; }
+  .team .role.lead .what { color: rgba(255,255,255,.7); }
+
+  /* ---- Section scaffold ---- */
+  section { margin-top: 56px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; }
+  .sec-head .no { font-size: 13px; font-weight: 800; color: var(--primary); letter-spacing: .04em; }
+  .sec-head h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+  .sec-head .sub { font-size: 14px; color: var(--ink-3); margin-left: auto; }
+
+  .panel { background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--sh-2); padding: 30px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+  /* ---- Color ---- */
+  .swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .sw { border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--line); }
+  .sw .chip { height: 76px; }
+  .sw .lab { padding: 9px 11px 11px; background: var(--surface); }
+  .sw .lab .nm { font-size: 12.5px; font-weight: 700; }
+  .sw .lab .hx { font-size: 11px; color: var(--ink-3); font-family: var(--num); letter-spacing: .02em; margin-top: 2px; }
+  .swatches.tints { grid-template-columns: repeat(7, 1fr); }
+  .sw.tint .chip { height: 56px; display: grid; place-items: center; }
+  .sw.tint .chip b { font-size: 12px; font-weight: 800; }
+
+  /* ---- Type specimen ---- */
+  .spec-row { display: flex; align-items: baseline; gap: 18px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .spec-row:last-child { border-bottom: 0; }
+  .spec-row .tk { width: 130px; flex: none; font-size: 12px; color: var(--ink-3); font-weight: 600; }
+  .spec-row .ex { flex: 1; }
+  .spec-row .px { font-size: 12px; color: var(--ink-3); font-family: var(--num); flex: none; }
+
+  /* ---- Component shelf ---- */
+  .shelf { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .row-demo { display: flex; flex-direction: column; gap: 1px; background: var(--line); border-radius: var(--r-md); overflow: hidden; }
+  .lrow { display: flex; align-items: center; gap: 13px; padding: 13px 15px; background: var(--surface); }
+  .lrow .av { width: 42px; height: 42px; border-radius: 13px; flex: none; display: grid; place-items: center; }
+  .lrow .tx { flex: 1; min-width: 0; }
+  .lrow .tx .l1 { font-size: 15px; font-weight: 600; }
+  .lrow .tx .l2 { font-size: 13px; color: var(--ink-2); margin-top: 1px; }
+  .lrow .meta { font-size: 13px; color: var(--ink-3); font-weight: 600; }
+
+  .label-mini { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 12px; }
+
+  /* ---- Tiers ---- */
+  .tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .tier { border-radius: var(--r-lg); padding: 20px 18px; position: relative; overflow: hidden; border: 1px solid rgba(0,0,0,.04); }
+  .tier .medal { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 14px; box-shadow: var(--sh-1); }
+  .tier .medal svg { width: 24px; height: 24px; }
+  .tier h4 { margin: 0 0 2px; font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+  .tier .cond { font-size: 12px; line-height: 16px; color: var(--ink-2); min-height: 32px; }
+  .tier .bd-list { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+
+  /* ---- Badge catalog ---- */
+  .catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 10px; }
+  .bd-cell { display: flex; align-items: center; gap: 9px; padding: 10px 12px; background: var(--surface-2); border-radius: var(--r-sm); border: 1px solid var(--line); }
+  .bd-cell .ic { width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center; }
+  .bd-cell .ic svg { width: 17px; height: 17px; }
+  .bd-cell .nm { font-size: 12.5px; font-weight: 600; line-height: 14px; }
+  .bd-cell .cd { font-size: 10.5px; color: var(--ink-3); margin-top: 2px; }
+
+  /* ---- Profile card demo ---- */
+  .profile {
+    background: linear-gradient(180deg, #FFFFFF, #FBF7F0);
+    border-radius: var(--r-xl); padding: 22px; box-shadow: var(--sh-2);
+    border: 1px solid var(--line); max-width: 380px;
+  }
+  .profile .top { display: flex; gap: 14px; align-items: center; }
+  .profile .pic { width: 60px; height: 60px; border-radius: 50%; flex: none;
+    background: linear-gradient(150deg, #EADFC8, #E1F5EE); display: grid; place-items: center;
+    font-size: 22px; font-weight: 800; color: var(--primary); }
+  .profile .who { flex: 1; }
+  .profile .who .nm { display: flex; align-items: center; gap: 8px; }
+  .profile .who .nm b { font-size: 18px; font-weight: 800; }
+  .profile .who .sub { font-size: 12.5px; color: var(--ink-2); margin-top: 4px; }
+  .profile .bdrow { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0; }
+  .profile .stats { display: flex; gap: 0; border-top: 1px solid var(--line); padding-top: 14px; }
+  .profile .stat { flex: 1; text-align: center; border-right: 1px solid var(--line); }
+  .profile .stat:last-child { border-right: 0; }
+  .profile .stat .v { font-size: 17px; font-weight: 800; font-family: var(--num); }
+  .profile .stat .k { font-size: 10.5px; color: var(--ink-3); margin-top: 2px; }
+
+  /* ---- Tokens grid ---- */
+  .tok { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+  .tok .col h5 { margin: 0 0 12px; font-size: 13px; font-weight: 800; letter-spacing: -.01em; }
+  .tok .line { display: flex; align-items: center; gap: 12px; padding: 7px 0; font-size: 12.5px; }
+  .tok .line .demo { flex: none; }
+  .tok .line .nm { color: var(--ink-2); font-family: var(--num); }
+  .rdemo { background: var(--primary-tint); border: 1.5px solid var(--primary); }
+
+  .note { font-size: 12.5px; color: var(--ink-3); line-height: 18px; margin-top: 14px; }
+
+  @media (max-width: 760px) {
+    .team, .tiers { grid-template-columns: repeat(2,1fr); }
+    .swatches { grid-template-columns: repeat(3,1fr); }
+    .swatches.tints { grid-template-columns: repeat(4,1fr); }
+    .grid-2, .tok { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="studio">
+
+  <!-- MASTHEAD -->
+  <div class="mast">
+    <div class="wordmark">
+      <span class="glyph">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-4.4-7-9.6C5 8.4 7.2 6.5 9.4 6.5c1.5 0 2.4.7 2.6 1.9.2-1.2 1.1-1.9 2.6-1.9C16.8 6.5 19 8.4 19 11.4 19 16.6 12 21 12 21z" fill="#fff" opacity=".95"/><circle cx="12" cy="4.2" r="2" fill="#FAEEDA"/></svg>
+      </span>
+      <span class="name">Baby<b>Log</b></span>
+    </div>
+    <p class="tagline">우리 동네 육아의 모든 것</p>
+    <p class="meta">DESIGN SYSTEM v0.1  ·  Warm Ivory · Ink · Sage · Gold  ·  Flutter (iOS + Android)</p>
+  </div>
+
+  <!-- TEAM -->
+  <div class="team">
+    <div class="role lead">
+      <div class="tag">Foundation</div>
+      <div class="who">🎨 Design System</div>
+      <div class="what">컬러·타입·컴포넌트·뱃지 시스템</div>
+    </div>
+    <div class="role">
+      <div class="tag">v1 Core</div>
+      <div class="who">👶 기록 담당</div>
+      <div class="what">성장기록·일지·온보딩·홈</div>
+    </div>
+    <div class="role">
+      <div class="tag">v1 Core</div>
+      <div class="who">🏥 주변/응급</div>
+      <div class="what">주변 인프라·응급·알림·위젯</div>
+    </div>
+    <div class="role">
+      <div class="tag">v2</div>
+      <div class="who">🛒 커머스</div>
+      <div class="what">마켓·렌탈·가계부·지원금</div>
+    </div>
+    <div class="role">
+      <div class="tag">v2.5–v3</div>
+      <div class="who">🤝 커뮤니티</div>
+      <div class="what">크루·게시판·뱃지·신뢰도</div>
+    </div>
+  </div>
+  <p class="note" style="text-align:center; max-width:680px; margin:16px auto 0;">
+    각 담당이 자기 영역을 디자인하되, 모두 이 Design System의 토큰과 컴포넌트를 공유합니다.
+    <b style="color:var(--ink-2)">정보가 주인공, 매물은 조연</b> — 스펙의 콘텐츠 커머스 원칙을 비주얼에도 반영합니다.
+  </p>
+
+  <!-- 01 COLOR -->
+  <section>
+    <div class="sec-head"><span class="no">01</span><h2>컬러 시스템</h2><span class="sub">따뜻한 아이보리 · 절제된 세이지 · 골드 포인트</span></div>
+    <div class="panel">
+      <div class="label-mini">Surfaces & Ink</div>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#F4EFE6"></div><div class="lab"><div class="nm">Canvas</div><div class="hx">#F4EFE6</div></div></div>
+        <div class="sw"><div class="chip" style="background:#FFFFFF"></div><div class="lab"><div class="nm">Surface</div><div class="hx">#FFFFFF</div></div></div>
+        <div class="sw"><div class="chip" style="background:#FBF7F0"></div><div class="lab"><div class="nm">Surface 2</div><div class="hx">#FBF7F0</div></div></div>
+        <div class="sw"><div class="chip" style="background:#211D17"></div><div class="lab"><div class="nm">Ink</div><div class="hx">#211D17</div></div></div>
+        <div class="sw"><div class="chip" style="background:#6B6256"></div><div class="lab"><div class="nm">Ink 2</div><div class="hx">#6B6256</div></div></div>
+        <div class="sw"><div class="chip" style="background:#A89D8C"></div><div class="lab"><div class="nm">Ink 3</div><div class="hx">#A89D8C</div></div></div>
+      </div>
+
+      <div class="label-mini" style="margin-top:24px;">Brand</div>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#4E8268"></div><div class="lab"><div class="nm">Primary · Sage</div><div class="hx">#4E8268</div></div></div>
+        <div class="sw"><div class="chip" style="background:#3F6B55"></div><div class="lab"><div class="nm">Primary Press</div><div class="hx">#3F6B55</div></div></div>
+        <div class="sw"><div class="chip" style="background:#B0832E"></div><div class="lab"><div class="nm">Gold · Premium</div><div class="hx">#B0832E</div></div></div>
+        <div class="sw"><div class="chip" style="background:#BE4D38"></div><div class="lab"><div class="nm">Danger · 응급</div><div class="hx">#BE4D38</div></div></div>
+        <div class="sw"><div class="chip" style="background:#DCEFE6"></div><div class="lab"><div class="nm">Primary Soft</div><div class="hx">#DCEFE6</div></div></div>
+        <div class="sw"><div class="chip" style="background:#F4E6C8"></div><div class="lab"><div class="nm">Gold Soft</div><div class="hx">#F4E6C8</div></div></div>
+      </div>
+
+      <div class="label-mini" style="margin-top:24px;">뱃지 팔레트 · 카테고리 (스펙 정의 — 색 + 아이콘 + 레이블 3중 인코딩)</div>
+      <div class="swatches tints">
+        <div class="sw tint"><div class="chip" style="background:#F1EFE8;color:#877E6B"><b>새싹</b></div><div class="lab"><div class="hx">#F1EFE8</div></div></div>
+        <div class="sw tint"><div class="chip" style="background:#E1F5EE;color:#2E7A5C"><b>민트</b></div><div class="lab"><div class="hx">#E1F5EE</div></div></div>
+        <div class="sw tint"><div class="chip" style="background:#EEEDFE;color:#5B53B0"><b>퍼플</b></div><div class="lab"><div class="hx">#EEEDFE</div></div></div>
+        <div class="sw tint"><div class="chip" style="background:#FAEEDA;color:#98711E"><b>앰버</b></div><div class="lab"><div class="hx">#FAEEDA</div></div></div>
+        <div class="sw tint"><div class="chip" style="background:#FAECE7;color:#B45840"><b>코랄</b></div><div class="lab"><div class="hx">#FAECE7</div></div></div>
+        <div class="sw tint"><div class="chip" style="background:#FBEAF0;color:#B5478A"><b>핑크</b></div><div class="lab"><div class="hx">#FBEAF0</div></div></div>
+        <div class="sw tint"><div class="chip" style="background:#E6F1FB;color:#3B6FA8"><b>블루</b></div><div class="lab"><div class="hx">#E6F1FB</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 TYPE -->
+  <section>
+    <div class="sec-head"><span class="no">02</span><h2>타이포그래피</h2><span class="sub">Pretendard Variable · Dynamic Type 대응</span></div>
+    <div class="panel">
+      <div class="spec-row"><div class="tk">Display · 800</div><div class="ex t-display">우리 동네 육아</div><div class="px">34 / 40</div></div>
+      <div class="spec-row"><div class="tk">H1 · 700</div><div class="ex t-h1">지호의 152번째 순간</div><div class="px">27 / 34</div></div>
+      <div class="spec-row"><div class="tk">H2 · 700</div><div class="ex t-h2">오늘 동네 야간 소아과</div><div class="px">22 / 28</div></div>
+      <div class="spec-row"><div class="tk">Title · 600</div><div class="ex t-title">성장 기록을 남겨볼까요?</div><div class="px">18 / 24</div></div>
+      <div class="spec-row"><div class="tk">Body · 400</div><div class="ex t-body">사진 한 장이면 충분해요. 키와 몸무게는 선택이에요.</div><div class="px">16 / 24</div></div>
+      <div class="spec-row"><div class="tk">Subhead · 500</div><div class="ex t-subhead">또래와 비슷하게 잘 크고 있어요</div><div class="px">14 / 20</div></div>
+      <div class="spec-row"><div class="tk">Caption · 500</div><div class="ex t-caption ink-2">3분 전 확인 · 신뢰도 높음</div><div class="px">13 / 18</div></div>
+      <div class="spec-row"><div class="tk">Num · tnum</div><div class="ex t-num" style="font-size:24px;font-weight:800;">D+128 · 4개월 6일 · 6.4kg</div><div class="px">tabular</div></div>
+    </div>
+  </section>
+
+  <!-- 03 COMPONENTS -->
+  <section>
+    <div class="sec-head"><span class="no">03</span><h2>공통 컴포넌트</h2><span class="sub">버튼 · 칩 · 리스트 · 카드 · FAB · 탭바</span></div>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="label-mini">Buttons</div>
+        <div class="shelf" style="margin-bottom:18px;">
+          <button class="bl-btn bl-btn--primary">기록 저장</button>
+          <button class="bl-btn bl-btn--gold">Pro 시작</button>
+          <button class="bl-btn bl-btn--ghost">자세히</button>
+        </div>
+        <div class="shelf">
+          <button class="bl-btn bl-btn--danger">📞 지금 전화</button>
+          <button class="bl-btn bl-btn--quiet">건너뛰기</button>
+        </div>
+        <div class="label-mini" style="margin-top:24px;">Filter chips</div>
+        <div class="shelf">
+          <button class="bl-chip bl-chip--on">현재 영업중</button>
+          <button class="bl-chip">야간진료</button>
+          <button class="bl-chip">공휴일</button>
+          <button class="bl-chip">0–2세</button>
+        </div>
+        <div class="label-mini" style="margin-top:24px;">Status badges</div>
+        <div class="shelf">
+          <span class="bl-badge bl-badge--mint"><span class="dot"></span>영업중</span>
+          <span class="bl-badge bl-badge--amber">3분 전 확인</span>
+          <span class="bl-badge bl-badge--coral">⚠ 리콜 대상</span>
+          <span class="bl-badge bl-badge--blue">S 등급</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="label-mini">List rows</div>
+        <div class="row-demo">
+          <div class="lrow">
+            <div class="av" style="background:var(--badge-coral);"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#B45840" stroke-width="1.8"><path d="M19 14c0 3.9-3.1 7-7 7s-7-3.1-7-7a7 7 0 0114 0z"/><path d="M12 3v4M9 5h6"/></svg></div>
+            <div class="tx"><div class="l1">행복소아과의원</div><div class="l2">야간진료 · 320m · ☆ 4.8</div></div>
+            <div class="meta">영업중</div>
+          </div>
+          <div class="lrow">
+            <div class="av" style="background:var(--badge-blue);"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#3B6FA8" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 9h6M9 13h4"/></svg></div>
+            <div class="tx"><div class="l1">스토케 트레일즈 유모차</div><div class="l2">S등급 · 12개월+ · 마포구</div></div>
+            <div class="meta">45,000</div>
+          </div>
+          <div class="lrow">
+            <div class="av" style="background:var(--gold-tint);"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#98711E" stroke-width="1.8"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 21l-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg></div>
+            <div class="tx"><div class="l1">아동수당 신청</div><div class="l2">이번 달부터 월 10만원</div></div>
+            <div class="meta" style="color:var(--gold);">D-4</div>
+          </div>
+        </div>
+
+        <div class="label-mini" style="margin-top:22px;">Tab bar + FAB</div>
+        <div style="position:relative; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:11px 8px 13px; display:flex; justify-content:space-around; box-shadow:var(--sh-1);">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--primary);"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 11l9-7 9 7M5 10v9h14v-9"/></svg><span style="font-size:10px;font-weight:700;">홈</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--ink-3);"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 21s-7-5-7-10a7 7 0 0114 0c0 5-7 10-7 10z"/><circle cx="12" cy="11" r="2.4"/></svg><span style="font-size:10px;font-weight:600;">주변</span></div>
+          <div style="width:54px;"></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--ink-3);"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 9h16"/></svg><span style="font-size:10px;font-weight:600;">마켓</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--ink-3);"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.3 3.1-5 7-5s7 1.7 7 5"/></svg><span style="font-size:10px;font-weight:600;">내정보</span></div>
+          <div style="position:absolute; left:50%; top:-18px; transform:translateX(-50%); width:56px; height:56px; border-radius:50%; background:var(--primary); box-shadow:var(--sh-fab); display:grid; place-items:center;">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+        </div>
+        <p class="note">FAB는 한 손 조작을 위해 하단 중앙 · iOS HIG 위치 준수. 사진 1장 = 1기록(2탭 완료).</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 TIER SYSTEM -->
+  <section>
+    <div class="sec-head"><span class="no">04</span><h2>티어 & 뱃지 시스템</h2><span class="sub">TickLab 계보 · 숫자가 아닌 '언어'로 정체성 표현</span></div>
+    <div class="panel">
+      <div class="tiers">
+        <div class="tier" style="background:#F7F5EF;">
+          <div class="medal" style="background:#fff;"><svg viewBox="0 0 24 24" fill="none" stroke="#877E6B" stroke-width="1.7"><path d="M12 20c-1-5-3-7-3-10a3 3 0 016 0c0 3-2 5-3 10z"/><path d="M12 10c2 0 4-1 4-4M12 13c-2 0-4-1-4-3.5"/></svg></div>
+          <h4>새싹</h4>
+          <div class="cond">가입 직후 ~ 거래 2회 이하</div>
+          <div class="bd-list">
+            <span class="bl-badge bl-badge--grey"><span class="dot"></span>새싹 양육자</span>
+            <span class="bl-badge bl-badge--grey">첫 거래 완료</span>
+          </div>
+        </div>
+        <div class="tier" style="background:#EAF7F1;">
+          <div class="medal" style="background:#fff;"><svg viewBox="0 0 24 24" fill="none" stroke="#2E7A5C" stroke-width="1.7"><path d="M12 21s-7-5-7-10a7 7 0 0114 0c0 5-7 10-7 10z" fill="#E1F5EE"/><circle cx="12" cy="11" r="2.6"/></svg></div>
+          <h4>따뜻한 이웃</h4>
+          <div class="cond">거래 3–9회 + 후기 보유</div>
+          <div class="bd-list">
+            <span class="bl-badge bl-badge--mint"><span class="dot"></span>따뜻한 이웃</span>
+            <span class="bl-badge bl-badge--mint">나눔 천사</span>
+          </div>
+        </div>
+        <div class="tier" style="background:#F0EFFD;">
+          <div class="medal" style="background:#fff;"><svg viewBox="0 0 24 24" fill="none" stroke="#5B53B0" stroke-width="1.7"><path d="M5 19l1.5-9 5.5 4 5.5-4L19 19z" fill="#EEEDFE"/><circle cx="12" cy="5" r="2"/></svg></div>
+          <h4>믿음직한 맘</h4>
+          <div class="cond">거래 10–29회 + 평점 4.5↑</div>
+          <div class="bd-list">
+            <span class="bl-badge bl-badge--purple"><span class="dot"></span>믿음직한 맘</span>
+            <span class="bl-badge bl-badge--purple">육아고수</span>
+          </div>
+        </div>
+        <div class="tier" style="background:linear-gradient(180deg,#FBF1DC,#FAEEDA);">
+          <div class="medal" style="background:#fff;"><svg viewBox="0 0 24 24" fill="none" stroke="#98711E" stroke-width="1.6"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9z" fill="#FAEEDA"/></svg></div>
+          <h4>골든 맘</h4>
+          <div class="cond">거래 30회+ · 평점 4.8+ · 6개월+</div>
+          <div class="bd-list">
+            <span class="bl-badge bl-badge--amber"><span class="dot"></span>골든 맘</span>
+            <span class="bl-badge bl-badge--amber">동네 레전드</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="label-mini" style="margin-top:28px;">전체 뱃지 카탈로그 · 거래 / 기록 / 커뮤니티 / 특별</div>
+      <div class="catalog">
+        <div class="bd-cell"><div class="ic" style="background:var(--badge-mint)"><svg viewBox="0 0 24 24" fill="none" stroke="#2E7A5C" stroke-width="1.8"><path d="M20 12a8 8 0 11-3-6"/><path d="M9 12l2 2 5-5"/></svg></div><div><div class="nm">나눔 천사</div><div class="cd">무료나눔 3회+</div></div></div>
+        <div class="bd-cell"><div class="ic" style="background:var(--badge-mint)"><svg viewBox="0 0 24 24" fill="none" stroke="#2E7A5C" stroke-width="1.8"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg></div><div><div class="nm">빠른 답장</div><div class="cd">응답률 90%+</div></div></div>
+        <div class="bd-cell"><div class="ic" style="background:var(--badge-purple)"><svg viewBox="0 0 24 24" fill="none" stroke="#5B53B0" stroke-width="1.8"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M9 12l2 2 4-4"/></svg></div><div><div class="nm">안심 판매자</div><div class="cd">거래10+·분쟁0</div></div></div>
+        <div class="bd-cell"><div class="ic" style="background:var(--badge-purple)"><svg viewBox="0 0 24 24" fill="none" stroke="#5B53B0" stroke-width="1.8"><path d="M4 19V5a2 2 0 012-2h9l5 5v11a2 2 0 01-2 2z"/><path d="M8 12h8M8 16h5"/></svg></div><div><div class="nm">육아고수</div><div class="cd">기록 50회+</div></div></div>
+        <div class="bd-cell"><div class="ic" style="background:var(--badge-amber)"><svg viewBox="0 0 24 24" fill="none" stroke="#98711E" stroke-width="1.6"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9z"/></svg></div><div><div class="nm">안심 거래왕</div><div class="cd">거래 50회+</div></div></div>
+        <div class="bd-cell"><div class="ic" style="background:var(--badge-blue)"><svg viewBox="0 0 24 24" fill="none" stroke="#3B6FA8" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.4"/><path d="M3 19c0-2.8 2.6-4.5 6-4.5M13 19c0-2.2 1.6-3.6 4-3.8"/></svg></div><div><div class="nm">모임 주선자</div><div class="cd">크루 생성 5회+</div></div></div>
+        <div class="bd-cell"><div class="ic" style="background:var(--badge-pink)"><svg viewBox="0 0 24 24" fill="none" stroke="#B5478A" stroke-width="1.8"><path d="M12 21s-7-4.4-7-9.6C5 8.4 7.2 6.5 9.4 6.5c1.5 0 2.4.7 2.6 1.9.2-1.2 1.1-1.9 2.6-1.9C16.8 6.5 19 8.4 19 11.4 19 16.6 12 21 12 21z"/></svg></div><div><div class="nm">첫돌 완주</div><div class="cd">돌까지 기록 유지</div></div></div>
+        <div class="bd-cell"><div class="ic" style="background:var(--badge-grey)"><svg viewBox="0 0 24 24" fill="none" stroke="#877E6B" stroke-width="1.8"><path d="M12 2l2 4 4 .6-3 3 .7 4.4L12 12l-3.7 2 .7-4.4-3-3 4-.6z"/></svg></div><div><div class="nm">베타 테스터</div><div class="cd">영구 · 박탈불가</div></div></div>
+      </div>
+      <p class="note">티어 뱃지는 분기 1회 자동 재산정(최근 6개월). 활동 뱃지는 조건 달성 즉시 부여. 특별 뱃지(베타·초기멤버)는 영구 보존. 신규 획득 시 푸시 + 축하 애니메이션(TickLab 언락 경험 이식).</p>
+    </div>
+  </section>
+
+  <!-- 05 PROFILE CARD -->
+  <section>
+    <div class="sec-head"><span class="no">05</span><h2>프로필 카드</h2><span class="sub">티어 1개 필수 + 보조 뱃지 최대 3개 (유저 직접 정렬)</span></div>
+    <div class="grid-2">
+      <div class="profile">
+        <div class="top">
+          <div class="pic">김</div>
+          <div class="who">
+            <div class="nm"><b>김지수맘</b><span class="bl-badge bl-badge--amber"><span class="dot"></span>골든 맘</span></div>
+            <div class="sub">36개월 아이 · 서울 마포구 · 가입 8개월</div>
+          </div>
+        </div>
+        <div class="bdrow">
+          <span class="bl-badge bl-badge--amber">안심 거래왕</span>
+          <span class="bl-badge bl-badge--mint">나눔 천사</span>
+          <span class="bl-badge bl-badge--purple">육아고수</span>
+          <span class="bl-badge bl-badge--grey">초기 멤버</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="v">47</div><div class="k">거래</div></div>
+          <div class="stat"><div class="v">4.9</div><div class="k">평점</div></div>
+          <div class="stat"><div class="v">12</div><div class="k">크루</div></div>
+          <div class="stat"><div class="v">94%</div><div class="k">응답률</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="label-mini">매물 리스트 미니 노출 · 최대 2개 (티어 + 신뢰 뱃지 자동)</div>
+        <div class="row-demo" style="margin-bottom:14px;">
+          <div class="lrow">
+            <div class="av" style="background:var(--surface-3);border-radius:11px;"></div>
+            <div class="tx"><div class="l1">스토케 트레일즈 · S등급 · 12개월+</div><div class="l2" style="display:flex;align-items:center;gap:6px;margin-top:4px;">김지수맘 <span class="bl-badge bl-badge--amber" style="height:20px;font-size:11px;">골든 맘</span><span class="bl-badge bl-badge--mint" style="height:20px;font-size:11px;">나눔 천사</span></div></div>
+            <div class="meta" style="color:var(--ink);font-weight:800;">45,000</div>
+          </div>
+          <div class="lrow">
+            <div class="av" style="background:var(--surface-3);border-radius:11px;"></div>
+            <div class="tx"><div class="l1">맥클라렌 유모차 · A등급 · 0–12개월</div><div class="l2" style="display:flex;align-items:center;gap:6px;margin-top:4px;">박하늘맘 <span class="bl-badge bl-badge--mint" style="height:20px;font-size:11px;">따뜻한 이웃</span><span class="bl-badge bl-badge--mint" style="height:20px;font-size:11px;">빠른 답장</span></div></div>
+            <div class="meta" style="color:var(--ink);font-weight:800;">68,000</div>
+          </div>
+        </div>
+        <p class="note">노출 우선순위: 티어 뱃지 → 거래 신뢰 뱃지 → 응답률 뱃지. 채팅 화면은 티어 1개만, 크루 카드는 티어 1 + 활동 1.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 TOKENS -->
+  <section>
+    <div class="sec-head"><span class="no">06</span><h2>스페이싱 · 라운드 · 엘리베이션</h2><span class="sub">4-base 그리드 · 부드러운 그림자</span></div>
+    <div class="panel">
+      <div class="tok">
+        <div class="col">
+          <h5>Spacing · 4-base</h5>
+          <div class="line"><span class="demo" style="width:4px;height:14px;background:var(--primary);border-radius:2px;"></span><span class="nm">s1 · 4</span></div>
+          <div class="line"><span class="demo" style="width:8px;height:14px;background:var(--primary);border-radius:2px;"></span><span class="nm">s2 · 8</span></div>
+          <div class="line"><span class="demo" style="width:16px;height:14px;background:var(--primary);border-radius:2px;"></span><span class="nm">s4 · 16</span></div>
+          <div class="line"><span class="demo" style="width:24px;height:14px;background:var(--primary);border-radius:2px;"></span><span class="nm">s6 · 24</span></div>
+          <div class="line"><span class="demo" style="width:40px;height:14px;background:var(--primary);border-radius:2px;"></span><span class="nm">s8 · 40</span></div>
+        </div>
+        <div class="col">
+          <h5>Radius</h5>
+          <div class="line"><span class="demo rdemo" style="width:34px;height:24px;border-radius:8px;"></span><span class="nm">sm · 12</span></div>
+          <div class="line"><span class="demo rdemo" style="width:34px;height:24px;border-radius:16px;"></span><span class="nm">md · 16</span></div>
+          <div class="line"><span class="demo rdemo" style="width:34px;height:24px;border-radius:22px;"></span><span class="nm">lg · 22</span></div>
+          <div class="line"><span class="demo rdemo" style="width:34px;height:24px;border-radius:28px;"></span><span class="nm">xl · 28</span></div>
+          <div class="line"><span class="demo rdemo" style="width:34px;height:24px;border-radius:999px;"></span><span class="nm">pill</span></div>
+        </div>
+        <div class="col">
+          <h5>Elevation</h5>
+          <div class="line"><span class="demo" style="width:46px;height:30px;background:#fff;border-radius:10px;box-shadow:var(--sh-1);"></span><span class="nm">sh-1 · 칩/행</span></div>
+          <div class="line"><span class="demo" style="width:46px;height:30px;background:#fff;border-radius:10px;box-shadow:var(--sh-2);"></span><span class="nm">sh-2 · 카드</span></div>
+          <div class="line"><span class="demo" style="width:46px;height:30px;background:#fff;border-radius:10px;box-shadow:var(--sh-3);"></span><span class="nm">sh-3 · 시트</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="note" style="text-align:center;margin-top:24px;">
+      다음 라운드 → <b style="color:var(--ink-2)">온보딩 플로우 + 홈 화면 3시안</b> (기록 담당) · iOS/Android 프레임에 인터랙티브 프로토타입으로 제작
+    </p>
+  </section>
+
+</div>
+</body>
+</html>
