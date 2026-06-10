@@ -105,3 +105,19 @@
 - **과학적 토론(해소)**: 통합 빌드 시 `AppStore` guard else fall-through 컴파일 에러 → switch 문으로 정리(팀장 통합 수정)
 - **디버거 후속과제 충족**: 상실 알림 자동 차단(1위험) ✅ · 전환 원자성(B2, 무변경 보장) ✅ — 테스트로 교차검증
 - **남은 디버거 과제**: AgeCalculator UTC 정규화·입력검증 / ink3 WCAG 대비 / EventBus 테스트 격리(주입) / CoreData+CloudKit 영속화
+
+### 라운드 3 (✅ 완료 · 2026-06-10) — "전부 진행"
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| coder | 온보딩(임신/출산 분기·강제입력0) + 임신모드 홈 | `Features/Onboarding`·`Home` | ✅ |
+| coder | 빠른기록 시트(2탭+보상) | `Features/QuickRecord` | ✅ |
+| coder | 성장카드 공유(ImageRenderer renderCard) | `Features/ShareCard` | ✅ |
+| coder | 인프라(입력검증·EventBus 격리·Codable 영속화·버스 주입) | `Core`·`Data/Persistence` | ✅ |
+| qa | 인프라 테스트 16개 | `Tests/BabyLogTests` | ✅ |
+| doc | `docs/screens.md`·`docs/roadmap-status.md` | `docs/` | ✅ |
+
+- **팀장 통합(Shell 와이어링)**: 온보딩 게이트(`@AppStorage`) · FAB→`QuickRecordSheet`(.sheet detents) · 좌하단 모드 전환(Liquid Glass 칩)→`PregnancyHomeView`
+- **✅ 통합 결과**: `xcodegen`→build→test → **61/61 PASS**
+- **과학적 토론(해소)**: ShareCard 문자열 따옴표 미이스케이프 컴파일에러 → 수정
+- **충족**: 입력검증·EventBus 격리 ✅(디버거 과제 일부 해소). **남은 1줄 와이어링**: 성장카드 공유 진입점(기록 화면 공유 버튼) — 화면은 컴파일·available

@@ -4,6 +4,7 @@ import SwiftUI
 /// 모드별 액션 분기(육아: 성장측정/사진/메모 · 임신: 태동/배사진/메모).
 struct QuickRecordFAB: View {
     var mode: AppMode
+    var onQuickRecord: () -> Void = {}
     @State private var open = false
 
     private var actions: [(icon: String, label: String)] {
@@ -18,6 +19,7 @@ struct QuickRecordFAB: View {
                 ForEach(actions, id: \.label) { a in
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { open = false }
+                        onQuickRecord()
                     } label: {
                         HStack(spacing: 9) {
                             Text(a.label)

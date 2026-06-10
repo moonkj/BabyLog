@@ -14,11 +14,29 @@ final class AppStore: ObservableObject {
     @Published private(set) var pregnancies: [Pregnancy]
     @Published private(set) var children: [Child]
 
+    // MARK: - Private
+
+    private let bus: EventBus
+
     // MARK: Init
 
-    init(pregnancies: [Pregnancy] = [], children: [Child] = []) {
+    init(pregnancies: [Pregnancy] = [], children: [Child] = [], bus: EventBus = .shared) {
         self.pregnancies = pregnancies
         self.children = children
+        self.bus = bus
+    }
+
+    // MARK: - Persistence Convenience
+
+    /// 현재 인메모리 상태를 스냅샷으로 반환한다.
+    func snapshot() -> PersistableState {
+        PersistableState(pregnancies: pregnancies, children: children)
+    }
+
+    /// 저장된 스냅샷으로 상태를 복원한다.
+    func restore(_ state: PersistableState) {
+        pregnancies = state.pregnancies
+        children = state.children
     }
 
     // MARK: - Atomic Birth Transition
@@ -27,12 +45,6 @@ final class AppStore: ObservableObject {
     ///
     /// 성공 조건이 모두 충족될 때만 상태를 변경한다.
     /// 검증 실패 또는 Child 생성 실패 시 pregnancies·children 어느 쪽도 변경하지 않는다.
-    ///
-    /// 성공 흐름:
-    /// 1. `pregnancyId`로 pregnancy 탐색 — 없으면 `.failure(.notActive)` 반환(무변경).
-    /// 2. `PregnancyTransition.makeChild(from:input:)` 호출 — `.failure`면 그대로 반환(무변경).
-    /// 3. 위 모두 통과 시, pregnancy.status를 `.delivered`로 교체 + child를 children에 추가
-    ///    + `EventBus.shared.publish(.recordSaved(childId:))` 발행 후 `.success(child)` 반환.
     ///
     /// - Parameters:
     ///   - pregnancyId: 전환 대상 임신 레코드의 ID
@@ -60,7 +72,7 @@ final class AppStore: ObservableObject {
             updatedPregnancy.status = .delivered
             pregnancies[index] = updatedPregnancy
             children.append(child)
-            EventBus.shared.publish(.recordSaved(childId: child.id))
+            bus.publish(.recordSaved(childId: child.id))
             return .success(child)
         }
     }

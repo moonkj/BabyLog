@@ -17,7 +17,7 @@ final class EventBus {
 
     let subject = PassthroughSubject<AppEvent, Never>()
 
-    private init() {}
+    init() {}
 
     func publish(_ e: AppEvent) {
         subject.send(e)

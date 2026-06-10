@@ -11,6 +11,7 @@ enum AgeCalculator {
     // MARK: - 임신 주수
 
     /// 임신 주수: edd 있으면 (edd - 280일) = 재태 0일 기준, 없으면 lmp 기준. 둘 다 nil이면 nil. (주, 일).
+    /// 재태 시작일이 asOf보다 미래인 경우(음수 주수)도 nil 반환.
     static func pregnancyWeeks(lmp: Date?, edd: Date?, asOf: Date) -> (weeks: Int, days: Int)? {
         let today = calendar.startOfDay(for: asOf)
 
@@ -23,9 +24,11 @@ enum AgeCalculator {
         } else if let lmp = lmp {
             conceptionBase = calendar.startOfDay(for: lmp)
         } else {
+            // lmp·edd 둘 다 nil → nil
             return nil
         }
 
+        // 재태 시작일이 asOf보다 미래이면 nil (미래 시작 방어)
         let components = calendar.dateComponents([.day], from: conceptionBase, to: today)
         guard let totalDays = components.day, totalDays >= 0 else { return nil }
 
@@ -45,9 +48,11 @@ enum AgeCalculator {
     // MARK: - 월령
 
     /// 월령: Calendar dateComponents([.month, .day]) (months, days).
+    /// asOf < birthDate(미래 출생)이면 (0, 0) 반환.
     static func childAgeMonths(birthDate: Date, asOf: Date) -> (months: Int, days: Int) {
         let birth = calendar.startOfDay(for: birthDate)
         let today = calendar.startOfDay(for: asOf)
+        guard today >= birth else { return (months: 0, days: 0) }
         let components = calendar.dateComponents([.month, .day], from: birth, to: today)
         return (months: components.month ?? 0, days: components.day ?? 0)
     }
@@ -55,9 +60,11 @@ enum AgeCalculator {
     // MARK: - 생후 일수
 
     /// 생후 일수. 출생일 당일 = 1 (백일 = 100).
+    /// asOf < birthDate(미래 출생)이면 0 반환.
     static func dPlusDays(birthDate: Date, asOf: Date) -> Int {
         let birth = calendar.startOfDay(for: birthDate)
         let today = calendar.startOfDay(for: asOf)
+        guard today >= birth else { return 0 }
         let components = calendar.dateComponents([.day], from: birth, to: today)
         return (components.day ?? 0) + 1
     }

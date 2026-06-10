@@ -131,3 +131,25 @@
 
 ### 남은 과제
 - AgeCalculator UTC 정규화 / 입력검증 · ink3 WCAG 대비 · EventBus 테스트 격리(주입) · CoreData 영속화 · 화면(온보딩·동네·홈 임신모드)
+
+---
+
+## 2026-06-10 — Phase 3 라운드 3 통합 ("전부 진행": 화면 4종 + 인프라)
+
+**상태:** ✅ 통합 build+test 성공 (**61/61 PASS**) · GitHub 푸시
+
+6명 병렬 산출물:
+- 온보딩(임신/출산 분기·강제입력0) + 임신모드 홈(`PregnancyHomeView`)
+- 빠른기록 시트(`QuickRecordSheet`, 2탭+보상)
+- 성장카드 공유(`ShareCardView` + `ImageRenderer.renderCard`)
+- 인프라: AgeCalculator 입력검증, EventBus 격리(`init` 개방), AppStore 버스 주입+snapshot/restore, `LocalPersistence`(Codable)
+- qa: 검증·버스격리·영속화 테스트 16
+- doc: `docs/screens.md`, `docs/roadmap-status.md`
+
+팀장 통합:
+- **Shell 와이어링**: 온보딩 게이트(`@AppStorage`), FAB→`QuickRecordSheet`(.sheet detents), 좌하단 모드 전환(Liquid Glass 칩)→임신홈
+- **과학적 토론(해소)**: ShareCard 문자열 따옴표 미이스케이프 컴파일에러 → 수정
+- 검증: `xcodebuild test` **61/61 PASS**
+
+### 남은 와이어링
+- 성장카드 공유 진입점(기록 화면 공유 버튼) — 화면 자체는 컴파일·available, 진입 1줄
