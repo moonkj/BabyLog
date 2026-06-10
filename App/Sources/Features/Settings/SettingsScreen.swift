@@ -18,6 +18,7 @@ struct SettingsScreen: View {
     @AppStorage("bl_fab_side")         private var fabSide: String         = "right"
     @AppStorage("bl_caregiver_title")  private var caregiverTitle: String  = "양육자"
     @AppStorage("bl_nickname")         private var nickname: String        = "양육자님"
+    @State private var showOpenSource = false
 
     // MARK: Environment
 
@@ -47,6 +48,11 @@ struct SettingsScreen: View {
         .background(AppColors.canvas.ignoresSafeArea())
         .navigationTitle("설정")
         .navigationBarTitleDisplayMode(.large)
+        .alert("오픈소스 고지", isPresented: $showOpenSource) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("BabyLog는 Apple 시스템 프레임워크(SwiftUI·Swift Charts·WidgetKit 등)로 제작되었습니다. 추가 서드파티 오픈소스를 도입하면 이 화면에 라이선스를 명시합니다.")
+        }
         // 설정 변경 미세 피드백 (§8.5)
         .sensoryFeedback(.selection, trigger: theme)
         .sensoryFeedback(.selection, trigger: fabSide)
@@ -465,6 +471,9 @@ struct SettingsScreen: View {
                 .padding(.leading, 62)
 
             // 오픈소스 고지
+            Button {
+                showOpenSource = true
+            } label: {
             settingsRow(
                 icon: "doc.text.fill",
                 iconBg: Color(hex: 0xEFF1F4),
@@ -475,6 +484,8 @@ struct SettingsScreen: View {
                     .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(AppColors.ink)
             }
+            }
+            .buttonStyle(.plain)
 
             Divider()
                 .overlay(AppColors.line)

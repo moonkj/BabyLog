@@ -245,7 +245,7 @@ struct PregnancyHomeView: View {
                         }
 
                         Button {
-                            // 알림 설정
+                            onNavigate(.record)
                         } label: {
                             ZStack {
                                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)

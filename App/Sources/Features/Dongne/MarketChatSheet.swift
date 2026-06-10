@@ -14,7 +14,7 @@ struct MarketChatSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var messageText = ""
 
-    private let mockMessages: [(text: String, isMe: Bool)] = [
+    @State private var messages: [(text: String, isMe: Bool)] = [
         ("안녕하세요! 혹시 직거래 가능할까요?", true),
         ("네, 가능해요 :) 같은 동네시면 더 편하실 거예요", false),
         ("오늘 저녁 7시에 정문 앞 어떠세요?", false),
@@ -33,8 +33,8 @@ struct MarketChatSheet: View {
             // 채팅 말풍선
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(mockMessages.indices, id: \.self) { i in
-                        MkChatBubble(text: mockMessages[i].text, isMe: mockMessages[i].isMe)
+                    ForEach(messages.indices, id: \.self) { i in
+                        MkChatBubble(text: messages[i].text, isMe: messages[i].isMe)
                     }
 
                     // 안심 거래존 뱃지
@@ -128,8 +128,13 @@ struct MarketChatSheet: View {
                 .accessibilityLabel("메시지 입력")
 
             Button {
-                // 목업: 입력 초기화
+                let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    messages.append((text: text, isMe: true))
+                }
                 messageText = ""
+                Haptics.light()
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 38, weight: .regular))

@@ -16,6 +16,7 @@ struct ProfileScreen: View {
     @State private var exportURL: URL? = nil
     @State private var showShareSheet = false
     @State private var showSettings = false
+    @State private var infoAlert: String? = nil
 
     // 성별 중립 닉네임 (설정에서 변경 — 맘/파파/양육자)
     @AppStorage("bl_nickname") private var nickname = "양육자님"
@@ -104,6 +105,14 @@ struct ProfileScreen: View {
             Button("확인", role: .cancel) {}
         } message: {
             Text("서버 사진 백업·AI 캡션·무제한 카드 등 프리미엄 혜택을 준비 중이에요. 다음 업데이트에서 안내드릴게요.")
+        }
+        .alert("안내", isPresented: Binding(
+            get: { infoAlert != nil },
+            set: { if !$0 { infoAlert = nil } }
+        )) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(infoAlert ?? "")
         }
         .sheet(isPresented: $showShareSheet) {
             if let url = exportURL {
@@ -492,7 +501,10 @@ struct ProfileScreen: View {
                         iconFg: Color(hex: 0x3B6FA8),
                         title: "가족 공유",
                         subtitle: "파트너 · 조부모 · 최대 6명",
-                        showDivider: true
+                        showDivider: true,
+                        onTap: {
+                            infoAlert = "가족 공유(파트너·조부모 최대 6명)는 곧 제공돼요. iCloud 동기화를 준비 중이에요."
+                        }
                     )
                     privacyRow(
                         icon: "shield.fill",
@@ -500,7 +512,10 @@ struct ProfileScreen: View {
                         iconFg: AppColors.primary,
                         title: "데이터는 절대 판매하지 않아요",
                         subtitle: "아동 데이터 비매각 — 약속",
-                        showDivider: true
+                        showDivider: true,
+                        onTap: {
+                            infoAlert = "BabyLog는 아동 데이터를 절대 외부에 판매하지 않아요. 수익은 구독과 거래 수수료로만 운영하며, 무료 사용자의 데이터도 영구 보존합니다."
+                        }
                     )
                     privacyRow(
                         icon: "square.and.arrow.up.fill",
@@ -523,7 +538,8 @@ struct ProfileScreen: View {
                         iconFg: Color(hex: 0xB5478A),
                         title: "양육자 역할 설정",
                         subtitle: "맘 · 파파 · 양육자 중립 — 선택",
-                        showDivider: false
+                        showDivider: false,
+                        onTap: { showSettings = true }
                     )
                 }
             }
