@@ -461,7 +461,8 @@ struct QuickRecordSheet: View {
             }
         }
 
-        // 1탭: 저장 버튼 탭 → 보상 오버레이 표시
+        // 1탭: 저장 버튼 탭 → 보상 오버레이 표시 (+ 성공 햅틱)
+        Haptics.success()
         withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
             savedOverlay = true
         }

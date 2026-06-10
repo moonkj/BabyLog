@@ -269,13 +269,17 @@ private struct VaccineRow: View {
                         .accessibilityLabel("접종 예정")
                 }
 
-                // 체크 버튼 (44pt 터치타깃)
+                // 체크 버튼 (44pt 터치타깃) — 체크 드로우 모션(§8.5)
                 Button(action: onToggle) {
-                    Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(done ? AppColors.primary : AppColors.line2)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                    ZStack {
+                        Circle()
+                            .strokeBorder(done ? AppColors.primary : AppColors.line2,
+                                          lineWidth: 2)
+                            .frame(width: 24, height: 24)
+                        CheckDrawView(isOn: done, size: 14, color: AppColors.primary)
+                    }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.93))
                 .accessibilityLabel(done ? "접종 완료 취소" : "\(displayName) 접종 완료로 표시")

@@ -229,6 +229,8 @@ struct HomeTab: View {
                     HStack(spacing: 8) {
                         Text(childName).font(.system(size: 18, weight: .heavy)).foregroundStyle(.white)
                         if !dPlusLabel.isEmpty {
+                            // 생애 시계 ★ — 상시 시그니처 모션 (DESIGN.md §8.2)
+                            LifeClockView(size: 18, hand: AppColors.gold, ring: .white)
                             Text(dPlusLabel)
                                 .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 8).frame(height: 22)
