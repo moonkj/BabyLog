@@ -224,7 +224,8 @@ final class AppStore: ObservableObject {
             date: Date(),
             recordType: photoRef != nil ? "photo" : "diary",
             content: content,
-            milestone: milestone
+            milestone: milestone,
+            photoRef: photoRef
         )
         diaryEntries.append(entry)
         bus.publish(.recordSaved(childId: childId))

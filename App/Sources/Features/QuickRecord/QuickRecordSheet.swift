@@ -453,11 +453,13 @@ struct QuickRecordSheet: View {
             || !trimmedMemo.isEmpty
             || !selectedMilestones.isEmpty
         if hasDiaryContent {
+            // 사진은 로컬에만 저장 (서버 비전송) → 파일명을 photoRef로 보관
+            let photoFile = selectedPhoto.flatMap { PhotoStore.save($0) }
             store.addDiaryEntry(
                 childId:   childId,
                 content:   trimmedMemo.isEmpty ? nil : trimmedMemo,
                 milestone: milestoneText,
-                photoRef:  selectedPhoto != nil ? "local" : nil
+                photoRef:  photoFile
             )
         }
 

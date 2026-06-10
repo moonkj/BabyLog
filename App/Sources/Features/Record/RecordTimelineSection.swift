@@ -141,28 +141,25 @@ private struct DiaryTimelineCard: View {
     private var isMilestone: Bool { entry.milestone != nil }
 
     var body: some View {
-        BLCard(padding: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                // 사진 플레이스홀더
-                PhotoPlaceholder(seed: entry.recordType == "photo" ? 2 : 3,
-                                 cornerRadius: 0)
-                    .frame(height: isMilestone ? 180 : 0)
-                    .clipped()
-                    .overlay(alignment: .topLeading) {
-                        if let milestone = entry.milestone {
-                            // 이정표: amber BLBadge(아이콘+레이블)
-                            BLBadge(tone: .amber, text: milestone, systemIcon: "star.fill")
-                                .padding(12)
-                                .accessibilityLabel("이정표: \(milestone)")
-                        }
-                    }
-                    .frame(height: isMilestone ? 180 : 0)
-                    .opacity(isMilestone ? 1 : 0)
+        let photo = PhotoStore.image(entry.photoRef)
+        let photoHeight: CGFloat = isMilestone ? 200 : 160
 
-                // 사진 카드는 항상 placeholder 노출 (photo type)
-                if entry.recordType == "photo" && !isMilestone {
-                    PhotoPlaceholder(seed: 4, cornerRadius: 0)
-                        .frame(height: 160)
+        return BLCard(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                // 사진 영역 — 실제 로컬 사진 우선, 없으면 이정표일 때만 플레이스홀더
+                if let photo {
+                    Image(uiImage: photo)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: photoHeight)
+                        .clipped()
+                        .overlay(alignment: .topLeading) { milestoneBadge }
+                } else if isMilestone {
+                    PhotoPlaceholder(seed: 2, cornerRadius: 0)
+                        .frame(height: 180)
+                        .clipped()
+                        .overlay(alignment: .topLeading) { milestoneBadge }
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -183,6 +180,15 @@ private struct DiaryTimelineCard: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var milestoneBadge: some View {
+        if let milestone = entry.milestone {
+            BLBadge(tone: .amber, text: milestone, systemIcon: "star.fill")
+                .padding(12)
+                .accessibilityLabel("이정표: \(milestone)")
+        }
     }
 
     private var recordTypeLabel: String {

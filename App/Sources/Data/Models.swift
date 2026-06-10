@@ -111,6 +111,8 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
     var recordType: String
     var content: String?
     var milestone: String?
+    /// 로컬 사진 파일명 (App Support/BabyLog/photos/). 서버 업로드 없음(CLAUDE.md 사진 비전송).
+    var photoRef: String?
 
     init(
         id: UUID = UUID(),
@@ -118,7 +120,8 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
         date: Date,
         recordType: String,
         content: String? = nil,
-        milestone: String? = nil
+        milestone: String? = nil,
+        photoRef: String? = nil
     ) {
         self.id = id
         self.childId = childId
@@ -126,6 +129,7 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
         self.recordType = recordType
         self.content = content
         self.milestone = milestone
+        self.photoRef = photoRef
     }
 }
 
