@@ -17,32 +17,39 @@ struct ProfileScreen: View {
     @State private var showShareSheet = false
     @State private var showSettings = false
 
-    // 샘플 프로필 데이터 (ViewModel 교체 전 하드코딩)
-    private let tradeCount   = 18
-    private let avgRating    = 4.8
-    private let joinedMonths = 5
-    private let crewCount    = 3
-    private let responseRate = 91
-    // 성별 중립 닉네임 (맘/파파는 설정에서 선택)
-    private let nickname     = "지호님"
-    private let childAge     = "16개월 아이"
-    private let region       = "서울 마포구"
+    // 성별 중립 닉네임 (설정에서 변경 — 맘/파파/양육자)
+    @AppStorage("bl_nickname") private var nickname = "양육자님"
 
-    // MARK: BadgeEngine — 목업 활동치
-    /// BadgeEngine으로 획득 뱃지 Set 결정 (ViewModel 교체 전 목업 입력)
-    private let mockRecordCount     = 5   // 기록 시작 조건 충족
-    private let mockConsecutiveDays = 0   // streak_30 미충족
-    private let mockTradeCount      = 18  // sharing_angel(3+) 충족, trade_50 미충족
-    private let mockCrewMeetings    = 1   // first_crew 충족
-    private let mockPostLikes       = 42  // info_master(500+) 미충족
+    /// 선택 아이 기준 나이 텍스트 (실데이터)
+    private var childAgeText: String {
+        guard let c = store.selectedChild else { return "아이를 등록해보세요" }
+        let m = AgeCalculator.childAgeMonths(birthDate: c.birthDate, asOf: Date()).months
+        return "\(c.name) · \(m)개월"
+    }
+
+    // 중고 마켓·크루는 백엔드(Supabase) 연동 전이므로 로컬 기준 0 (정직한 신규 상태)
+    private let tradeCount   = 0
+    private let avgRating    = 0.0
+    private let joinedMonths = 0
+    private let crewCount    = 0
+
+    // MARK: 실 로컬 활동치 (기록 기반)
+    /// 전체 기록 수 (다이어리 + 성장)
+    private var totalRecordCount: Int { store.diaryEntries.count + store.growthRecords.count }
+    /// 연속 기록일 (오늘 또는 어제까지 이어진 다이어리 streak)
+    private var streakDays: Int {
+        ProfileStreak.currentStreak(diaryDates: store.diaryEntries.map(\.date))
+    }
+    /// 획득 뱃지 수
+    private var earnedBadgeCount: Int { resolvedCatalog.filter(\.isEarned).count }
 
     private var engineEarnedBadgeIds: Set<String> {
         BadgeEngine.earnedBadges(
-            recordCount:     mockRecordCount,
-            consecutiveDays: mockConsecutiveDays,
-            tradeCount:      mockTradeCount,
-            crewMeetings:    mockCrewMeetings,
-            postLikes:       mockPostLikes
+            recordCount:     totalRecordCount,
+            consecutiveDays: streakDays,
+            tradeCount:      tradeCount,    // 마켓 연동 전 0
+            crewMeetings:    crewCount,     // 크루 연동 전 0
+            postLikes:       0              // 커뮤니티 연동 전 0
         )
     }
 
@@ -142,13 +149,13 @@ struct ProfileScreen: View {
                                 .foregroundStyle(AppColors.ink)
                             tierBadge
                         }
-                        Text("\(childAge) · \(region) · 가입 \(joinedMonths)개월")
+                        Text(childAgeText)
                             .font(AppFont.caption)
                             .foregroundStyle(AppColors.ink2)
                     }
                     Spacer()
                     Button {
-                        // 프로필 편집 (팀장 연결)
+                        showSettings = true
                     } label: {
                         Image(systemName: "pencil")
                             .font(.system(size: 17, weight: .medium))
@@ -209,13 +216,13 @@ struct ProfileScreen: View {
         }
     }
 
-    // 거래·평점·크루·응답률 4분할
+    // 실 로컬 활동 4분할 (기록·뱃지·아이·연속)
     private var statsRow: some View {
         let stats: [(String, String)] = [
-            (tradeCount.formatted(), "거래"),
-            (String(format: "%.1f", avgRating), "평점"),
-            (crewCount.formatted(), "크루"),
-            ("\(responseRate)%", "응답률"),
+            (totalRecordCount.formatted(), "기록"),
+            (earnedBadgeCount.formatted(), "뱃지"),
+            (store.children.count.formatted(), "아이"),
+            ("\(streakDays)일", "연속 기록"),
         ]
         return HStack(spacing: 0) {
             ForEach(Array(stats.enumerated()), id: \.offset) { idx, stat in
@@ -648,6 +655,34 @@ private struct BadgeTileView: View {
                 : "미획득 뱃지: \(badge.name). 조건: \(badge.condition)"
         )
         .accessibilityAddTraits(badge.isEarned ? [] : .isStaticText)
+    }
+}
+
+// MARK: - ProfileStreak (연속 기록일 계산 — 순수 함수, QA 테스트 대상)
+
+/// 다이어리 기록일 기반 연속 streak 계산.
+/// 오늘 기록이 없어도 어제까지 이어졌다면 streak를 유지한다(죄책감 방지, DESIGN §8.5).
+enum ProfileStreak {
+    static func currentStreak(diaryDates: [Date],
+                              calendar: Calendar = .current,
+                              today: Date = Date()) -> Int {
+        let days = Set(diaryDates.map { calendar.startOfDay(for: $0) })
+        guard !days.isEmpty else { return 0 }
+
+        var cursor = calendar.startOfDay(for: today)
+        if !days.contains(cursor) {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: cursor) else { return 0 }
+            cursor = yesterday
+            if !days.contains(cursor) { return 0 }
+        }
+
+        var streak = 0
+        while days.contains(cursor) {
+            streak += 1
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return streak
     }
 }
 
