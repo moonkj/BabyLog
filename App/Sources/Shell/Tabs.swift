@@ -80,6 +80,7 @@ struct HomeTab: View {
         let date: Date
         let tone: BadgeTone
         let icon: String?
+        var photoRef: String? = nil
     }
 
     /// 선택 아이의 최근 기록(다이어리+성장) 최신순 최대 5건
@@ -92,7 +93,8 @@ struct HomeTab: View {
                 caption: e.content ?? (e.recordType == "photo" ? "사진을 남겼어요" : "오늘의 기록"),
                 date: e.date,
                 tone: e.milestone != nil ? .amber : .mint,
-                icon: e.recordType == "photo" ? nil : "text.alignleft"
+                icon: e.recordType == "photo" ? nil : "text.alignleft",
+                photoRef: e.photoRef
             )
         }
         let growth = store.growthRecords(for: cid).map { g in
@@ -567,9 +569,16 @@ struct HomeTab: View {
         }
 
         return HStack(spacing: 12) {
-            PhotoPlaceholder(seed: 2, cornerRadius: Radius.md)
-                .frame(width: 56, height: 56)
-                .accessibilityHidden(true)
+            Group {
+                if let img = heroPhoto {
+                    Image(uiImage: img).resizable().scaledToFill()
+                } else {
+                    PhotoPlaceholder(seed: 2, cornerRadius: Radius.md)
+                }
+            }
+            .frame(width: 56, height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(childName).font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
                 Text(statLine)
@@ -712,7 +721,8 @@ struct HomeTab: View {
                 VStack(spacing: 10) {
                     ForEach(Array(recentHomeRecords.enumerated()), id: \.element.id) { idx, item in
                         timelineRecord(seed: idx + 1, badge: item.badge, caption: item.caption,
-                                       day: relativeDay(item.date), tone: item.tone, icon: item.icon)
+                                       day: relativeDay(item.date), tone: item.tone, icon: item.icon,
+                                       photoRef: item.photoRef)
                     }
                 }
             }
@@ -725,12 +735,18 @@ struct HomeTab: View {
         caption: String,
         day: String,
         tone: BadgeTone,
-        icon: String?
+        icon: String?,
+        photoRef: String? = nil
     ) -> some View {
         Button { onNavigate(.record) } label: {
             HStack(spacing: 12) {
                 Group {
-                    if let icon {
+                    if let photo = PhotoStore.image(photoRef) {
+                        Image(uiImage: photo)
+                            .resizable().scaledToFill()
+                            .frame(width: 54, height: 54)
+                            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    } else if let icon {
                         ZStack {
                             RoundedRectangle(cornerRadius: 11, style: .continuous)
                                 .fill(tone.bg)
