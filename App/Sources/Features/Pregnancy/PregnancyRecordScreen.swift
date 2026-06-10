@@ -46,7 +46,6 @@ struct PregnancyRecordScreen: View {
 
     // ── 상태 ────────────────────────────────────────────────────────
     @State private var selectedSegment: PregnancyRecordSegment = .fetus
-    @State private var movementCount: Int = 3
     @State private var showBirthTransition: Bool = false
     @State private var showPauseConfirm: Bool = false
 
@@ -78,7 +77,7 @@ struct PregnancyRecordScreen: View {
                             // ③ 세그먼트 본문
                             switch selectedSegment {
                             case .fetus:    PregnancyFetusGuideSection(week: pregnancyWeek)
-                            case .mom:      PregnancyMomRecordSection(movementCount: $movementCount)
+                            case .mom:      PregnancyMomRecordSection()
                             case .checkup:  PregnancyCheckupSection(week: pregnancyWeek)
                             }
 

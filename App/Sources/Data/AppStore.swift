@@ -18,6 +18,7 @@ final class AppStore: ObservableObject {
     @Published private(set) var expenses: [Expense]
     /// 접종 완료 키 집합 (키 = "childId|vaccineId").
     @Published private(set) var vaccineCompletions: Set<String>
+    @Published private(set) var pregnancyLogs: [PregnancyLog]
     @Published var selectedChildId: UUID?
 
     // MARK: - Private
@@ -43,6 +44,7 @@ final class AppStore: ObservableObject {
         diaryEntries: [DiaryEntry] = [],
         expenses: [Expense] = [],
         vaccineCompletions: Set<String> = [],
+        pregnancyLogs: [PregnancyLog] = [],
         bus: EventBus = .shared,
         persistence: LocalPersistence? = nil
     ) {
@@ -52,6 +54,7 @@ final class AppStore: ObservableObject {
         self.diaryEntries = diaryEntries
         self.expenses = expenses
         self.vaccineCompletions = vaccineCompletions
+        self.pregnancyLogs = pregnancyLogs
         self.bus = bus
         self.persistence = persistence
 
@@ -64,6 +67,7 @@ final class AppStore: ObservableObject {
             self.diaryEntries       = saved.diaryEntries
             self.expenses           = saved.expenses
             self.vaccineCompletions = saved.vaccineCompletions
+            self.pregnancyLogs      = saved.pregnancyLogs
         }
     }
 
@@ -99,7 +103,8 @@ final class AppStore: ObservableObject {
             growthRecords: growthRecords,
             diaryEntries:  diaryEntries,
             expenses:      expenses,
-            vaccineCompletions: vaccineCompletions
+            vaccineCompletions: vaccineCompletions,
+            pregnancyLogs: pregnancyLogs
         )
     }
 
@@ -111,6 +116,7 @@ final class AppStore: ObservableObject {
         diaryEntries       = state.diaryEntries
         expenses           = state.expenses
         vaccineCompletions = state.vaccineCompletions
+        pregnancyLogs      = state.pregnancyLogs
     }
 
     // MARK: - 선택 아이 / 온보딩
@@ -286,6 +292,51 @@ final class AppStore: ObservableObject {
         } else {
             vaccineCompletions.insert(key)
         }
+    }
+
+    // MARK: - 임신 기록 (태동·체중)
+
+    /// 특정 임신의 오늘 태동 횟수.
+    func todayMovementCount(pregnancyId: UUID, on date: Date = Date()) -> Int {
+        let cal = Calendar.current
+        let log = pregnancyLogs.first {
+            $0.pregnancyId == pregnancyId && $0.kind == .movement
+                && cal.isDate($0.date, inSameDayAs: date)
+        }
+        return Int(log?.value ?? 0)
+    }
+
+    /// 오늘 태동 횟수를 upsert한다 (0 이하면 해당 로그 제거).
+    func setMovementCount(pregnancyId: UUID, count: Int, on date: Date = Date()) {
+        let cal = Calendar.current
+        let idx = pregnancyLogs.firstIndex {
+            $0.pregnancyId == pregnancyId && $0.kind == .movement
+                && cal.isDate($0.date, inSameDayAs: date)
+        }
+        if count <= 0 {
+            if let idx { pregnancyLogs.remove(at: idx) }
+            return
+        }
+        if let idx {
+            pregnancyLogs[idx].value = Double(count)
+        } else {
+            pregnancyLogs.append(PregnancyLog(pregnancyId: pregnancyId, date: date,
+                                              kind: .movement, value: Double(count)))
+        }
+    }
+
+    /// 체중 기록을 추가한다 (kg). 0 이하 무시.
+    func addPregnancyWeight(pregnancyId: UUID, kg: Double, on date: Date = Date()) {
+        guard kg > 0 else { return }
+        pregnancyLogs.append(PregnancyLog(pregnancyId: pregnancyId, date: date,
+                                          kind: .weight, value: kg))
+    }
+
+    /// 특정 임신의 체중 기록을 날짜 오름차순으로 반환한다.
+    func pregnancyWeights(pregnancyId: UUID) -> [PregnancyLog] {
+        pregnancyLogs
+            .filter { $0.pregnancyId == pregnancyId && $0.kind == .weight }
+            .sorted { $0.date < $1.date }
     }
 
     // MARK: - 기록 조회

@@ -4,6 +4,7 @@
 // SwiftUI / Foundation only
 
 import SwiftUI
+import Charts
 
 // MARK: - ③-A 태아 가이드
 
@@ -113,7 +114,25 @@ struct PregnancyFetusGuideSection: View {
 // MARK: - ③-B 산모 기록
 
 struct PregnancyMomRecordSection: View {
-    @Binding var movementCount: Int
+    @EnvironmentObject private var store: AppStore
+    @State private var showWeightEntry = false
+    @State private var weightText = ""
+
+    private var pregnancyId: UUID? { store.activePregnancy?.id }
+
+    /// 오늘 태동 횟수 (store 영속)
+    private var movementCount: Int {
+        pregnancyId.map { store.todayMovementCount(pregnancyId: $0) } ?? 0
+    }
+    private func setMovement(_ v: Int) {
+        guard let pid = pregnancyId else { return }
+        store.setMovementCount(pregnancyId: pid, count: max(0, min(10, v)))
+    }
+
+    /// 체중 기록 (store 영속, 날짜 오름차순)
+    private var weights: [PregnancyLog] {
+        pregnancyId.map { store.pregnancyWeights(pregnancyId: $0) } ?? []
+    }
 
     var body: some View {
         LazyVStack(spacing: Spacing.s3, pinnedViews: []) {
@@ -128,6 +147,20 @@ struct PregnancyMomRecordSection: View {
             // 배 사진 D라인 타임라인
             bellyPhotoTimeline
                 .padding(.bottom, Spacing.s4)
+        }
+        .alert("체중 기록", isPresented: $showWeightEntry) {
+            TextField("예: 58.4", text: $weightText)
+                .keyboardType(.decimalPad)
+            Button("저장") {
+                if let pid = pregnancyId, let kg = Double(weightText), kg > 0 {
+                    store.addPregnancyWeight(pregnancyId: pid, kg: kg)
+                    Haptics.success()
+                }
+                weightText = ""
+            }
+            Button("취소", role: .cancel) { weightText = "" }
+        } message: {
+            Text("오늘 체중을 kg 단위로 입력하세요.")
         }
     }
 
@@ -164,9 +197,9 @@ struct PregnancyMomRecordSection: View {
                         MovementDot(filled: index < movementCount, index: index) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                                 if index == movementCount && movementCount < 10 {
-                                    movementCount += 1
+                                    setMovement(movementCount + 1)
                                 } else if index == movementCount - 1 && movementCount > 0 {
-                                    movementCount -= 1
+                                    setMovement(movementCount - 1)
                                 }
                             }
                         }
@@ -178,8 +211,9 @@ struct PregnancyMomRecordSection: View {
 
                 // 태동 기록 버튼
                 Button {
+                    Haptics.soft()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        if movementCount < 10 { movementCount += 1 }
+                        if movementCount < 10 { setMovement(movementCount + 1) }
                     }
                 } label: {
                     Label("태동 기록", systemImage: "plus.circle.fill")
@@ -213,26 +247,62 @@ struct PregnancyMomRecordSection: View {
 
     // 체중 추이 차트 ───────────────────────────────────────────────────
     private var weightChartCard: some View {
-        BLCard {
+        let latest = weights.last?.value
+        let first = weights.first?.value
+        let delta = (latest != nil && first != nil) ? latest! - first! : nil
+
+        return BLCard {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("체중 변화")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(AppColors.ink)
                     Spacer()
-                    Text("58.4 kg · +6.4 kg")
-                        .font(AppFont.num(13))
-                        .foregroundStyle(AppColors.ink2)
+                    if let latest {
+                        Text(weightSummary(latest: latest, delta: delta))
+                            .font(AppFont.num(13))
+                            .foregroundStyle(AppColors.ink2)
+                    }
+                    Button { showWeightEntry = true } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppColors.pregnancyPink)
+                    }
+                    .accessibilityLabel("체중 기록 추가")
                 }
 
-                WeightChart()
+                if weights.count >= 2 {
+                    Chart(weights) { log in
+                        LineMark(x: .value("날짜", log.date), y: .value("kg", log.value))
+                            .foregroundStyle(AppColors.pregnancyPink)
+                            .interpolationMethod(.catmullRom)
+                        PointMark(x: .value("날짜", log.date), y: .value("kg", log.value))
+                            .foregroundStyle(AppColors.pregnancyPink)
+                    }
                     .frame(height: 120)
-                    .accessibilityLabel("체중 추이 차트. 임신 전 52kg에서 현재 58.4kg. 권장 증가 범위 내에 있어요.")
+                    .accessibilityLabel("체중 추이 차트. 기록 \(weights.count)건, 현재 \(weightSummary(latest: latest ?? 0, delta: delta)).")
 
-                Text("권장 증가 범위 안에서 건강하게 늘고 있어요")
-                    .font(AppFont.micro)
-                    .foregroundStyle(AppColors.ink3)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                    Text("꾸준히 기록하면 권장 증가 범위를 함께 살펴봐요")
+                        .font(AppFont.micro)
+                        .foregroundStyle(AppColors.ink3)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    Button { showWeightEntry = true } label: {
+                        VStack(spacing: Spacing.s2) {
+                            Image(systemName: "scalemass")
+                                .font(.system(size: 24, weight: .regular))
+                                .foregroundStyle(AppColors.ink3)
+                            Text(weights.isEmpty ? "체중을 기록하면 그래프가 그려져요"
+                                                 : "한 번 더 기록하면 추이가 보여요")
+                                .font(AppFont.caption)
+                                .foregroundStyle(AppColors.ink3)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 100)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("체중 기록 추가하기")
+                }
 
                 Text("※ 일반 정보이며 의료 상담을 대체하지 않아요")
                     .font(AppFont.micro)
@@ -242,13 +312,19 @@ struct PregnancyMomRecordSection: View {
         .accessibilityElement(children: .contain)
     }
 
+    private func weightSummary(latest: Double, delta: Double?) -> String {
+        let latestStr = latest == latest.rounded() ? "\(Int(latest))" : String(format: "%.1f", latest)
+        guard let delta, abs(delta) >= 0.05 else { return "\(latestStr) kg" }
+        let sign = delta > 0 ? "+" : "−"
+        let deltaStr = String(format: "%.1f", abs(delta))
+        return "\(latestStr) kg · \(sign)\(deltaStr) kg"
+    }
+
     // 배 사진 D라인 타임라인 ─────────────────────────────────────────
     private var bellyPhotoTimeline: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            BLSectionHead(title: "배 사진 (D라인)", action: "추가") {
-                // 팀장 통합 시: 사진 추가 액션
-            }
-            .padding(.horizontal, Spacing.s5)
+            BLSectionHead(title: "배 사진 (D라인)")
+                .padding(.horizontal, Spacing.s5)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.s3) {

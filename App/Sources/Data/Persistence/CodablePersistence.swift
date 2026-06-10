@@ -13,6 +13,7 @@ struct PersistableState: Codable, Equatable {
     /// 접종 완료 키 집합. 키 = "childId|vaccineId" (provider가 매 로드마다 새 UUID를 만들어
     /// VaccineRecord.id가 불안정하므로 안정 키로 영속한다).
     var vaccineCompletions: Set<String>
+    var pregnancyLogs: [PregnancyLog]
 
     init(
         pregnancies: [Pregnancy] = [],
@@ -20,7 +21,8 @@ struct PersistableState: Codable, Equatable {
         growthRecords: [GrowthRecord] = [],
         diaryEntries: [DiaryEntry] = [],
         expenses: [Expense] = [],
-        vaccineCompletions: Set<String> = []
+        vaccineCompletions: Set<String> = [],
+        pregnancyLogs: [PregnancyLog] = []
     ) {
         self.pregnancies = pregnancies
         self.children = children
@@ -28,13 +30,14 @@ struct PersistableState: Codable, Equatable {
         self.diaryEntries = diaryEntries
         self.expenses = expenses
         self.vaccineCompletions = vaccineCompletions
+        self.pregnancyLogs = pregnancyLogs
     }
 
     // MARK: - Codable (하위 호환 디코딩)
     // 기존 저장 파일에 신규 키가 없어도 디코딩 실패하지 않도록 decodeIfPresent + 기본값 사용.
 
     enum CodingKeys: String, CodingKey {
-        case pregnancies, children, growthRecords, diaryEntries, expenses, vaccineCompletions
+        case pregnancies, children, growthRecords, diaryEntries, expenses, vaccineCompletions, pregnancyLogs
     }
 
     init(from decoder: Decoder) throws {
@@ -45,6 +48,7 @@ struct PersistableState: Codable, Equatable {
         diaryEntries   = try container.decodeIfPresent([DiaryEntry].self,   forKey: .diaryEntries)  ?? []
         expenses       = try container.decodeIfPresent([Expense].self,      forKey: .expenses)      ?? []
         vaccineCompletions = try container.decodeIfPresent(Set<String>.self, forKey: .vaccineCompletions) ?? []
+        pregnancyLogs  = try container.decodeIfPresent([PregnancyLog].self, forKey: .pregnancyLogs) ?? []
     }
 }
 
