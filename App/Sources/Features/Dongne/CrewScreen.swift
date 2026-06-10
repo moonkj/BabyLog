@@ -174,9 +174,7 @@ private struct CrewActiveContent: View {
         VStack(alignment: .leading, spacing: 11) {
             BLSectionHead(
                 eyebrow: "주변 모임",
-                title: "같이 가요",
-                action: "모임 만들기",
-                onAction: { }
+                title: "같이 가요"
             )
             .padding(.horizontal, Spacing.s5)
 
@@ -216,9 +214,7 @@ private struct CrewActiveContent: View {
         VStack(alignment: .leading, spacing: 11) {
             BLSectionHead(
                 eyebrow: "동네 이야기",
-                title: "동네 게시판",
-                action: "전체",
-                onAction: { }
+                title: "동네 게시판"
             )
             .padding(.horizontal, Spacing.s5)
 

@@ -29,7 +29,7 @@ struct MainTabView: View {
         ZStack(alignment: fabOnLeft ? .bottomLeading : .bottomTrailing) {
             TabView(selection: $tab) {
                 Group {
-                    if mode == .pregnancy { PregnancyHomeView() } else { HomeTab(onNavigate: { tab = $0 }) }
+                    if mode == .pregnancy { PregnancyHomeView(onNavigate: { tab = $0 }) } else { HomeTab(onNavigate: { tab = $0 }) }
                 }
                 .tabItem { Label("홈", systemImage: "house.fill") }
                 .tag(AppTab.home)

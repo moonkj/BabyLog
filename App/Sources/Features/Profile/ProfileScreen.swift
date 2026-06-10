@@ -100,6 +100,11 @@ struct ProfileScreen: View {
         .background(AppColors.canvas.ignoresSafeArea())
         .navigationTitle("내 정보")
         .navigationBarTitleDisplayMode(.large)
+        .alert("Pro — 곧 만나요", isPresented: $showProDetail) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("서버 사진 백업·AI 캡션·무제한 카드 등 프리미엄 혜택을 준비 중이에요. 다음 업데이트에서 안내드릴게요.")
+        }
         .sheet(isPresented: $showShareSheet) {
             if let url = exportURL {
                 ShareSheet(activityItems: [url])
@@ -359,7 +364,7 @@ struct ProfileScreen: View {
 
                     // 7일 무료 LiquidButton
                     LiquidButton(fill: AppColors.gold, cornerRadius: Radius.md) {
-                        // 구독 시작 (팀장 연결)
+                        showProDetail = true
                     } label: {
                         HStack(spacing: Spacing.s2) {
                             Image(systemName: "crown.fill")

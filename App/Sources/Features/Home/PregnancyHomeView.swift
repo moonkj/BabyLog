@@ -16,6 +16,9 @@ struct PregnancyHomeView: View {
     // MARK: AppStore — 실데이터
     @EnvironmentObject private var store: AppStore
 
+    /// 홈 카드(요약·진입점) 탭 시 해당 탭으로 이동. MainTabView가 주입.
+    var onNavigate: (AppTab) -> Void = { _ in }
+
     // MARK: 목업 폴백 (store 없거나 activePregnancy nil 시)
     private let mockLMP: Date = Calendar.current.date(
         byAdding: .day,
@@ -184,7 +187,7 @@ struct PregnancyHomeView: View {
 
     private var checkupPriorityCard: some View {
         Button {
-            // 팀장 통합 시: navigate to CheckupView
+            onNavigate(.record)
         } label: {
             ZStack(alignment: .topTrailing) {
                 // 배경
@@ -235,9 +238,9 @@ struct PregnancyHomeView: View {
                             fill: AppColors.pregnancyPink,
                             cornerRadius: Radius.sm
                         ) {
-                            // 팀장 통합 시: navigate
+                            onNavigate(.record)
                         } label: {
-                            Text("검진 예약하기")
+                            Text("검진 일정 보기")
                                 .font(.system(size: 15, weight: .bold))
                         }
 
@@ -341,9 +344,7 @@ struct PregnancyHomeView: View {
                     eyebrow: "지역",
                     title: "우리 동네 소식",
                     action: "더보기",
-                    onAction: {
-                        // 팀장 통합 시: tab 이동
-                    }
+                    onAction: { onNavigate(.dongne) }
                 )
 
                 VStack(spacing: Spacing.s3) {
@@ -368,7 +369,7 @@ struct PregnancyHomeView: View {
 
     private func neighborhoodRow(emoji: String, emojiAccessibility: String, title: String, subtitle: String, seed: Int) -> some View {
         Button {
-            // 팀장 통합 시: navigate to item detail
+            onNavigate(.dongne)
         } label: {
             HStack(spacing: Spacing.s3) {
                 ZStack {
@@ -400,7 +401,7 @@ struct PregnancyHomeView: View {
 
     private var budgetCard: some View {
         Button {
-            // 팀장 통합 시: navigate to budget
+            onNavigate(.budget)
         } label: {
             BLCard {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
