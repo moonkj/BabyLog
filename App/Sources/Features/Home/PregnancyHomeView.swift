@@ -142,7 +142,7 @@ struct PregnancyHomeView: View {
                     // 과일 이모지 원형
                     ZStack {
                         Circle()
-                            .fill(Color.white)
+                            .fill(AppColors.surface)
                             .frame(width: 84, height: 84)
                             .blShadow(.card)
                         Text(fruit.emoji)

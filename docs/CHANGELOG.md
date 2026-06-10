@@ -17,7 +17,7 @@
 | **커밋** | main 브랜치 지속 증가 |
 | **실기기** | iPhone "Moon" (iOS 26.5.1) 설치·실행 확인 (위젯 포함) |
 | **디자인** | 화이트 `#FFFFFF` + 딥 인디고 `#1A1B2E` + 앤티크 골드 `#C9A961` (TickLab 참고 프리미엄) |
-| **디스플레이 모드** | 라이트 모드 고정 (`UIUserInterfaceStyle=Light`) |
+| **디스플레이 모드** | 시스템/라이트/다크 설정 연동 (다크 팔레트 §3 활성, 설정에서 전환) |
 | **프레임워크** | Swift/SwiftUI (iOS 26 Liquid Glass 네이티브) |
 | **WidgetKit** | 오늘 할 일·아이 요약·주변 소아과 3종 위젯 완성 (라운드 7 완료) |
 | **네트워킹 인프라** | `APIClient` + `APIConfig` + `ProviderFactory` + Live/Mock 폴백 + 응답 파서 (라운드 8~11) |

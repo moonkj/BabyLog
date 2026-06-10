@@ -263,7 +263,7 @@ struct PregnancyRecordScreen: View {
                     // 과일 원형
                     ZStack {
                         Circle()
-                            .fill(Color.white)
+                            .fill(AppColors.surface)
                             .frame(width: 88, height: 88)
                             .blShadow(.card)
                         Text(fruit.emoji)

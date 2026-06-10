@@ -427,7 +427,7 @@ struct BudgetScreen: View {
                 // 아이콘 박스
                 ZStack {
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(Color.white)
+                        .fill(AppColors.surface)
                         .frame(width: 44, height: 44)
                         .blShadow(.chip)
                     Image(systemName: "chart.bar.fill")

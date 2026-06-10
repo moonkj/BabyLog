@@ -400,7 +400,7 @@ struct PregnancyCheckupSection: View {
             HStack(spacing: Spacing.s3) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(Color.white)
+                        .fill(AppColors.surface)
                         .frame(width: 48, height: 48)
                     Image(systemName: "syringe.fill")
                         .font(.system(size: 22))
