@@ -3,10 +3,40 @@ import Foundation
 // MARK: - PersistableState
 
 /// 앱 전체 인메모리 상태의 Codable 스냅샷.
-/// Pregnancy·Child 는 이미 Codable(Models.swift 참조).
+/// Pregnancy·Child·GrowthRecord·DiaryEntry 는 이미 Codable(Models.swift 참조).
 struct PersistableState: Codable, Equatable {
     var pregnancies: [Pregnancy]
     var children: [Child]
+    var growthRecords: [GrowthRecord]
+    var diaryEntries: [DiaryEntry]
+
+    init(
+        pregnancies: [Pregnancy] = [],
+        children: [Child] = [],
+        growthRecords: [GrowthRecord] = [],
+        diaryEntries: [DiaryEntry] = []
+    ) {
+        self.pregnancies = pregnancies
+        self.children = children
+        self.growthRecords = growthRecords
+        self.diaryEntries = diaryEntries
+    }
+
+    // MARK: - Codable (하위 호환 디코딩)
+    // 기존 저장 파일에 growthRecords/diaryEntries 키가 없어도 디코딩 실패하지 않도록
+    // decodeIfPresent + 기본값 [] 사용.
+
+    enum CodingKeys: String, CodingKey {
+        case pregnancies, children, growthRecords, diaryEntries
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pregnancies    = try container.decode([Pregnancy].self, forKey: .pregnancies)
+        children       = try container.decode([Child].self,     forKey: .children)
+        growthRecords  = try container.decodeIfPresent([GrowthRecord].self, forKey: .growthRecords) ?? []
+        diaryEntries   = try container.decodeIfPresent([DiaryEntry].self,   forKey: .diaryEntries)  ?? []
+    }
 }
 
 // MARK: - LocalPersistence

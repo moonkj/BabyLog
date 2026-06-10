@@ -212,4 +212,19 @@
 - **흐름 완성**: 온보딩 입력 → AppStore(Codable 영속화) → 홈이 **실제 입력한 아이** 표시 (재실행해도 유지)
 - ⚠️ iPhone 재설치는 **기기 연결 끊김**(disconnected)으로 보류 — 재연결 시 설치
 - 남은 실데이터: RecordScreen·ProfileScreen store 연결 · 기록(GrowthRecord/DiaryEntry) CRUD
+
+### 라운드 10 (진행중 · 2026-06-10) — 런치스크린 + 실데이터 CRUD
+
+| 담당 | 작업 | 산출물 | 상태 |
+| --- | --- | --- | --- |
+| lead | 런치스크린(로고 + 크림 #FAFAF7 배경) | `Assets`·`Info.plist` | ✅ |
+| coder | AppStore 기록 배열 + CRUD + PersistableState 하위호환 | `Data` | ✅ |
+| coder | 빠른기록 → 실제 저장(addDiaryEntry/addGrowthRecord) | `Features/QuickRecord` | ✅ |
+| coder | RecordScreen 실기록·빈상태 + 내정보 내보내기 store | `Features/Record`·`Profile` | ✅ |
+| qa | 기록 CRUD·하위호환 테스트 16개 | `Tests` | ✅ |
+
+- **✅ 통합 결과**: build→test → **214/214 PASS** (컴파일 버그 0) · iPhone 재설치
+- **완성**: 빠른기록 → AppStore 저장 → RecordScreen 타임라인/차트 실시간 반영 → 영속화(재실행 유지). 빈 상태=BLEmptyState 권유 톤. 런치스크린 브랜드 적용.
+- 다음: **B**(API 키 실연동) / **C**(CloudKit·App Group 위젯)
+- 앱 아이콘 적용 완료(커밋 9107edb)
 - **별도 전용 라운드 권장(무거움/리스크)**: CoreData+CloudKit 실영속화 · App Group 위젯 실데이터 · 외부 API 실키 연동 · SPM 모듈화 · 온보딩→실데이터 흐름

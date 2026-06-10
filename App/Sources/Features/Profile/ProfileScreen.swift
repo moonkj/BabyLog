@@ -7,6 +7,9 @@ import UIKit
 /// ProfileTab 연결은 팀장 담당 — 이 파일은 독립 View만 제공.
 struct ProfileScreen: View {
 
+    // MARK: Environment
+    @EnvironmentObject private var store: AppStore
+
     // MARK: Mock State (실제 구현 시 ViewModel / Environment 주입)
     @State private var selectedBadgeCategory: BadgeCatalogItem.BadgeCategory? = nil
     @State private var showProDetail = false
@@ -480,7 +483,7 @@ struct ProfileScreen: View {
                         subtitle: "표준 포맷으로 언제든",
                         showDivider: true,
                         onTap: {
-                            let state = SampleData.store().snapshot()
+                            let state = store.snapshot()
                             if let url = try? DataExporter.exportToTemporaryFile(state) {
                                 exportURL = url
                                 showShareSheet = true
@@ -653,5 +656,6 @@ private struct ShareSheet: UIViewControllerRepresentable {
     NavigationStack {
         ProfileScreen()
     }
+    .environmentObject(SampleData.store())
 }
 #endif

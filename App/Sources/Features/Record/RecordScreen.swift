@@ -4,6 +4,7 @@ import Charts
 // MARK: - RecordScreen
 
 struct RecordScreen: View {
+    @EnvironmentObject private var store: AppStore
     @State private var segment: RecordSegment = .timeline
     @State private var growthMetric: GrowthMetric = .weight
     @State private var expandAssurance = false
@@ -25,13 +26,21 @@ struct RecordScreen: View {
 
                 // 세그먼트 본문
                 Group {
-                    switch segment {
-                    case .timeline:
-                        TimelineSection()
-                    case .chart:
-                        GrowthChartSection(metric: $growthMetric, expandAssurance: $expandAssurance)
-                    case .vaccine:
-                        VaccineSection()
+                    if let child = store.selectedChild {
+                        switch segment {
+                        case .timeline:
+                            TimelineSection(child: child)
+                        case .chart:
+                            GrowthChartSection(child: child, metric: $growthMetric, expandAssurance: $expandAssurance)
+                        case .vaccine:
+                            VaccineSection()
+                        }
+                    } else {
+                        BLEmptyState(
+                            icon: "person.crop.circle.badge.plus",
+                            title: "아이를 먼저 등록해주세요",
+                            message: "아이 정보를 등록하면\n성장 기록과 추억을 함께 모아볼 수 있어요."
+                        )
                     }
                 }
                 .padding(.horizontal, Spacing.s5)
@@ -41,7 +50,7 @@ struct RecordScreen: View {
         }
         .background(AppColors.canvas)
         .sheet(isPresented: $showShareCard) {
-            if let child = SampleData.children.first {
+            if let child = store.selectedChild {
                 ShareCardView(child: child)
             }
         }
@@ -52,11 +61,11 @@ struct RecordScreen: View {
     private var screenHeader: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("아이 성장 기록".uppercased())
+                Text((store.selectedChild?.name.uppercased() ?? "아이 성장") + " 기록".uppercased())
                     .font(.system(size: 11, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(AppColors.ink3)
-                Text("기록")
+                Text(store.selectedChild?.name ?? "기록")
                     .font(.system(size: 34, weight: .heavy))
                     .tracking(-0.5)
                     .foregroundStyle(AppColors.ink)
@@ -117,40 +126,14 @@ private enum GrowthMetric: String, CaseIterable, Identifiable {
 // MARK: - 타임라인 섹션
 
 private struct TimelineSection: View {
-    // 목업 데이터
-    private let dummyChild = UUID()
-    private var growthRecords: [GrowthRecord] {
-        let cal = Calendar.current
-        let base = cal.date(from: DateComponents(year: 2024, month: 1, day: 10))!
-        return [
-            GrowthRecord(childId: dummyChild, date: base,
-                         heightCm: 75.2, weightKg: 9.8),
-            GrowthRecord(childId: dummyChild,
-                         date: cal.date(byAdding: .month, value: 2, to: base)!,
-                         heightCm: 78.0, weightKg: 10.4),
-            GrowthRecord(childId: dummyChild,
-                         date: cal.date(byAdding: .month, value: 4, to: base)!,
-                         heightCm: 80.5, weightKg: 11.0),
-        ]
-    }
+    @EnvironmentObject private var store: AppStore
+    let child: Child
+
+    // store에서 실데이터 (date 내림차순)
     private var diaryEntries: [DiaryEntry] {
-        let cal = Calendar.current
-        let base = cal.date(from: DateComponents(year: 2024, month: 5, day: 3))!
-        return [
-            DiaryEntry(childId: dummyChild, date: base,
-                       recordType: "milestone",
-                       content: "드디어 혼자 세 걸음! 너무 대견해 😊",
-                       milestone: "첫 걸음마"),
-            DiaryEntry(childId: dummyChild,
-                       date: cal.date(byAdding: .day, value: -3, to: base)!,
-                       recordType: "photo",
-                       content: "공원에서 비눗방울 잡으려고 온 힘을 다하는 지호"),
-            DiaryEntry(childId: dummyChild,
-                       date: cal.date(byAdding: .day, value: -3, to: base)!,
-                       recordType: "note",
-                       content: "오늘 처음으로 '엄마'를 또렷하게 말했어요",
-                       milestone: "첫 단어"),
-        ]
+        store.diaryEntries
+            .filter { $0.childId == child.id }
+            .sorted { $0.date > $1.date }
     }
 
     // 날짜별 그룹
@@ -158,10 +141,6 @@ private struct TimelineSection: View {
         var map: [String: [TimelineItem]] = [:]
         let df = DateFormatter(); df.locale = Locale(identifier: "ko_KR")
         df.dateFormat = "yyyy년 M월 d일 EEEE"
-        for r in growthRecords {
-            let key = df.string(from: r.date)
-            map[key, default: []].append(.growth(r))
-        }
         for e in diaryEntries {
             let key = df.string(from: e.date)
             map[key, default: []].append(.diary(e))
@@ -170,28 +149,36 @@ private struct TimelineSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s5) {
-            ForEach(groupedItems, id: \.0) { (day, items) in
-                VStack(alignment: .leading, spacing: Spacing.s3) {
-                    // 날짜 그룹 헤더
-                    DateGroupHeader(label: day)
-                    // 카드 목록
-                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                        switch item {
-                        case .growth(let r):
-                            GrowthTimelineCard(record: r)
-                        case .diary(let e):
-                            DiaryTimelineCard(entry: e)
+        if diaryEntries.isEmpty {
+            BLEmptyState(
+                icon: "book.closed.fill",
+                title: "첫 기록을 남겨볼까요?",
+                message: "\(child.name)의 소중한 순간을\n하나씩 담아보세요."
+            )
+        } else {
+            VStack(alignment: .leading, spacing: Spacing.s5) {
+                ForEach(groupedItems, id: \.0) { (day, items) in
+                    VStack(alignment: .leading, spacing: Spacing.s3) {
+                        // 날짜 그룹 헤더
+                        DateGroupHeader(label: day)
+                        // 카드 목록
+                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                            switch item {
+                            case .growth(let r):
+                                GrowthTimelineCard(record: r)
+                            case .diary(let e):
+                                DiaryTimelineCard(entry: e)
+                            }
                         }
                     }
                 }
+                // 하단 안내
+                Text("\(child.name)의 \(diaryEntries.count)개 순간이 기록되었어요 💛")
+                    .font(AppFont.caption)
+                    .foregroundStyle(AppColors.ink3)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, Spacing.s2)
             }
-            // 하단 안내
-            Text("지호의 152개 순간이 기록되었어요 💛")
-                .font(AppFont.caption)
-                .foregroundStyle(AppColors.ink3)
-                .frame(maxWidth: .infinity)
-                .padding(.top, Spacing.s2)
         }
     }
 }
@@ -336,27 +323,16 @@ private struct DiaryTimelineCard: View {
 // MARK: - 성장차트 섹션
 
 private struct GrowthChartSection: View {
+    @EnvironmentObject private var store: AppStore
+    let child: Child
     @Binding var metric: GrowthMetric
     @Binding var expandAssurance: Bool
 
-    // 목업 성장 기록 (월령별)
-    private let dummyChild = UUID()
+    // store에서 실데이터 (date 오름차순)
     private var records: [GrowthRecord] {
-        let cal = Calendar.current
-        let origin = cal.date(from: DateComponents(year: 2023, month: 1, day: 1))!
-        let rawData: [(Int, Double, Double)] = [
-            (0, 50.5, 3.3), (2, 58.0, 5.6), (4, 63.5, 7.0),
-            (6, 67.0, 8.0), (8, 69.8, 8.8), (10, 72.0, 9.4),
-            (12, 74.5, 9.8), (14, 77.0, 10.3), (16, 80.2, 10.8),
-        ]
-        return rawData.map { (month, height, weight) in
-            GrowthRecord(
-                childId: dummyChild,
-                date: cal.date(byAdding: .month, value: month, to: origin)!,
-                heightCm: height,
-                weightKg: weight
-            )
-        }
+        store.growthRecords
+            .filter { $0.childId == child.id }
+            .sorted { $0.date < $1.date }
     }
 
     // WHO 백분위 참조 데이터 (남아 기준 근사값, 월령별)
@@ -408,10 +384,8 @@ private struct GrowthChartSection: View {
     }
 
     private var chartPoints: [ChartPoint] {
-        let cal = Calendar.current
-        let origin = cal.date(from: DateComponents(year: 2023, month: 1, day: 1))!
-        return records.compactMap { r -> ChartPoint? in
-            let months = cal.dateComponents([.month], from: origin, to: r.date).month ?? 0
+        records.compactMap { r -> ChartPoint? in
+            let months = AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: r.date).months
             let val = metric == .weight ? r.weightKg : r.heightCm
             guard let v = val else { return nil }
             return ChartPoint(month: months, value: v)
@@ -431,46 +405,69 @@ private struct GrowthChartSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            // 정성적 안심 메시지 카드 (백분위 숫자 강조 금지)
-            assuranceCard
+        if records.isEmpty {
+            BLEmptyState(
+                icon: "chart.line.uptrend.xyaxis",
+                title: "성장 기록을 추가해볼까요?",
+                message: "\(child.name)의 키와 몸무게를 기록하면\nWHO 성장곡선과 함께 확인할 수 있어요."
+            )
+        } else {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                // 정성적 안심 메시지 카드 (백분위 숫자 강조 금지)
+                assuranceCard
 
-            // 키/몸무게 토글
-            HStack(spacing: Spacing.s2) {
-                ForEach(GrowthMetric.allCases) { m in
-                    BLChip(text: m.label, on: metric == m) {
-                        withAnimation(.easeOut(duration: 0.18)) { metric = m }
+                // 키/몸무게 토글
+                HStack(spacing: Spacing.s2) {
+                    ForEach(GrowthMetric.allCases) { m in
+                        BLChip(text: m.label, on: metric == m) {
+                            withAnimation(.easeOut(duration: 0.18)) { metric = m }
+                        }
+                        .accessibilityAddTraits(metric == m ? .isSelected : [])
                     }
-                    .accessibilityAddTraits(metric == m ? .isSelected : [])
+                    Spacer()
                 }
-                Spacer()
-            }
 
-            // 차트 카드
-            BLCard(padding: 16) {
-                VStack(alignment: .leading, spacing: Spacing.s3) {
-                    HStack {
-                        Label(metric.label, systemImage: metric.icon)
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(AppColors.ink)
-                        Spacer()
-                        Text("월령(개월)")
-                            .font(AppFont.micro)
-                            .foregroundStyle(AppColors.ink3)
+                // 1개 데이터 단일 포인트 안내
+                if records.count == 1 {
+                    BLCard(padding: 14, flat: true) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(AppColors.primary)
+                                .accessibilityHidden(true)
+                            Text("측정이 2회 이상 쌓이면 추이 그래프가 그려져요")
+                                .font(AppFont.caption)
+                                .foregroundStyle(AppColors.ink2)
+                        }
                     }
+                }
 
-                    // Swift Charts — LineMark + WHO AreaMark 밴드
-                    growthChart
-                        .frame(height: 200)
-                        .accessibilityLabel(chartAccessibilityDescription)
+                // 차트 카드
+                BLCard(padding: 16) {
+                    VStack(alignment: .leading, spacing: Spacing.s3) {
+                        HStack {
+                            Label(metric.label, systemImage: metric.icon)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(AppColors.ink)
+                            Spacer()
+                            Text("월령(개월)")
+                                .font(AppFont.micro)
+                                .foregroundStyle(AppColors.ink3)
+                        }
 
-                    // 범례
-                    chartLegend
+                        // Swift Charts — LineMark + WHO AreaMark 밴드
+                        growthChart
+                            .frame(height: 200)
+                            .accessibilityLabel(chartAccessibilityDescription)
 
-                    Divider().background(AppColors.line)
+                        // 범례
+                        chartLegend
 
-                    // 요약 스탯 행
-                    statsRow
+                        Divider().background(AppColors.line)
+
+                        // 요약 스탯 행
+                        statsRow
+                    }
                 }
             }
         }
@@ -637,7 +634,7 @@ private struct GrowthChartSection: View {
 
     private var chartLegend: some View {
         HStack(spacing: Spacing.s4) {
-            legendItem(color: AppColors.primary, style: .solid, label: "지호")
+            legendItem(color: AppColors.primary, style: .solid, label: child.name)
             legendItem(color: AppColors.primary.opacity(0.45), style: .dashed, label: "WHO 중앙(p50)")
             legendItem(color: AppColors.primary.opacity(0.10), style: .area, label: "WHO 정상범위")
         }
@@ -887,4 +884,5 @@ private struct VaccineRow: View {
 
 #Preview {
     RecordScreen()
+        .environmentObject(SampleData.store())
 }

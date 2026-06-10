@@ -11,6 +11,8 @@ struct QuickRecordSheet: View {
     var onSave: () -> Void = {}
     var onClose: () -> Void = {}
 
+    @EnvironmentObject private var store: AppStore
+
     // MARK: Internal state
     @State private var showDetail = false
     @State private var savedOverlay = false
@@ -421,11 +423,49 @@ struct QuickRecordSheet: View {
     // MARK: - Actions
 
     private func handleSave() {
+        // selectedChild 없으면 저장 스킵하고 바로 닫기
+        guard let childId = store.selectedChild?.id else {
+            onSave()
+            onClose()
+            return
+        }
+
+        // 사진·메모·이정표 중 하나라도 있으면 DiaryEntry 기록
+        let trimmedMemo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
+        let milestoneText = selectedMilestones.isEmpty
+            ? nil
+            : selectedMilestones.sorted().joined(separator: ", ")
+        let hasDiaryContent = selectedPhoto != nil
+            || !trimmedMemo.isEmpty
+            || !selectedMilestones.isEmpty
+        if hasDiaryContent {
+            store.addDiaryEntry(
+                childId:   childId,
+                content:   trimmedMemo.isEmpty ? nil : trimmedMemo,
+                milestone: milestoneText,
+                photoRef:  selectedPhoto != nil ? "local" : nil
+            )
+        }
+
+        // 자세히 모드에서 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
+        if showDetail {
+            let heightVal  = Double(heightText.trimmingCharacters(in: .whitespaces))
+            let weightVal  = Double(weightText.trimmingCharacters(in: .whitespaces))
+            if heightVal != nil || weightVal != nil {
+                store.addGrowthRecord(
+                    childId:             childId,
+                    heightCm:            heightVal,
+                    weightKg:            weightVal,
+                    headCircumferenceCm: nil
+                )
+            }
+        }
+
         // 1탭: 저장 버튼 탭 → 보상 오버레이 표시
         withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
             savedOverlay = true
         }
-        // 2탭(0.5s): 오버레이 표시 후 onSave+onClose 호출
+        // 2탭(1.6s): 오버레이 표시 후 onSave+onClose 호출
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
             onSave()
             onClose()
@@ -488,10 +528,12 @@ private let pregnancyMilestones: [MilestoneItem] = [
 #Preview("Baby Mode") {
     QuickRecordSheet(mode: .baby, childName: "지호")
         .presentationDetents([.medium, .large])
+        .environmentObject(SampleData.store())
 }
 
 #Preview("Pregnancy Mode") {
     QuickRecordSheet(mode: .pregnancy, childName: "아기")
         .presentationDetents([.medium, .large])
+        .environmentObject(SampleData.store())
 }
 #endif

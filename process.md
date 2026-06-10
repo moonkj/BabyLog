@@ -247,3 +247,23 @@
 ### 비고 / 남은 실데이터
 - iPhone 연결 끊김으로 재설치 보류(재연결 시 `devicectl` 설치) — 코드 무관
 - RecordScreen·ProfileScreen의 store 연결, 기록(GrowthRecord/DiaryEntry) CRUD는 후속
+
+---
+
+## 2026-06-10 — 앱 아이콘 + 라운드 10 (런치스크린 + 실데이터 CRUD)
+
+**상태:** ✅ build+test **214/214 PASS** · iPhone 재설치 · GitHub 푸시
+
+- **앱 아이콘**(커밋 9107edb): 세이지+골드 on 크림, 1024 Asset Catalog(알파 제거)
+- **런치스크린**: 로고 + 크림(#FAFAF7) 배경 (흰 플래시 제거, 브랜드 스플래시)
+- **실데이터 CRUD**:
+  - AppStore: `growthRecords`/`diaryEntries` + `addDiaryEntry`/`addGrowthRecord`/`diaryEntries(for:)`/`growthRecords(for:)`, PersistableState 하위호환 디코딩
+  - 빠른기록 시트 → 선택 아이에 실제 저장(보상 애니 유지)
+  - RecordScreen 타임라인·성장차트가 store 실기록 표시 + BLEmptyState(권유 톤), 내정보 내보내기 store 연결
+  - qa: 기록 CRUD·하위호환·영속화 16 테스트
+- **완성 흐름**: 빠른기록 저장 → RecordScreen 실시간 반영 → 앱 재실행해도 유지
+- 검증: **214/214 PASS**, 컴파일 버그 0
+
+### 다음
+- **B**: 외부 API 실키 연동 (ProviderFactory→화면, 키 필요)
+- **C**: CloudKit 가족공유 / App Group 위젯 실데이터 (엔타이틀먼트)
