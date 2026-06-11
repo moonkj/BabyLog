@@ -22,6 +22,31 @@ struct PregnancyHomeView: View {
     @State private var showPregReg = false
     @State private var editingPregnancy: Pregnancy? = nil
 
+    // MARK: 가계부 실데이터
+    private var monthTotal: Int { BudgetSummary.monthlyTotal(store.expenses, in: Date()) }
+    private var prevMonthTotal: Int {
+        guard let prev = Calendar.current.date(byAdding: .month, value: -1, to: Date()) else { return 0 }
+        return BudgetSummary.monthlyTotal(store.expenses, in: prev)
+    }
+    private var monthOverMonthPct: Int? {
+        guard prevMonthTotal > 0 else { return nil }
+        return Int((Double(monthTotal - prevMonthTotal) / Double(prevMonthTotal) * 100).rounded())
+    }
+    private var monthCategoryBreakdown: [(category: ExpenseCategory, amount: Int)] {
+        let monthEx = store.expenses.filter {
+            Calendar.current.isDate($0.date, equalTo: Date(), toGranularity: .month)
+        }
+        let dict = BudgetSummary.byCategory(monthEx)
+        return ExpenseCategory.allCases.compactMap { c -> (ExpenseCategory, Int)? in
+            guard let a = dict[c], a > 0 else { return nil }
+            return (c, a)
+        }.sorted { $0.1 > $1.1 }
+    }
+    private func wonFull(_ n: Int) -> String {
+        let f = NumberFormatter(); f.numberStyle = .decimal
+        return (f.string(from: NSNumber(value: n)) ?? "\(n)")
+    }
+
     // MARK: 목업 폴백 (store 없거나 activePregnancy nil 시)
     private let mockLMP: Date = Calendar.current.date(
         byAdding: .day,
@@ -452,9 +477,9 @@ struct PregnancyHomeView: View {
                                 .foregroundStyle(AppColors.ink3)
                                 .fontWeight(.semibold)
 
-                            // 금액 (모노스페이스 숫자)
+                            // 금액 (실 지출)
                             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                                Text("320,000")
+                                Text(wonFull(monthTotal))
                                     .font(AppFont.num(24, weight: .heavy))
                                     .foregroundStyle(AppColors.ink)
                                 Text("원")
@@ -465,37 +490,46 @@ struct PregnancyHomeView: View {
 
                         Spacer()
 
-                        VStack(alignment: .trailing, spacing: Spacing.s1) {
-                            BLBadge(tone: .mint, text: "전월 -12%", systemIcon: "arrow.down")
-                            Text("아동수당 D-12 미신청")
-                                .font(AppFont.micro)
-                                .foregroundStyle(AppColors.ink3)
+                        if let pct = monthOverMonthPct {
+                            BLBadge(tone: pct <= 0 ? .mint : .coral,
+                                    text: "전월 \(pct > 0 ? "+" : "")\(pct)%",
+                                    systemIcon: pct <= 0 ? "arrow.down" : "arrow.up")
                         }
                     }
 
-                    // 카테고리 바 (색+레이블 2중 인코딩)
-                    GeometryReader { geo in
-                        HStack(spacing: 2) {
-                            budgetBarSegment(color: BadgeTone.blue.ink, width: geo.size.width * 0.45 - 2)
-                            budgetBarSegment(color: BadgeTone.mint.ink, width: geo.size.width * 0.25 - 2)
-                            budgetBarSegment(color: BadgeTone.amber.ink, width: geo.size.width * 0.20 - 2)
-                            budgetBarSegment(color: AppColors.ink3, width: geo.size.width * 0.10)
+                    if monthTotal > 0 {
+                        // 실 카테고리 바
+                        GeometryReader { geo in
+                            HStack(spacing: 2) {
+                                ForEach(Array(monthCategoryBreakdown.prefix(4).enumerated()), id: \.element.category) { _, item in
+                                    budgetBarSegment(
+                                        color: item.category.badgeTone.ink,
+                                        width: geo.size.width * CGFloat(item.amount) / CGFloat(max(1, monthTotal)) - 2
+                                    )
+                                }
+                            }
                         }
-                    }
-                    .frame(height: 8)
-                    .clipShape(Capsule())
+                        .frame(height: 8)
+                        .clipShape(Capsule())
 
-                    // 범례
-                    HStack(spacing: Spacing.s3) {
-                        budgetLegend(color: BadgeTone.blue.ink, label: "의료 45%")
-                        budgetLegend(color: BadgeTone.mint.ink, label: "식품 25%")
-                        budgetLegend(color: BadgeTone.amber.ink, label: "용품 20%")
+                        // 실 범례 (상위 3)
+                        HStack(spacing: Spacing.s3) {
+                            ForEach(Array(monthCategoryBreakdown.prefix(3).enumerated()), id: \.element.category) { _, item in
+                                let pct = Int(Double(item.amount) / Double(max(1, monthTotal)) * 100)
+                                budgetLegend(color: item.category.badgeTone.ink,
+                                             label: "\(item.category.displayName) \(pct)%")
+                            }
+                        }
+                    } else {
+                        Text("이번 달 지출 기록이 없어요 · 탭해서 추가")
+                            .font(AppFont.caption)
+                            .foregroundStyle(AppColors.ink3)
                     }
                 }
             }
         }
         .buttonStyle(LiquidPressStyle(scale: 0.98))
-        .accessibilityLabel("이번 달 육아비 320,000원. 전월 대비 -12%. 아동수당 신청 D-12")
+        .accessibilityLabel("이번 달 육아비 \(wonFull(monthTotal))원")
         .accessibilityHint("탭하면 가계부 상세 보기")
     }
 
