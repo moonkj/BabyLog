@@ -38,7 +38,7 @@ enum BadgeEngine {
         // MARK: 육아 기록 뱃지
         if recordCount >= 1  { badges.insert("record_start") }
         if consecutiveDays >= 30 { badges.insert("streak_30") }
-        if recordCount >= 50 { badges.insert("parenting_master") }
+        if recordCount >= 50 { badges.insert("parenting_pro") }   // 카탈로그 id와 일치(육아고수)
 
         // MARK: 거래 활동 뱃지
         if tradeCount >= 3   { badges.insert("sharing_angel") }

@@ -11,6 +11,7 @@ struct PregnancyLog: Identifiable, Codable, Equatable {
         case movement   // value = 그 날의 태동 횟수
         case weight     // value = kg
         case belly      // value = 주차, photoRef = 로컬 배 사진
+        case memo       // note = 메모 텍스트
     }
 
     let id: UUID
@@ -20,14 +21,17 @@ struct PregnancyLog: Identifiable, Codable, Equatable {
     var value: Double
     /// 배 사진 로컬 파일명 (kind == .belly). 서버 비전송.
     var photoRef: String?
+    /// 메모 텍스트 (kind == .memo). 옵셔널 → 구 데이터 디코딩 자동 호환.
+    var note: String?
 
     init(id: UUID = UUID(), pregnancyId: UUID, date: Date, kind: Kind,
-         value: Double, photoRef: String? = nil) {
+         value: Double, photoRef: String? = nil, note: String? = nil) {
         self.id = id
         self.pregnancyId = pregnancyId
         self.date = date
         self.kind = kind
         self.value = value
         self.photoRef = photoRef
+        self.note = note
     }
 }

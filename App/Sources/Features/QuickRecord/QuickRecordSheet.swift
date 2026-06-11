@@ -489,6 +489,11 @@ struct QuickRecordSheet: View {
         if showDetail, let w = Double(weightText.trimmingCharacters(in: .whitespaces)) {
             store.addPregnancyWeight(pregnancyId: preg.id, kg: w)
         }
+        // 메모 저장 (손실 방지)
+        let trimmedMemo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedMemo.isEmpty {
+            store.addPregnancyMemo(pregnancyId: preg.id, text: trimmedMemo)
+        }
     }
 
     private func handleSave() {

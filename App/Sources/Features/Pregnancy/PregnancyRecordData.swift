@@ -292,9 +292,9 @@ enum PregnancyData {
     }
     static func checkupSchedule(currentWeek: Int) -> [CheckupItem] {
         [
-            .init(name: "초기 정밀 초음파",      weekRange: "11~13주",  dueLabel: "완료", isDone: true,  isUrgent: false),
-            .init(name: "기형아 1차 검사",        weekRange: "11~13주",  dueLabel: "완료", isDone: true,  isUrgent: false),
-            .init(name: "기형아 2차 검사",        weekRange: "16~20주",  dueLabel: "완료", isDone: true,  isUrgent: false),
+            .init(name: "초기 정밀 초음파",      weekRange: "11~13주",  dueLabel: "권장", isDone: false, isUrgent: false),
+            .init(name: "기형아 1차 검사",        weekRange: "11~13주",  dueLabel: "권장", isDone: false, isUrgent: false),
+            .init(name: "기형아 2차 검사",        weekRange: "16~20주",  dueLabel: "권장", isDone: false, isUrgent: false),
             .init(name: "정밀 초음파",            weekRange: "20~24주",  dueLabel: "D-14", isDone: false, isUrgent: false),
             .init(name: "임신성 당뇨 검사",       weekRange: "24~28주",  dueLabel: "D-3",  isDone: false, isUrgent: true),
             .init(name: "빈혈·소변 검사",         weekRange: "28주",     dueLabel: "D+11", isDone: false, isUrgent: false),

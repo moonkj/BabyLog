@@ -194,14 +194,21 @@ final class AppStore: ObservableObject {
 
     func isJoinedCrew(_ id: String) -> Bool { joinedCrewIds.contains(id) }
 
-    /// 표시용 참여 인원 = 기본 인원 + (내가 참여 시 +1)
+    /// 표시용 참여 인원 = 기본 인원 + (내가 참여 시 +1). 내 모임은 주최자(나)가 곧 참여자.
     func crewJoinedCount(_ meetup: CrewMeetup) -> Int {
-        meetup.joined + (joinedCrewIds.contains(meetup.id) && !meetup.mine ? 1 : 0)
+        meetup.joined + (joinedCrewIds.contains(meetup.id) ? 1 : 0)
     }
 
+    /// 참여 토글. 정원 초과 시 신규 참여를 막는다.
     func toggleJoinCrew(_ id: String) {
-        if joinedCrewIds.contains(id) { joinedCrewIds.remove(id) }
-        else { joinedCrewIds.insert(id) }
+        if joinedCrewIds.contains(id) {
+            joinedCrewIds.remove(id)
+        } else {
+            if let m = crews.first(where: { $0.id == id }), crewJoinedCount(m) >= m.capacity {
+                return   // 정원 초과
+            }
+            joinedCrewIds.insert(id)
+        }
         refreshBadgeAwards()
     }
 
@@ -637,6 +644,21 @@ final class AppStore: ObservableObject {
                                           kind: .belly, value: Double(week), photoRef: photoRef))
     }
 
+    /// 임신 메모를 추가한다(빠른기록 임신 모드 — 데이터 손실 방지).
+    func addPregnancyMemo(pregnancyId: UUID, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        pregnancyLogs.append(PregnancyLog(pregnancyId: pregnancyId, date: Date(),
+                                          kind: .memo, value: 0, note: trimmed))
+    }
+
+    /// 특정 임신의 메모를 최신순으로 반환한다.
+    func pregnancyMemos(pregnancyId: UUID) -> [PregnancyLog] {
+        pregnancyLogs
+            .filter { $0.pregnancyId == pregnancyId && $0.kind == .memo }
+            .sorted { $0.date > $1.date }
+    }
+
     /// 특정 임신의 배 사진을 주차 오름차순으로 반환한다.
     func bellyPhotos(pregnancyId: UUID) -> [PregnancyLog] {
         pregnancyLogs
@@ -667,8 +689,10 @@ final class AppStore: ObservableObject {
     /// 다이어리 항목 수정 (캡션·이정표). 사진/영상은 유지.
     func updateDiaryEntry(id: UUID, content: String?, milestone: String?) {
         guard let idx = diaryEntries.firstIndex(where: { $0.id == id }) else { return }
+        let childId = diaryEntries[idx].childId
         diaryEntries[idx].content = content
         diaryEntries[idx].milestone = milestone
+        bus.publish(.recordSaved(childId: childId))
     }
 
     /// 성장 기록을 삭제한다.

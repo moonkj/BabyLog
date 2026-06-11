@@ -74,7 +74,7 @@ enum DataExporter {
         let jsonData = try exportJSON(state)
 
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd"
+        formatter.dateFormat = "yyyyMMdd-HHmmss"   // 같은 날 여러 번 내보내도 덮어쓰지 않게
         let dateString = formatter.string(from: Date())
         let fileName = "babylog-export-\(dateString).json"
 
