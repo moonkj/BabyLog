@@ -9,19 +9,34 @@ struct AddExpenseSheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
 
+    @State private var title: String = ""
     @State private var amountText: String = ""
     @State private var category: ExpenseCategory = .diaper
     @State private var date: Date = Date()
-    @State private var memo: String = ""
-    @State private var shakeTrigger = 0
+    @State private var titleShake = 0
+    @State private var amountShake = 0
 
     private var amount: Int { Int(amountText.filter(\.isNumber)) ?? 0 }
-    private var canSave: Bool { amount > 0 }
+    private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSave: Bool { amount > 0 && !trimmedTitle.isEmpty }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
+
+                    // 제목 (항목 이름)
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text("제목").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
+                        TextField("예: 기저귀", text: $title)
+                            .font(.system(size: 18, weight: .bold))
+                            .padding(.horizontal, Spacing.s4)
+                            .frame(height: 56)
+                            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                            .submitLabel(.done)
+                            .blShake(titleShake)
+                            .accessibilityLabel("지출 제목 입력")
+                    }
 
                     // 금액
                     VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -37,7 +52,7 @@ struct AddExpenseSheet: View {
                         .padding(.horizontal, Spacing.s4)
                         .frame(height: 64)
                         .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                        .blShake(shakeTrigger)
+                        .blShake(amountShake)
                     }
 
                     // 카테고리 (색+아이콘+레이블 3중)
@@ -59,26 +74,17 @@ struct AddExpenseSheet: View {
                             .labelsHidden()
                     }
 
-                    // 메모
-                    VStack(alignment: .leading, spacing: Spacing.s2) {
-                        Text("메모 (선택)").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
-                        TextField("예: 기저귀 대용량", text: $memo)
-                            .font(AppFont.body)
-                            .padding(.horizontal, Spacing.s4)
-                            .frame(height: 48)
-                            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                    }
-
                     Spacer(minLength: Spacing.s4)
 
                     LiquidButton(fill: canSave ? AppColors.primary : AppColors.ink3,
                                  cornerRadius: Radius.md) {
                         guard canSave else {
-                            shakeTrigger += 1   // 금액 미입력 시 흔들림 + 경고 햅틱
+                            if trimmedTitle.isEmpty { titleShake += 1 }
+                            if amount <= 0 { amountShake += 1 }
                             return
                         }
                         store.addExpense(amount: amount, category: category, date: date,
-                                         memo: memo.isEmpty ? nil : memo)
+                                         memo: trimmedTitle)
                         Haptics.success()
                         dismiss()
                     } label: {

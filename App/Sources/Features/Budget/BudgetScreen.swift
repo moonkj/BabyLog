@@ -590,9 +590,7 @@ private struct SubsidyCard: View {
                         .padding(.vertical, Spacing.s3)
 
                     LiquidButton(fill: AppColors.gold, cornerRadius: Radius.sm) {
-                        if let url = info.applyURL {
-                            UIApplication.shared.open(url)
-                        }
+                        openApplyInfo()
                     } label: {
                         HStack(spacing: Spacing.s2) {
                             Image(systemName: "arrow.up.right.square.fill")
@@ -620,6 +618,16 @@ private struct SubsidyCard: View {
         .accessibilityLabel("\(info.name), \(amountStr(info.amountKRW)). \(info.eligibility)\(dDayLabel.map { ". 마감 \($0)" } ?? "")")
     }
 
+    // 복지로 딥링크(mock)가 깨질 수 있어, 이름 기반 검색으로 항상 정상 페이지가 열리게 한다.
+    // (복지로 API 연동 시 info.applyURL 실링크로 자동 대체 가능)
+    private func openApplyInfo() {
+        let q = "\(info.name) 복지로 신청"
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "복지로"
+        if let url = URL(string: "https://search.naver.com/search.naver?query=\(q)") {
+            UIApplication.shared.open(url)
+        }
+    }
+
     private var iconBox: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
@@ -635,9 +643,7 @@ private struct SubsidyCard: View {
 
     private var applyButton: some View {
         Button {
-            if let url = info.applyURL {
-                UIApplication.shared.open(url)
-            }
+            openApplyInfo()
         } label: {
             Text("신청")
                 .font(.system(size: 13.5, weight: .bold))
