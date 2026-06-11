@@ -43,6 +43,29 @@ enum PhotoStore {
         try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
     }
 
+    /// 동영상을 로컬로 복사하고 파일명을 반환. 서버 업로드 없음.
+    static func saveVideo(from sourceURL: URL) -> String? {
+        let ext = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
+        let name = "\(UUID().uuidString).\(ext)"
+        let dest = directory.appendingPathComponent(name)
+        do {
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try FileManager.default.removeItem(at: dest)
+            }
+            try FileManager.default.copyItem(at: sourceURL, to: dest)
+            return name
+        } catch {
+            return nil
+        }
+    }
+
+    /// 동영상 로컬 파일 URL (없으면 nil).
+    static func videoURL(_ name: String?) -> URL? {
+        guard let name, !name.isEmpty else { return nil }
+        let url = directory.appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
     private static func downscaled(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
         let w = image.size.width, h = image.size.height
         let maxSide = max(w, h)

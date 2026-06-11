@@ -272,16 +272,21 @@ final class AppStore: ObservableObject {
         childId: UUID,
         content: String?,
         milestone: String?,
-        photoRef: String?
+        photoRef: String?,
+        photoRefs: [String] = [],
+        videoRef: String? = nil
     ) {
+        let hasMedia = photoRef != nil || !photoRefs.isEmpty || videoRef != nil
         let entry = DiaryEntry(
             id: UUID(),
             childId: childId,
             date: Date(),
-            recordType: photoRef != nil ? "photo" : "diary",
+            recordType: hasMedia ? "photo" : "diary",
             content: content,
             milestone: milestone,
-            photoRef: photoRef
+            photoRef: photoRef ?? photoRefs.first,
+            photoRefs: photoRefs,
+            videoRef: videoRef
         )
         diaryEntries.append(entry)
         bus.publish(.recordSaved(childId: childId))
@@ -420,7 +425,9 @@ final class AppStore: ObservableObject {
     /// 다이어리 항목을 삭제한다. 연결된 로컬 사진도 함께 정리한다.
     func deleteDiaryEntry(id: UUID) {
         if let entry = diaryEntries.first(where: { $0.id == id }) {
-            PhotoStore.delete(entry.photoRef)
+            for ref in entry.photoRefList { PhotoStore.delete(ref) }
+            if entry.photoRefList.isEmpty { PhotoStore.delete(entry.photoRef) }
+            PhotoStore.delete(entry.videoRef)
         }
         diaryEntries.removeAll { $0.id == id }
         likedDiaryIds.remove(id.uuidString)

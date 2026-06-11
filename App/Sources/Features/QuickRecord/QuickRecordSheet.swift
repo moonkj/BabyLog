@@ -26,7 +26,10 @@ struct QuickRecordSheet: View {
     @State private var selectedMilestones: Set<String> = []
 
     // 사진 선택
-    @State private var selectedPhoto: UIImage? = nil
+    @State private var selectedImages: [UIImage] = []
+    @State private var selectedVideoURL: URL? = nil
+    @State private var carouselIndex = 0
+    private var hasMedia: Bool { !selectedImages.isEmpty || selectedVideoURL != nil }
 
     // 자세히 펼치기 입력
     @State private var memo: String = ""
@@ -160,54 +163,84 @@ struct QuickRecordSheet: View {
         .padding(.bottom, Spacing.s4)
     }
 
-    // 사진 드롭존 — 선택 사진은 잘림 없이 원본 비율(전체)로 표시
+    // 사진/동영상 드롭존 — 선택 시 스와이프 캐러셀, 미선택 시 드롭존
     private var photoDropZone: some View {
-        let placeholderHeight: CGFloat = showDetail ? 150 : 210
-        let maxPhotoHeight: CGFloat = showDetail ? 300 : 430
-        return PhotoPickerButton(image: $selectedPhoto) {
-            if let img = selectedPhoto {
-                // 원본 비율 유지(scaledToFit) — 사진 전체가 보이도록
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .frame(maxHeight: maxPhotoHeight)
-                    .background(AppColors.surface2)
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-                    .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: "photo.badge.arrow.down.fill")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .padding(10)
-                            .background(.black.opacity(0.4), in: Circle())
-                            .padding(10)
-                            .accessibilityHidden(true)
-                    }
+        let mediaHeight: CGFloat = showDetail ? 300 : 420
+        return Group {
+            if hasMedia {
+                mediaCarousel(height: mediaHeight)
             } else {
-                ZStack {
-                    PhotoPlaceholder(seed: mode == .pregnancy ? 3 : 1, cornerRadius: Radius.lg)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: placeholderHeight)
-                        .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-                    VStack(spacing: Spacing.s2) {
-                        Image(systemName: photoCameraIcon)
-                            .font(.system(size: 34, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.95))
-                            .accessibilityHidden(true)
-                        Text(photoPrompt)
-                            .font(.system(size: 13.5, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
-                    }
+                MediaPickerButton(maxImages: 5, images: $selectedImages, videoURL: $selectedVideoURL) {
+                    dropZonePlaceholder(height: showDetail ? 150 : 210)
                 }
+                .buttonStyle(LiquidPressStyle(scale: 0.97))
             }
         }
-        .buttonStyle(LiquidPressStyle(scale: 0.97))
-        .accessibilityLabel(mode == .pregnancy ? "배 사진 추가 버튼" : "사진 추가 버튼")
-        .accessibilityValue(selectedPhoto != nil ? "사진 선택됨" : "사진 없음")
-        .accessibilityHint("탭하여 사진 라이브러리에서 선택합니다")
+        .accessibilityLabel(mode == .pregnancy ? "배 사진 추가" : "사진·동영상 추가")
+        .accessibilityValue(hasMedia ? "선택됨" : "없음")
         .animation(.easeInOut(duration: 0.22), value: showDetail)
-        .animation(.easeInOut(duration: 0.18), value: selectedPhoto != nil)
+        .animation(.easeInOut(duration: 0.2), value: hasMedia)
+    }
+
+    // 선택 미디어 캐러셀 (사진 여러 장 + 동영상, 스와이프)
+    private func mediaCarousel(height: CGFloat) -> some View {
+        let pageCount = selectedImages.count + (selectedVideoURL != nil ? 1 : 0)
+        return ZStack(alignment: .topTrailing) {
+            TabView(selection: $carouselIndex) {
+                ForEach(Array(selectedImages.enumerated()), id: \.offset) { idx, img in
+                    Image(uiImage: img).resizable().scaledToFill()
+                        .frame(maxWidth: .infinity).frame(height: height).clipped()
+                        .tag(idx)
+                }
+                if let vurl = selectedVideoURL {
+                    VideoPreviewView(url: vurl)
+                        .frame(maxWidth: .infinity).frame(height: height)
+                        .tag(selectedImages.count)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: pageCount > 1 ? .always : .never))
+            .frame(height: height)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+
+            // 변경/삭제
+            HStack(spacing: 8) {
+                MediaPickerButton(maxImages: 5, images: $selectedImages, videoURL: $selectedVideoURL) {
+                    Label("변경", systemImage: "photo.on.rectangle")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10).frame(height: 32)
+                        .background(.black.opacity(0.45), in: Capsule())
+                }
+                Button {
+                    selectedImages = []; selectedVideoURL = nil; carouselIndex = 0
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(.black.opacity(0.45), in: Circle())
+                }
+                .accessibilityLabel("미디어 모두 지우기")
+            }
+            .padding(10)
+        }
+    }
+
+    private func dropZonePlaceholder(height: CGFloat) -> some View {
+        ZStack {
+            PhotoPlaceholder(seed: mode == .pregnancy ? 3 : 1, cornerRadius: Radius.lg)
+                .frame(maxWidth: .infinity).frame(height: height)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            VStack(spacing: Spacing.s2) {
+                Image(systemName: photoCameraIcon)
+                    .font(.system(size: 34, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .accessibilityHidden(true)
+                Text("사진·동영상 (최대 5장)")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+            }
+        }
     }
 
     // 이정표 칩 가로 스크롤
@@ -416,17 +449,20 @@ struct QuickRecordSheet: View {
         let milestoneText = selectedMilestones.isEmpty
             ? nil
             : selectedMilestones.sorted().joined(separator: ", ")
-        let hasDiaryContent = selectedPhoto != nil
+        let hasDiaryContent = hasMedia
             || !trimmedMemo.isEmpty
             || !selectedMilestones.isEmpty
         if hasDiaryContent {
-            // 사진은 로컬에만 저장 (서버 비전송) → 파일명을 photoRef로 보관
-            let photoFile = selectedPhoto.flatMap { PhotoStore.save($0) }
+            // 사진·동영상은 로컬에만 저장 (서버 비전송)
+            let refs = selectedImages.compactMap { PhotoStore.save($0) }
+            let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
             store.addDiaryEntry(
                 childId:   childId,
                 content:   trimmedMemo.isEmpty ? nil : trimmedMemo,
                 milestone: milestoneText,
-                photoRef:  photoFile
+                photoRef:  refs.first,
+                photoRefs: refs,
+                videoRef:  videoFile
             )
         }
 

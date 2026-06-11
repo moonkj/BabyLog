@@ -5,6 +5,11 @@
 import SwiftUI
 import UIKit
 
+private struct IdentifiableImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
 // MARK: - 타임라인 섹션
 
 struct TimelineSection: View {
@@ -150,33 +155,55 @@ private struct DiaryTimelineCard: View {
     @EnvironmentObject private var store: AppStore
     var entry: DiaryEntry
     var child: Child
-    @State private var showFullPhoto = false
     @State private var showComments = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var heartPop = false
+    @State private var cardIndex = 0
+    @State private var fullPhoto: UIImage? = nil
 
     private var isMilestone: Bool { entry.milestone != nil }
     private var liked: Bool { store.isDiaryLiked(entry.id) }
     private var commentCount: Int { store.comments(for: entry.id).count }
 
     var body: some View {
-        let photo = PhotoStore.image(entry.photoRef)
+        let photos = entry.photoRefList.compactMap { PhotoStore.image($0) }
+        let videoURL = PhotoStore.videoURL(entry.videoRef)
+        let pageCount = photos.count + (videoURL != nil ? 1 : 0)
         return BLCard(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 header
 
-                // 사진 — 더블탭 좋아요 / 탭 전체화면
-                if let photo {
-                    Image(uiImage: photo)
-                        .resizable().scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 320)
-                        .clipped()
-                        .overlay(alignment: .topLeading) { milestoneBadge }
-                        .overlay { heartPopOverlay }
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) { likeWithPop() }
-                        .onTapGesture { showFullPhoto = true }
+                // 미디어 — 스와이프 캐러셀(사진 여러 장 + 동영상), 더블탭 좋아요 / 탭 전체화면
+                if pageCount > 0 {
+                    TabView(selection: $cardIndex) {
+                        ForEach(Array(photos.enumerated()), id: \.offset) { idx, img in
+                            Image(uiImage: img)
+                                .resizable().scaledToFill()
+                                .frame(maxWidth: .infinity).frame(height: 360).clipped()
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) { likeWithPop() }
+                                .onTapGesture { fullPhoto = img }
+                                .tag(idx)
+                        }
+                        if let videoURL {
+                            VideoPreviewView(url: videoURL)
+                                .frame(maxWidth: .infinity).frame(height: 360)
+                                .tag(photos.count)
+                        }
+                    }
+                    .frame(height: 360)
+                    .tabViewStyle(.page(indexDisplayMode: pageCount > 1 ? .always : .never))
+                    .overlay(alignment: .topLeading) { milestoneBadge }
+                    .overlay { heartPopOverlay }
+                    .overlay(alignment: .topTrailing) {
+                        if pageCount > 1 {
+                            Text("\(min(cardIndex + 1, pageCount))/\(pageCount)")
+                                .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 8).frame(height: 22)
+                                .background(.black.opacity(0.45), in: Capsule())
+                                .padding(10)
+                        }
+                    }
                 } else if isMilestone {
                     PhotoPlaceholder(seed: 2, cornerRadius: 0)
                         .frame(height: 200)
@@ -184,7 +211,7 @@ private struct DiaryTimelineCard: View {
                         .overlay(alignment: .topLeading) { milestoneBadge }
                 }
 
-                actionBar(photo: photo)
+                actionBar(photo: photos.first)
                 captionBlock
             }
         }
@@ -193,8 +220,11 @@ private struct DiaryTimelineCard: View {
                 Label("기록 삭제", systemImage: "trash")
             }
         }
-        .fullScreenCover(isPresented: $showFullPhoto) {
-            if let photo { FullScreenPhotoView(image: photo, onClose: { showFullPhoto = false }) }
+        .fullScreenCover(item: Binding(
+            get: { fullPhoto.map { IdentifiableImage(image: $0) } },
+            set: { if $0 == nil { fullPhoto = nil } }
+        )) { wrapper in
+            FullScreenPhotoView(image: wrapper.image, onClose: { fullPhoto = nil })
         }
         .sheet(isPresented: $showComments) {
             DiaryCommentSheet(entryId: entry.id, authorName: child.name)

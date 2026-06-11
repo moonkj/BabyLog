@@ -4,6 +4,113 @@
 
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
+import AVKit
+
+// MARK: - VideoPreviewView (로컬 동영상 재생)
+
+struct VideoPreviewView: View {
+    let url: URL
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        ZStack {
+            Color.black
+            if let player {
+                VideoPlayer(player: player)
+            } else {
+                Image(systemName: "play.circle.fill")
+                    .font(.system(size: 44)).foregroundStyle(.white.opacity(0.85))
+            }
+        }
+        .onAppear { if player == nil { player = AVPlayer(url: url) } }
+        .onDisappear { player?.pause() }
+    }
+}
+
+// MARK: - PickedMovie (PhotosPicker 동영상 로드용 Transferable)
+
+struct PickedMovie: Transferable {
+    let url: URL
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { movie in
+            SentTransferredFile(movie.url)
+        } importing: { received in
+            let ext = received.file.pathExtension.isEmpty ? "mov" : received.file.pathExtension
+            let temp = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
+            try? FileManager.default.removeItem(at: temp)
+            try FileManager.default.copyItem(at: received.file, to: temp)
+            return PickedMovie(url: temp)
+        }
+    }
+}
+
+// 공용 다운샘플 (최대 변 maxDimension)
+func blDownsample(data: Data, maxDimension: CGFloat = 2000) async -> UIImage? {
+    await Task.detached(priority: .userInitiated) {
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension
+        ]
+        guard
+            let source = CGImageSourceCreateWithData(data as CFData, nil),
+            let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        else { return nil }
+        return UIImage(cgImage: cgImage)
+    }.value
+}
+
+// MARK: - MediaPickerButton (다중 사진 + 동영상)
+
+/// 사진 최대 maxImages장 + 동영상 1개를 한 번에 선택. 온디바이스 로컬 처리(서버 비전송).
+struct MediaPickerButton<Label: View>: View {
+    var maxImages: Int = 5
+    @Binding var images: [UIImage]
+    @Binding var videoURL: URL?
+    @ViewBuilder var label: () -> Label
+
+    @State private var items: [PhotosPickerItem] = []
+
+    var body: some View {
+        PhotosPicker(
+            selection: $items,
+            maxSelectionCount: maxImages,
+            matching: .any(of: [.images, .videos]),
+            photoLibrary: .shared()
+        ) {
+            label()
+        }
+        .onChange(of: items) { _, newItems in
+            Task { await load(newItems) }
+        }
+    }
+
+    private func load(_ newItems: [PhotosPickerItem]) async {
+        var imgs: [UIImage] = []
+        var vid: URL? = nil
+        for item in newItems {
+            let isMovie = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+            if isMovie {
+                if vid == nil, let movie = try? await item.loadTransferable(type: PickedMovie.self) {
+                    vid = movie.url
+                }
+            } else if imgs.count < maxImages {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let ui = await blDownsample(data: data) {
+                    imgs.append(ui)
+                }
+            }
+        }
+        let finalImgs = imgs, finalVid = vid
+        await MainActor.run {
+            images = finalImgs
+            videoURL = finalVid
+        }
+    }
+}
 
 // MARK: - PhotoPickerButton
 

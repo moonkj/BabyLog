@@ -29,6 +29,23 @@ final class PhotoStoreTests: XCTestCase {
         XCTAssertNil(PhotoStore.image("does-not-exist.jpg"))
     }
 
+    func test_diaryEntry_multiMedia_backwardCompatAndList() throws {
+        // 구 데이터(단일 photoRef, 다중/동영상 키 없음) → photoRefList 폴백
+        let legacy = """
+        {"id":"\(UUID().uuidString)","childId":"\(UUID().uuidString)","date":0,"recordType":"photo","photoRef":"a.jpg"}
+        """.data(using: .utf8)!
+        let old = try JSONDecoder().decode(DiaryEntry.self, from: legacy)
+        XCTAssertEqual(old.photoRefList, ["a.jpg"])
+        XCTAssertNil(old.videoRef)
+
+        // 신규 다중 + 동영상 roundtrip
+        let e = DiaryEntry(childId: UUID(), date: Date(), recordType: "photo",
+                           photoRef: "a.jpg", photoRefs: ["a.jpg", "b.jpg"], videoRef: "v.mov")
+        let dec = try JSONDecoder().decode(DiaryEntry.self, from: try JSONEncoder().encode(e))
+        XCTAssertEqual(dec.photoRefList, ["a.jpg", "b.jpg"])
+        XCTAssertEqual(dec.videoRef, "v.mov")
+    }
+
     func test_diaryEntry_backwardCompat_missingPhotoRefDecodesNil() throws {
         // 구버전 저장 JSON: photoRef 키 없음
         let legacy = """
