@@ -66,15 +66,25 @@ enum MarketCategory: String, CaseIterable {
     case ride   = "이동수단"
     case toy    = "완구"
     case meal   = "식사"
+    case book   = "도서·교구"
+    case bath   = "목욕·위생"
+    case safety = "안전·외출"
+    case furn   = "가구·침구"
+    case etc    = "기타"
 
     var systemIcon: String {
         switch self {
-        case .all:   return "square.grid.2x2.fill"
-        case .cloth: return "tshirt.fill"
-        case .feed:  return "drop.fill"
-        case .ride:  return "stroller.fill"
-        case .toy:   return "teddybear.fill"
-        case .meal:  return "fork.knife"
+        case .all:    return "square.grid.2x2.fill"
+        case .cloth:  return "tshirt.fill"
+        case .feed:   return "drop.fill"
+        case .ride:   return "stroller.fill"
+        case .toy:    return "teddybear.fill"
+        case .meal:   return "fork.knife"
+        case .book:   return "books.vertical.fill"
+        case .bath:   return "shower.fill"
+        case .safety: return "shield.fill"
+        case .furn:   return "bed.double.fill"
+        case .etc:    return "ellipsis.circle.fill"
         }
     }
 }

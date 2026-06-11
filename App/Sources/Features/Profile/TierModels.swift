@@ -159,6 +159,7 @@ extension BadgeCatalogItem {
         .init(id: "growth_tracker",   name: "성장 기록가",   condition: "성장 측정 5회 이상",        tone: .mint,   systemIcon: "ruler.fill",            category: .milestone, isEarned: false),
         .init(id: "memory_keeper",    name: "추억 수집가",   condition: "기록 10개 이상",            tone: .purple, systemIcon: "photo.stack.fill",      category: .milestone, isEarned: false),
         // 거래
+        .init(id: "first_listing",  name: "첫 매물 등록", condition: "마켓에 첫 매물 올리기",        tone: .mint,   systemIcon: "tag.fill",              category: .trade,     isEarned: false),
         .init(id: "first_trade",    name: "첫 거래 완료", condition: "첫 거래 성사",                tone: .grey,   systemIcon: "bag.fill",              category: .trade,     isEarned: true),
         .init(id: "share_angel",    name: "나눔 천사",    condition: "무료나눔 3회 이상",            tone: .mint,   systemIcon: "gift.fill",             category: .trade,     isEarned: true),
         .init(id: "fast_reply",     name: "빠른 답장",    condition: "응답률 90% 이상 30일",        tone: .mint,   systemIcon: "bolt.fill",             category: .trade,     isEarned: false),

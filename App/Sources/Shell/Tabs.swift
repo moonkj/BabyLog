@@ -907,6 +907,7 @@ struct DongneTab: View {
     @State private var seg = 0
     @State private var showEmergency = false
     private let segs = ["주변", "마켓", "크루"]
+    private let segIcons = ["mappin.and.ellipse", "tag.fill", "person.3.fill"]
 
     var body: some View {
         NavigationStack {
@@ -934,17 +935,26 @@ struct DongneTab: View {
                         Button {
                             guard seg != i else { return }
                             Haptics.selection()
-                            withAnimation(.easeOut(duration: 0.15)) { seg = i }
+                            withAnimation(.easeOut(duration: 0.18)) { seg = i }
                         } label: {
-                            Text(segs[i]).font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(seg == i ? .white : AppColors.ink2)
-                                .frame(maxWidth: .infinity).frame(height: 38)
-                                .background(seg == i ? AppColors.ink : AppColors.surface,
-                                            in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                            HStack(spacing: 5) {
+                                Image(systemName: segIcons[i]).font(.system(size: 13, weight: .bold))
+                                Text(segs[i]).font(.system(size: 14.5, weight: .bold))
+                            }
+                            .foregroundStyle(seg == i ? .white : AppColors.ink2)
+                            .frame(maxWidth: .infinity).frame(height: 40)
+                            .background {
+                                if seg == i {
+                                    Capsule().fill(AppColors.ink).blShadow(.chip)
+                                }
+                            }
                         }
                         .buttonStyle(LiquidPressStyle(scale: 0.97))
                     }
                 }
+                .padding(4)
+                .background(AppColors.surface2, in: Capsule())
+                .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
                 .padding(.horizontal, Spacing.s5)
 
                 switch seg {

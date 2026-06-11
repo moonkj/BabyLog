@@ -74,6 +74,12 @@ final class AppStore: ObservableObject {
         if growthRecords.count >= 5 { s.insert("growth_tracker") }
         if children.contains(where: { AgeCalculator.dPlusDays(birthDate: $0.birthDate, asOf: now) >= 100 }) { s.insert("hundred_days") }
         if children.contains(where: { AgeCalculator.dPlusDays(birthDate: $0.birthDate, asOf: now) >= 365 }) { s.insert("first_birthday") }
+        // 마켓/거래
+        if marketItems.contains(where: { $0.mine }) { s.insert("first_listing") }
+        if marketItems.contains(where: { $0.status == .sold }) { s.insert("first_trade") }
+        if marketItems.filter({ $0.mine && $0.isFree }).count >= 3 { s.insert("share_angel") }
+        // 크루
+        if !joinedCrewIds.isEmpty { s.insert("first_crew") }
         return s
     }
 
@@ -178,6 +184,7 @@ final class AppStore: ObservableObject {
     func addCrew(_ meetup: CrewMeetup) {
         crews.insert(meetup, at: 0)
         joinedCrewIds.insert(meetup.id)   // 주최자는 자동 참여
+        refreshBadgeAwards()
     }
 
     func deleteCrew(id: String) {
@@ -195,6 +202,7 @@ final class AppStore: ObservableObject {
     func toggleJoinCrew(_ id: String) {
         if joinedCrewIds.contains(id) { joinedCrewIds.remove(id) }
         else { joinedCrewIds.insert(id) }
+        refreshBadgeAwards()
     }
 
     // 크루 그룹 가입 / 게시판 좋아요 (로컬)
@@ -215,6 +223,7 @@ final class AppStore: ObservableObject {
         guard let idx = marketItems.firstIndex(where: { $0.id == id }) else { return }
         marketItems[idx].status = .sold
         sendMarketMessage(itemId: id, text: "거래를 확정했어요. 감사합니다! 🤍", mine: true)
+        refreshBadgeAwards()
     }
     /// 예약중으로 전환.
     func reserveMarketItem(id: String) {
@@ -233,6 +242,7 @@ final class AppStore: ObservableObject {
 
     func addMarketItem(_ item: MarketItem) {
         marketItems.insert(item, at: 0)
+        refreshBadgeAwards()
     }
 
     func deleteMarketItem(id: String) {
