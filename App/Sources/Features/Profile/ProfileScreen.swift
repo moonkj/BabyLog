@@ -122,11 +122,9 @@ struct ProfileScreen: View {
                     },
                     onClose: { detailBadge = nil }
                 )
-                .transition(.opacity)
                 .zIndex(10)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: detailBadge?.id)
         .alert("Pro — 곧 만나요", isPresented: $showProDetail) {
             Button("확인", role: .cancel) {}
         } message: {
@@ -747,7 +745,6 @@ private struct BadgeDetailOverlay: View {
                 .frame(width: 250, height: 330)
                 .scaleEffect(appeared ? 1 : 0.3)
                 .rotationEffect(.degrees(appeared || reduceMotion ? 0 : -200))
-                .opacity(appeared ? 1 : 0)
                 .shadow(color: .black.opacity(0.3), radius: 24, y: 12)
 
                 VStack(spacing: Spacing.s2) {
