@@ -32,6 +32,10 @@ struct PersistableState: Codable, Equatable {
     var savedMarketIds: Set<String>
     var marketChats: [String: [ChatMessage]]
     var marketSeeded: Bool
+    // 크루 (로컬 백본)
+    var crews: [CrewMeetup]
+    var joinedCrewIds: Set<String>
+    var crewSeeded: Bool
 
     init(
         pregnancies: [Pregnancy] = [],
@@ -46,7 +50,10 @@ struct PersistableState: Codable, Equatable {
         marketItems: [MarketItem] = [],
         savedMarketIds: Set<String> = [],
         marketChats: [String: [ChatMessage]] = [:],
-        marketSeeded: Bool = false
+        marketSeeded: Bool = false,
+        crews: [CrewMeetup] = [],
+        joinedCrewIds: Set<String> = [],
+        crewSeeded: Bool = false
     ) {
         self.pregnancies = pregnancies
         self.children = children
@@ -61,6 +68,9 @@ struct PersistableState: Codable, Equatable {
         self.savedMarketIds = savedMarketIds
         self.marketChats = marketChats
         self.marketSeeded = marketSeeded
+        self.crews = crews
+        self.joinedCrewIds = joinedCrewIds
+        self.crewSeeded = crewSeeded
     }
 
     // MARK: - Codable (하위 호환 디코딩)
@@ -70,6 +80,7 @@ struct PersistableState: Codable, Equatable {
         case pregnancies, children, growthRecords, diaryEntries, expenses, vaccineCompletions, pregnancyLogs
         case likedDiaryIds, diaryComments
         case marketItems, savedMarketIds, marketChats, marketSeeded
+        case crews, joinedCrewIds, crewSeeded
     }
 
     init(from decoder: Decoder) throws {
@@ -87,6 +98,9 @@ struct PersistableState: Codable, Equatable {
         savedMarketIds = try container.decodeIfPresent(Set<String>.self, forKey: .savedMarketIds) ?? []
         marketChats    = try container.decodeIfPresent([String: [ChatMessage]].self, forKey: .marketChats) ?? [:]
         marketSeeded   = try container.decodeIfPresent(Bool.self, forKey: .marketSeeded) ?? false
+        crews          = try container.decodeIfPresent([CrewMeetup].self, forKey: .crews) ?? []
+        joinedCrewIds  = try container.decodeIfPresent(Set<String>.self, forKey: .joinedCrewIds) ?? []
+        crewSeeded     = try container.decodeIfPresent(Bool.self, forKey: .crewSeeded) ?? false
     }
 }
 

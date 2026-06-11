@@ -11,11 +11,13 @@ import Foundation
 struct CrewMeetupDetail: View {
     let meetup: CrewMeetup
 
-    @State private var isJoined = false
+    @EnvironmentObject private var store: AppStore
     @State private var showGroupChatGuide = false
     @Environment(\.dismiss) private var dismiss
 
-    private var spotsLeft: Int { meetup.capacity - meetup.joined }
+    private var isJoined: Bool { store.isJoinedCrew(meetup.id) }
+    private var joinedCount: Int { store.crewJoinedCount(meetup) }
+    private var spotsLeft: Int { max(0, meetup.capacity - joinedCount) }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -127,7 +129,7 @@ struct CrewMeetupDetail: View {
                     icon: "person.2.fill",
                     iconColor: Color(hex: 0x3B6FA8),
                     label: "정원",
-                    value: "\(meetup.joined)/\(meetup.capacity)명 · 남은 자리 \(spotsLeft)자리"
+                    value: "\(joinedCount)/\(meetup.capacity)명 · 남은 자리 \(spotsLeft)자리"
                 )
             }
         }
@@ -142,14 +144,14 @@ struct CrewMeetupDetail: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(AppColors.primary)
                     .accessibilityHidden(true)
-                Text("참가자 \(meetup.joined)명")
+                Text("참가자 \(joinedCount)명")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(AppColors.ink)
             }
 
             // 아바타 그리드
             HStack(spacing: 10) {
-                ForEach(0..<min(meetup.joined, 6), id: \.self) { i in
+                ForEach(0..<min(joinedCount, 6), id: \.self) { i in
                     VStack(spacing: 4) {
                         Circle()
                             .fill(CrewAvatarPalette.color(for: i))
@@ -169,13 +171,13 @@ struct CrewMeetupDetail: View {
                     .accessibilityLabel(CrewAvatarPalette.name(for: i))
                 }
 
-                if meetup.joined > 6 {
+                if joinedCount > 6 {
                     VStack(spacing: 4) {
                         Circle()
                             .fill(AppColors.surface2)
                             .frame(width: 44, height: 44)
                             .overlay {
-                                Text("+\(meetup.joined - 6)")
+                                Text("+\(joinedCount - 6)")
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundStyle(AppColors.ink3)
                             }
@@ -183,12 +185,12 @@ struct CrewMeetupDetail: View {
                             .font(.system(size: 10))
                             .frame(height: 14)
                     }
-                    .accessibilityLabel("외 \(meetup.joined - 6)명")
+                    .accessibilityLabel("외 \(joinedCount - 6)명")
                 }
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("참가자 \(meetup.joined)명")
+        .accessibilityLabel("참가자 \(joinedCount)명")
     }
 
     // MARK: 호스트 카드
@@ -319,9 +321,8 @@ struct CrewMeetupDetail: View {
                 LiquidButton(
                     fill: isJoined ? AppColors.ink3 : AppColors.primary,
                     action: {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                            isJoined.toggle()
-                        }
+                        Haptics.selection()
+                        store.toggleJoinCrew(meetup.id)
                     }
                 ) {
                     HStack(spacing: 8) {
@@ -490,8 +491,7 @@ private struct CrewChatGuideRow: View {
 #if DEBUG
 #Preview("모임 상세 — 공원") {
     NavigationStack {
-        CrewMeetupDetail(meetup: CrewMeetup(
-            id: 1,
+        CrewMeetupDetail(meetup: CrewMeetup(id: "pm1",
             place: "망원한강공원 잔디밭",
             when: "오늘 오후 3시",
             hostName: "보리맘",
@@ -505,8 +505,7 @@ private struct CrewChatGuideRow: View {
 
 #Preview("모임 상세 — 실내") {
     NavigationStack {
-        CrewMeetupDetail(meetup: CrewMeetup(
-            id: 2,
+        CrewMeetupDetail(meetup: CrewMeetup(id: "pm2",
             place: "성산 실내놀이터",
             when: "내일 오전 10시",
             hostName: "하준이네",
@@ -519,8 +518,7 @@ private struct CrewChatGuideRow: View {
 }
 
 #Preview("그룹 채팅 가이드") {
-    CrewGroupChatGuideSheet(meetup: CrewMeetup(
-        id: 1,
+    CrewGroupChatGuideSheet(meetup: CrewMeetup(id: "pm1",
         place: "망원한강공원 잔디밭",
         when: "오늘 오후 3시",
         hostName: "보리맘",

@@ -28,6 +28,10 @@ final class AppStore: ObservableObject {
     @Published private(set) var savedMarketIds: Set<String> = []
     @Published private(set) var marketChats: [String: [ChatMessage]] = [:]
     private var marketSeeded: Bool = false
+    // 크루 (로컬 백본)
+    @Published private(set) var crews: [CrewMeetup] = []
+    @Published private(set) var joinedCrewIds: Set<String> = []
+    private var crewSeeded: Bool = false
     @Published var selectedChildId: UUID?
 
     /// 방금 획득한 뱃지 — 어느 화면에서든 전역 축하 카드로 표시(설정 시 MainTabView가 띄움)
@@ -136,8 +140,42 @@ final class AppStore: ObservableObject {
             self.savedMarketIds     = saved.savedMarketIds
             self.marketChats        = saved.marketChats
             self.marketSeeded       = saved.marketSeeded
+            self.crews              = saved.crews
+            self.joinedCrewIds      = saved.joinedCrewIds
+            self.crewSeeded         = saved.crewSeeded
         }
         seedMarketIfNeeded()
+        seedCrewIfNeeded()
+    }
+
+    // MARK: - 크루 (로컬 백본 — 추후 Supabase)
+
+    func seedCrewIfNeeded() {
+        guard !crewSeeded else { return }
+        if crews.isEmpty { crews = CrewMeetup.seedSamples }
+        crewSeeded = true
+    }
+
+    func addCrew(_ meetup: CrewMeetup) {
+        crews.insert(meetup, at: 0)
+        joinedCrewIds.insert(meetup.id)   // 주최자는 자동 참여
+    }
+
+    func deleteCrew(id: String) {
+        crews.removeAll { $0.id == id }
+        joinedCrewIds.remove(id)
+    }
+
+    func isJoinedCrew(_ id: String) -> Bool { joinedCrewIds.contains(id) }
+
+    /// 표시용 참여 인원 = 기본 인원 + (내가 참여 시 +1)
+    func crewJoinedCount(_ meetup: CrewMeetup) -> Int {
+        meetup.joined + (joinedCrewIds.contains(meetup.id) && !meetup.mine ? 1 : 0)
+    }
+
+    func toggleJoinCrew(_ id: String) {
+        if joinedCrewIds.contains(id) { joinedCrewIds.remove(id) }
+        else { joinedCrewIds.insert(id) }
     }
 
     // MARK: - 마켓 (로컬 백본 — 추후 Supabase 동기화)
@@ -227,7 +265,10 @@ final class AppStore: ObservableObject {
             marketItems: marketItems,
             savedMarketIds: savedMarketIds,
             marketChats: marketChats,
-            marketSeeded: marketSeeded
+            marketSeeded: marketSeeded,
+            crews: crews,
+            joinedCrewIds: joinedCrewIds,
+            crewSeeded: crewSeeded
         )
     }
 
@@ -246,7 +287,11 @@ final class AppStore: ObservableObject {
         savedMarketIds     = state.savedMarketIds
         marketChats        = state.marketChats
         marketSeeded       = state.marketSeeded
+        crews              = state.crews
+        joinedCrewIds      = state.joinedCrewIds
+        crewSeeded         = state.crewSeeded
         seedMarketIfNeeded()
+        seedCrewIfNeeded()
     }
 
     // MARK: - 선택 아이 / 온보딩

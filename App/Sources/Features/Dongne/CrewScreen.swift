@@ -30,8 +30,15 @@ enum CrewPostCategory: String, CaseIterable {
     }
 }
 
-enum CrewMeetupType: Hashable {
+enum CrewMeetupType: String, Hashable, Codable, CaseIterable {
     case park, indoor
+
+    var label: String {
+        switch self {
+        case .park:   return "야외/공원"
+        case .indoor: return "실내"
+        }
+    }
 
     var systemIcon: String {
         switch self {
@@ -55,15 +62,18 @@ enum CrewMeetupType: Hashable {
     }
 }
 
-struct CrewMeetup: Identifiable, Hashable {
-    let id: Int
-    let place: String
-    let when: String
-    let hostName: String
-    let hostTier: MarketSellerTier   // 재사용 (amber=골든맘, warm=따뜻한이웃)
-    let joined: Int
-    let capacity: Int
-    let meetupType: CrewMeetupType
+struct CrewMeetup: Identifiable, Hashable, Codable {
+    var id: String = UUID().uuidString
+    var place: String
+    var when: String
+    var hostName: String
+    var hostTier: MarketSellerTier   // 재사용 (amber=골든맘, warm=따뜻한이웃)
+    var joined: Int                  // 기본 참여 인원(나 제외)
+    var capacity: Int
+    var meetupType: CrewMeetupType
+    var description: String = ""
+    var mine: Bool = false
+    var createdAt: Date = Date()
 }
 
 struct CrewGroup: Identifiable {
@@ -87,11 +97,13 @@ struct CrewPost: Identifiable {
 
 // MARK: - Mock Data
 
-private let crewMeetups: [CrewMeetup] = [
-    CrewMeetup(id: 1, place: "망원한강공원 잔디밭",   when: "오늘 오후 3시",   hostName: "보리맘",  hostTier: .golden, joined: 5, capacity: 8, meetupType: .park),
-    CrewMeetup(id: 2, place: "성산 실내놀이터",       when: "내일 오전 10시",  hostName: "하준이네", hostTier: .warm,   joined: 3, capacity: 6, meetupType: .indoor),
-    CrewMeetup(id: 3, place: "마포구청 어린이공원",   when: "토 오후 2시",     hostName: "민서맘",  hostTier: .warm,   joined: 7, capacity: 10, meetupType: .park),
-]
+extension CrewMeetup {
+    static let seedSamples: [CrewMeetup] = [
+        CrewMeetup(id: "cm1", place: "망원한강공원 잔디밭",   when: "오늘 오후 3시",   hostName: "보리맘",  hostTier: .golden, joined: 5, capacity: 8, meetupType: .park),
+        CrewMeetup(id: "cm2", place: "성산 실내놀이터",       when: "내일 오전 10시",  hostName: "하준이네", hostTier: .warm,   joined: 3, capacity: 6, meetupType: .indoor),
+        CrewMeetup(id: "cm3", place: "마포구청 어린이공원",   when: "토 오후 2시",     hostName: "민서맘",  hostTier: .warm,   joined: 7, capacity: 10, meetupType: .park),
+    ]
+}
 
 private let crewGroups: [CrewGroup] = [
     CrewGroup(id: 1, name: "망원 8-12개월 크루",    memberCount: 23, distanceText: "반경 500m", ageRange: "8–12개월",   interestTags: ["이유식", "공원 산책", "성장 기록"]),
@@ -111,8 +123,9 @@ private let crewPosts: [CrewPost] = [
 /// DongneTab의 "크루" 세그먼트에 임베드하는 메인 뷰.
 /// `isPreviewActive` 내부 토글로 콜드스타트 / 활성 상태 전환 가능 (팀 QA용).
 struct CrewScreen: View {
-    // 실제 서비스에서는 AppStore/ViewModel에서 주입
-    @State private var isActive: Bool = false  // false = 콜드스타트(오픈 전), true = 활성
+    @EnvironmentObject private var store: AppStore
+    @State private var isActive: Bool = true   // 로컬 기능 활성 (콜드스타트는 토글로 미리보기)
+    @State private var showCreate = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -122,10 +135,31 @@ struct CrewScreen: View {
                 CrewColdStartContent(onJoinWaitlist: { })
             }
 
-            // 내부 미리보기 토글 (팀장 QA용 — 프로덕션에서 조건부 숨김 처리)
             previewToggle
+
+            // 모임 만들기 FAB
+            if isActive {
+                Button { showCreate = true } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "plus").font(.system(size: 15, weight: .bold))
+                        Text("모임 만들기").font(.system(size: 16, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20).frame(height: 50)
+                    .background(AppColors.ink, in: Capsule())
+                    .blShadow(.fab)
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.95))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, Spacing.s5)
+                .padding(.bottom, Spacing.s6)
+                .accessibilityLabel("모임 만들기")
+            }
         }
         .background(AppColors.canvas.ignoresSafeArea())
+        .sheet(isPresented: $showCreate) {
+            CrewCreateSheet().environmentObject(store).presentationDetents([.large])
+        }
     }
 
     private var previewToggle: some View {
@@ -157,6 +191,7 @@ struct CrewScreen: View {
 // MARK: - CrewActiveContent (활성 상태)
 
 private struct CrewActiveContent: View {
+    @EnvironmentObject private var store: AppStore
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
@@ -164,7 +199,7 @@ private struct CrewActiveContent: View {
                     .padding(.top, Spacing.s5)
                 crewSection
                 boardSection
-                    .padding(.bottom, Spacing.s7)
+                    .padding(.bottom, 100)
             }
         }
     }
@@ -178,7 +213,7 @@ private struct CrewActiveContent: View {
             )
             .padding(.horizontal, Spacing.s5)
 
-            ForEach(crewMeetups) { meetup in
+            ForEach(store.crews) { meetup in
                 NavigationLink(value: meetup) {
                     CrewMeetupCard(meetup: meetup)
                         .padding(.horizontal, Spacing.s5)
@@ -242,9 +277,12 @@ private struct CrewActiveContent: View {
 // MARK: - CrewMeetupCard
 
 private struct CrewMeetupCard: View {
+    @EnvironmentObject private var store: AppStore
     let meetup: CrewMeetup
 
-    private var spotsLeft: Int { meetup.capacity - meetup.joined }
+    private var joinedCount: Int { store.crewJoinedCount(meetup) }
+    private var isJoined: Bool { store.isJoinedCrew(meetup.id) }
+    private var spotsLeft: Int { max(0, meetup.capacity - joinedCount) }
 
     var body: some View {
         BLCard(padding: 15) {
@@ -279,8 +317,8 @@ private struct CrewMeetupCard: View {
 
                     // 참가자 아바타 + 정원
                     HStack(spacing: 5) {
-                        MkAvatarStack(count: min(meetup.joined, 4))
-                        Text("\(meetup.joined)/\(meetup.capacity)명")
+                        MkAvatarStack(count: min(joinedCount, 4))
+                        Text("\(joinedCount)/\(meetup.capacity)명")
                             .font(.system(size: 11.5, weight: .medium))
                             .foregroundStyle(AppColors.ink3)
                     }
@@ -289,18 +327,22 @@ private struct CrewMeetupCard: View {
 
                 Spacer(minLength: 0)
 
-                // 참가 버튼
-                Button { } label: {
-                    Text("참가")
+                // 참가 버튼 (토글)
+                Button {
+                    Haptics.selection()
+                    store.toggleJoinCrew(meetup.id)
+                } label: {
+                    Text(isJoined ? "참가중" : "참가")
                         .font(.system(size: 13.5, weight: .bold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(isJoined ? AppColors.ink2 : Color.white)
                         .padding(.horizontal, 16)
                         .frame(height: 38)
-                        .background(AppColors.ink, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        .background(isJoined ? AppColors.surface2 : AppColors.ink,
+                                    in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.94))
-                .accessibilityLabel("참가")
-                .accessibilityHint("\(meetup.place) 모임에 참가합니다. 남은 자리 \(spotsLeft)자리")
+                .accessibilityLabel(isJoined ? "참가 취소" : "참가")
+                .accessibilityHint("\(meetup.place) 모임. 남은 자리 \(spotsLeft)자리")
             }
         }
         .accessibilityElement(children: .contain)
