@@ -184,6 +184,11 @@ private struct CrewActiveContent: View {
     @EnvironmentObject private var store: AppStore
     @State private var showWrite = false
     @State private var selectedPost: CrewPost?
+    @State private var showAllMeetups = false
+    @State private var showAllGroups = false
+    @State private var showAllPosts = false
+
+    private let sectionLimit = 5
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -205,6 +210,15 @@ private struct CrewActiveContent: View {
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
+        .sheet(isPresented: $showAllMeetups) {
+            CrewMeetupListScreen().environmentObject(store)
+        }
+        .sheet(isPresented: $showAllGroups) {
+            CrewGroupListScreen().environmentObject(store)
+        }
+        .sheet(isPresented: $showAllPosts) {
+            CrewPostListScreen().environmentObject(store)
+        }
     }
 
     // MARK: 같이 가요
@@ -212,11 +226,13 @@ private struct CrewActiveContent: View {
         VStack(alignment: .leading, spacing: 11) {
             BLSectionHead(
                 eyebrow: "주변 모임",
-                title: "같이 가요"
+                title: "같이 가요",
+                action: store.crews.count > sectionLimit ? "전체보기" : nil,
+                onAction: store.crews.count > sectionLimit ? { Haptics.light(); showAllMeetups = true } : nil
             )
             .padding(.horizontal, Spacing.s5)
 
-            ForEach(store.crews) { meetup in
+            ForEach(Array(store.crews.prefix(sectionLimit))) { meetup in
                 NavigationLink(value: meetup) {
                     CrewMeetupCard(meetup: meetup)
                         .padding(.horizontal, Spacing.s5)
@@ -235,11 +251,13 @@ private struct CrewActiveContent: View {
         VStack(alignment: .leading, spacing: 11) {
             BLSectionHead(
                 eyebrow: "반경 1km",
-                title: "비슷한 또래 크루"
+                title: "비슷한 또래 크루",
+                action: crewGroups.count > sectionLimit ? "전체보기" : nil,
+                onAction: crewGroups.count > sectionLimit ? { Haptics.light(); showAllGroups = true } : nil
             )
             .padding(.horizontal, Spacing.s5)
 
-            ForEach(crewGroups) { group in
+            ForEach(crewGroups.prefix(sectionLimit)) { group in
                 CrewGroupCard(group: group)
                     .padding(.horizontal, Spacing.s5)
             }
@@ -253,7 +271,9 @@ private struct CrewActiveContent: View {
             HStack(alignment: .firstTextBaseline) {
                 BLSectionHead(
                     eyebrow: "동네 이야기",
-                    title: "동네 게시판"
+                    title: "동네 게시판",
+                    action: store.crewPosts.count > sectionLimit ? "전체보기" : nil,
+                    onAction: store.crewPosts.count > sectionLimit ? { Haptics.light(); showAllPosts = true } : nil
                 )
                 Button {
                     Haptics.light()
@@ -275,7 +295,7 @@ private struct CrewActiveContent: View {
 
             BLCard(padding: 0) {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(store.crewPosts.enumerated()), id: \.element.id) { idx, post in
+                    ForEach(Array(store.crewPosts.prefix(sectionLimit).enumerated()), id: \.element.id) { idx, post in
                         Button {
                             Haptics.light()
                             selectedPost = post
@@ -296,6 +316,88 @@ private struct CrewActiveContent: View {
                 }
             }
             .padding(.horizontal, Spacing.s5)
+        }
+    }
+}
+
+// MARK: - 전체보기 리스트 화면
+
+private struct CrewMeetupListScreen: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 11) {
+                    ForEach(store.crews) { meetup in
+                        NavigationLink(value: meetup) {
+                            CrewMeetupCard(meetup: meetup).padding(.horizontal, Spacing.s5)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.vertical, Spacing.s4)
+            }
+            .background(AppColors.canvas.ignoresSafeArea())
+            .navigationTitle("같이 가요")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { dismiss() } } }
+            .navigationDestination(for: CrewMeetup.self) { CrewMeetupDetail(meetup: $0) }
+        }
+    }
+}
+
+private struct CrewGroupListScreen: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 11) {
+                    ForEach(crewGroups) { group in
+                        CrewGroupCard(group: group).padding(.horizontal, Spacing.s5)
+                    }
+                }
+                .padding(.vertical, Spacing.s4)
+            }
+            .background(AppColors.canvas.ignoresSafeArea())
+            .navigationTitle("비슷한 또래 크루")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { dismiss() } } }
+        }
+    }
+}
+
+private struct CrewPostListScreen: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedPost: CrewPost?
+    var body: some View {
+        NavigationStack {
+            ScrollView(.vertical, showsIndicators: false) {
+                BLCard(padding: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(store.crewPosts.enumerated()), id: \.element.id) { idx, post in
+                            Button { Haptics.light(); selectedPost = post } label: {
+                                CrewPostRow(post: post)
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                    .overlay(alignment: .top) {
+                                        if idx > 0 { Rectangle().fill(AppColors.line).frame(height: 1) }
+                                    }
+                            }
+                            .buttonStyle(LiquidPressStyle(scale: 0.985))
+                        }
+                    }
+                }
+                .padding(Spacing.s5)
+            }
+            .background(AppColors.canvas.ignoresSafeArea())
+            .navigationTitle("동네 게시판")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { dismiss() } } }
+            .sheet(item: $selectedPost) { post in
+                CrewPostDetailSheet(post: post).environmentObject(store).presentationDetents([.large])
+            }
         }
     }
 }
