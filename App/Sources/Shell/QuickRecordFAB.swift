@@ -8,40 +8,25 @@ struct QuickRecordFAB: View {
     var suppressTap: Bool = false
     var onQuickRecord: () -> Void = {}
     @State private var open = false
-    @State private var sheen = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // 글래스 FAB 배경 — 프로스티드(뒤 화면이 블러로 비침) + 아주 옅은 틴트 + 약한 글로스
     // 뱃지 카드 수준 투명도: 흰 글로스/틴트를 최소화해 ultraThinMaterial 블러가 드러나게 한다.
+    // 글래스 FAB 배경 — 뱃지카드와 동일 구조(반투명 단색 + ultraThinMaterial)로 뒤가 비침.
+    // 세이지 그린(브랜드) 틴트. 회전 sheen/흰 글로스 제거 → 은색 느낌 없이 명확한 색 글래스.
     private var fabBackground: some View {
         ZStack {
-            Circle().fill(.ultraThinMaterial)               // 프로스티드 글래스(뒤가 블러로 비침)
-            Circle().fill(AppColors.surface.opacity(0.6))   // 밝은 디스크 — 어두운 사진 위에서도 버튼이 보이게(뱃지카드 톤, 단 더 비침)
-            Circle().fill(AppColors.primary.opacity(0.05))  // 아주 옅은 브랜드 틴트
-            // 움직이는 sheen (은은)
-            Circle()
-                .fill(
-                    AngularGradient(
-                        gradient: Gradient(colors: [.clear, .white.opacity(0.18), .clear, .clear, .clear]),
-                        center: .center,
-                        angle: .degrees(sheen ? 360 : 0)
-                    )
-                )
-                .blendMode(.plusLighter)
-            // 상단 살짝 하이라이트
+            Circle().fill(.ultraThinMaterial)                      // 글래스 블러(뒤가 비침)
+            Circle().fill(BadgeTone.mint.ink.opacity(0.5))         // 세이지 그린 반투명(뱃지카드 톤)
+            // 아주 옅은 상단 하이라이트(정적) — 유리 질감만, 투명도 유지
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [.white.opacity(0.3), .clear],
-                        center: .topLeading, startRadius: 1, endRadius: 34
+                        colors: [.white.opacity(0.18), .clear],
+                        center: .topLeading, startRadius: 1, endRadius: 30
                     )
                 )
-            // 림 라이트
-            Circle().strokeBorder(.white.opacity(0.5), lineWidth: 1)
-        }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 3.2).repeatForever(autoreverses: false)) { sheen = true }
+            // 얇은 림
+            Circle().strokeBorder(.white.opacity(0.4), lineWidth: 1)
         }
     }
 
@@ -84,7 +69,7 @@ struct QuickRecordFAB: View {
             // 드래그 후 메뉴가 열리는 문제를 근본적으로 막는다.
             Image(systemName: "plus")
                 .font(.system(size: 26, weight: .bold))
-                .foregroundStyle(AppColors.primary)
+                .foregroundStyle(.white)
                 .frame(width: 60, height: 60)
                 .background(fabBackground)
                 .clipShape(Circle())
