@@ -3,6 +3,7 @@
 // SwiftUI / Foundation only
 
 import SwiftUI
+import UIKit
 
 // MARK: - 출산 전환 뷰
 
@@ -21,6 +22,9 @@ struct BirthTransitionView: View {
     @State private var showDatePicker: Bool = false
     @State private var nameError: String? = nil
     @State private var transitionError: String? = nil
+    @State private var profilePhoto: UIImage? = nil
+    @State private var birthWeight: String = ""
+    @State private var birthHeight: String = ""
 
     // ── 화면 단계 ────────────────────────────────────────────────────
     @State private var step: TransitionStep = .input
@@ -215,6 +219,37 @@ struct BirthTransitionView: View {
                 .animation(.easeInOut(duration: 0.2), value: nameError)
                 .animation(.easeInOut(duration: 0.2), value: transitionError)
 
+                // 프로필 사진 + 출생 키/몸무게 (아이 프로필로 동기화)
+                VStack(alignment: .leading, spacing: Spacing.s3) {
+                    Text("프로필 사진 (선택)").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
+                    MediaPickerButton(maxImages: 1,
+                                      images: Binding(get: { profilePhoto.map { [$0] } ?? [] },
+                                                      set: { profilePhoto = $0.first }),
+                                      videoURL: .constant(nil)) {
+                        ZStack {
+                            if let img = profilePhoto {
+                                Image(uiImage: img).resizable().scaledToFill()
+                            } else {
+                                Circle().fill(AppColors.primaryTint)
+                                Image(systemName: "camera.fill").font(.system(size: 22, weight: .medium))
+                                    .foregroundStyle(AppColors.pregnancyPink)
+                            }
+                        }
+                        .frame(width: 90, height: 90).clipShape(Circle())
+                        .overlay { Circle().strokeBorder(AppColors.line, lineWidth: 1) }
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    Text("출생 정보 (선택)").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
+                        .padding(.top, Spacing.s2)
+                    HStack(spacing: Spacing.s3) {
+                        birthMeasureField(label: "키(cm)", placeholder: "50.0", text: $birthHeight)
+                        birthMeasureField(label: "몸무게(kg)", placeholder: "3.3", text: $birthWeight)
+                    }
+                }
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, Spacing.s5)
+
                 // CTA 버튼
                 LiquidButton(
                     fill: AppColors.pregnancyPink,
@@ -368,6 +403,20 @@ struct BirthTransitionView: View {
         }
     }
 
+    private func birthMeasureField(label: String, placeholder: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(AppFont.micro).foregroundStyle(AppColors.ink3)
+            TextField(placeholder, text: text)
+                .keyboardType(.decimalPad)
+                .font(AppFont.num(15))
+                .padding(.horizontal, Spacing.s3)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
+        }
+        .accessibilityLabel("\(label) 입력")
+    }
+
     // MARK: - 전환 시도 (검증 + AppStore 연결)
 
     private func attemptTransition() {
@@ -389,6 +438,18 @@ struct BirthTransitionView: View {
             case .success(let child):
                 store.selectedChildId = child.id
                 createdChildName = child.name
+                // 아이 프로필 동기화: 프로필 사진 + 출생 키/몸무게
+                if let img = profilePhoto, let ref = PhotoStore.save(img) {
+                    store.updateChild(id: child.id, name: child.name,
+                                      birthDate: child.birthDate, gender: child.gender,
+                                      profileImageRef: .some(ref))
+                }
+                let h = Double(birthHeight.trimmingCharacters(in: .whitespaces))
+                let w = Double(birthWeight.trimmingCharacters(in: .whitespaces))
+                if h != nil || w != nil {
+                    store.addGrowthRecord(childId: child.id, heightCm: h, weightKg: w,
+                                          headCircumferenceCm: nil)
+                }
                 Haptics.success()
                 withAnimation(.easeInOut(duration: 0.35)) {
                     step = .celebration

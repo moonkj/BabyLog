@@ -91,11 +91,7 @@ struct PregnancyRecordScreen: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
-            .confirmationDialog(
-                "잠시 멈춰도 괜찮아요",
-                isPresented: $showPauseConfirm,
-                titleVisibility: .visible
-            ) {
+            .alert("잠시 멈춰도 괜찮아요", isPresented: $showPauseConfirm) {
                 if let preg = pauseTargetPregnancy {
                     Button("잠시 멈출게요") {
                         store.updatePregnancyStatus(pregnancyId: preg.id, to: .paused)
@@ -226,10 +222,8 @@ struct PregnancyRecordScreen: View {
                             .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundStyle(AppColors.pregnancyPink)
-                    .padding(.horizontal, 13)
-                    .frame(height: 36)
-                    .background(Color(hex: 0xFBEAF0), in: Capsule())
                 }
+                .tint(AppColors.pregnancyPink)
                 .accessibilityLabel("출산 전환 시작")
                 .accessibilityHint("탭하면 아이 프로필로 전환하는 시트가 열립니다")
             }
