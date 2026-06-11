@@ -66,6 +66,34 @@ enum PhotoStore {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
+    // MARK: - 백업/복원 지원
+
+    /// 사진 디렉토리(공개 — 백업 서비스용).
+    static var photosDirectory: URL { directory }
+
+    /// photos 디렉토리의 모든 파일을 파일명→원본 데이터로 반환(전체 백업용).
+    static func allPhotoData() -> [String: Data] {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: directory.path) else { return [:] }
+        var out: [String: Data] = [:]
+        for name in names {
+            if let data = try? Data(contentsOf: directory.appendingPathComponent(name)) {
+                out[name] = data
+            }
+        }
+        return out
+    }
+
+    /// 백업에서 사진 파일들을 복원(이미 있으면 유지, 없으면 기록).
+    static func restorePhotos(_ files: [String: Data]) {
+        for (name, data) in files {
+            let url = directory.appendingPathComponent(name)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
+    }
+
     private static func downscaled(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
         let w = image.size.width, h = image.size.height
         let maxSide = max(w, h)

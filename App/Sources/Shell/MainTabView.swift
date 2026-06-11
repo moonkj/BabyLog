@@ -16,8 +16,38 @@ struct MainTabView: View {
     @State private var showAddChild = false
     @State private var showAddPregnancy = false
     @State private var showSplash = true
+    // FAB 자유 위치(길게 눌러 드래그) — 기준 위치에서의 오프셋 영속
+    @AppStorage("bl_fab_dx") private var fabDX: Double = 0
+    @AppStorage("bl_fab_dy") private var fabDY: Double = 0
+    @State private var fabDrag: CGSize = .zero
+    @State private var fabDragging = false
 
     private var fabOnLeft: Bool { fabSide == "left" }
+
+    /// FAB 길게 눌러(0.3s) 드래그로 위치 이동. 화면 밖으로 안 나가게 클램프 후 영속.
+    private var fabMoveGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.3)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .onChanged { value in
+                if case .second(true, let drag) = value {
+                    if !fabDragging { fabDragging = true; Haptics.light() }
+                    if let drag { fabDrag = drag.translation }
+                }
+            }
+            .onEnded { value in
+                if case .second(true, let drag?) = value {
+                    let b = UIScreen.main.bounds
+                    let span = b.width - 100, maxUp = b.height - 240
+                    let nx = fabDX + drag.translation.width
+                    let ny = fabDY + drag.translation.height
+                    fabDX = fabOnLeft ? min(span, max(0, nx)) : min(0, max(-span, nx))
+                    fabDY = min(0, max(-maxUp, ny))
+                }
+                fabDrag = .zero
+                fabDragging = false
+                Haptics.success()
+            }
+    }
 
     var body: some View {
         Group {
@@ -105,6 +135,10 @@ struct MainTabView: View {
                 })
                     .padding(fabOnLeft ? .leading : .trailing, Spacing.s5)
                     .padding(.bottom, 92)
+                    .offset(x: fabDX + fabDrag.width, y: fabDY + fabDrag.height)
+                    .scaleEffect(fabDragging ? 1.12 : 1)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: fabDragging)
+                    .gesture(fabMoveGesture)
                     .transition(.scale.combined(with: .opacity))
             }
         }

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 // MARK: - SettingsScreen
 
@@ -31,6 +32,11 @@ struct SettingsScreen: View {
     @State private var exportURL: URL?   = nil
     @State private var showShareSheet    = false
     @State private var showExportError   = false
+    // 전체 백업(사진 포함)
+    @AppStorage("bl_last_backup") private var lastBackupAt: Double = 0
+    @State private var showBackupImporter = false
+    @State private var backupBusy = false
+    @State private var backupAlert: String? = nil
 
     // MARK: Body
 
@@ -41,6 +47,7 @@ struct SettingsScreen: View {
                 quickRecordSection
                 caregiverSection
                 notificationSection
+                backupSection
                 iCloudSection
                 dataSection
                 infoSection
@@ -65,6 +72,21 @@ struct SettingsScreen: View {
                 SettingsShareSheet(activityItems: [url])
             }
         }
+        .fileImporter(isPresented: $showBackupImporter,
+                      allowedContentTypes: [UTType(filenameExtension: BackupService.fileExtension) ?? .data, .data]) { result in
+            switch result {
+            case .success(let url):
+                backupBusy = true
+                let ok = BackupService.restore(from: url, into: store)
+                backupBusy = false
+                backupAlert = ok ? "백업에서 복원했어요. 사진과 기록이 돌아왔습니다 🤍" : "이 파일을 복원하지 못했어요. 올바른 백업 파일인지 확인해 주세요."
+            case .failure:
+                backupAlert = "파일을 열지 못했어요."
+            }
+        }
+        .alert("백업", isPresented: Binding(get: { backupAlert != nil }, set: { if !$0 { backupAlert = nil } })) {
+            Button("확인", role: .cancel) {}
+        } message: { Text(backupAlert ?? "") }
         .alert("내보내기 실패", isPresented: $showExportError) {
             Button("확인", role: .cancel) {}
         } message: {
@@ -381,6 +403,78 @@ struct SettingsScreen: View {
     }
 
     // MARK: - 데이터 섹션
+
+    // MARK: - 데이터 백업 (사진 포함 전체)
+
+    private var lastBackupText: String {
+        guard lastBackupAt > 0 else { return "아직 백업하지 않았어요" }
+        let days = Int(Date().timeIntervalSince1970 - lastBackupAt) / 86400
+        if days <= 0 { return "오늘 백업함" }
+        return "\(days)일 전 백업"
+    }
+    private var backupOverdue: Bool {
+        lastBackupAt == 0 || (Date().timeIntervalSince1970 - lastBackupAt) > 86400 * 14
+    }
+
+    private var backupSection: some View {
+        settingsSection(eyebrow: "백업", title: "데이터 백업 (사진 포함)") {
+            // 안내 — 로컬 저장의 위험 고지
+            settingsRow(icon: "exclamationmark.shield.fill",
+                        iconBg: AppColors.goldTint, iconFg: AppColors.gold) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(lastBackupText)
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(backupOverdue ? AppColors.gold : AppColors.ink)
+                    Text("앱을 삭제하면 기기 데이터가 사라져요. 사진·기록 전체를 파일로 백업해 두세요.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Divider().overlay(AppColors.line).padding(.leading, 62)
+
+            // 전체 백업 내보내기
+            Button { handleBackupExport() } label: {
+                settingsRow(icon: "arrow.up.doc.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(backupBusy ? "준비 중…" : "전체 백업 내보내기")
+                            .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Text("사진·영상·기록을 파일 하나로 — 파일 앱/iCloud Drive에 저장")
+                            .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }.buttonStyle(.plain).disabled(backupBusy)
+
+            Divider().overlay(AppColors.line).padding(.leading, 62)
+
+            // 백업에서 복원
+            Button { showBackupImporter = true } label: {
+                settingsRow(icon: "arrow.down.doc.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("백업에서 복원")
+                            .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Text("새 기기·재설치 후 백업 파일로 사진과 기록을 되살려요")
+                            .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }.buttonStyle(.plain).disabled(backupBusy)
+        }
+    }
+
+    private func handleBackupExport() {
+        backupBusy = true
+        if let url = BackupService.makeArchive(store) {
+            exportURL = url
+            lastBackupAt = Date().timeIntervalSince1970
+            backupBusy = false
+            showShareSheet = true
+        } else {
+            backupBusy = false
+            showExportError = true
+        }
+    }
 
     private var dataSection: some View {
         settingsSection(eyebrow: "데이터", title: "내 데이터") {

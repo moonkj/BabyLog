@@ -477,53 +477,65 @@ struct QuickRecordSheet: View {
 
     // MARK: - Actions
 
+    // 임신 모드 저장: 배 사진 → 활성 임신 배사진 타임라인, 산모 체중 → 체중 기록
+    private func savePregnancyRecord() {
+        guard let preg = store.activePregnancy else { return }
+        let week = AgeCalculator.pregnancyWeeks(lmp: preg.lmpDate, edd: preg.eddDate, asOf: Date())?.weeks ?? 0
+        for img in selectedImages {
+            if let ref = PhotoStore.save(img) {
+                store.addBellyPhoto(pregnancyId: preg.id, week: week, photoRef: ref)
+            }
+        }
+        if showDetail, let w = Double(weightText.trimmingCharacters(in: .whitespaces)) {
+            store.addPregnancyWeight(pregnancyId: preg.id, kg: w)
+        }
+    }
+
     private func handleSave() {
-        // selectedChild 없으면 저장 스킵하고 바로 닫기
-        guard let childId = store.selectedChild?.id else {
-            onSave()
-            onClose()
-            return
-        }
-
-        // 사진·메모·이정표 중 하나라도 있으면 DiaryEntry 기록
-        let trimmedMemo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
-        let milestoneText = selectedMilestones.isEmpty
-            ? nil
-            : selectedMilestones.sorted().joined(separator: ", ")
-        let hasDiaryContent = hasMedia
-            || !trimmedMemo.isEmpty
-            || !selectedMilestones.isEmpty
-        if hasDiaryContent {
-            let content = trimmedMemo.isEmpty ? nil : trimmedMemo
-            // 대상 아이들: 현재 아이 + 함께 선택된 형제·자매. 각 아이가 자기 사진 파일을 소유(삭제 안전).
-            let targetIds = [childId] + selectedExtraChildIds.filter { $0 != childId }
-            for tid in targetIds {
-                // 사진·동영상은 로컬에만 저장(서버 비전송). 아이마다 별도 복사본.
-                let refs = selectedImages.compactMap { PhotoStore.save($0) }
-                let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
-                store.addDiaryEntry(
-                    childId:   tid,
-                    content:   content,
-                    milestone: milestoneText,
-                    photoRef:  refs.first,
-                    photoRefs: refs,
-                    videoRef:  videoFile
-                )
+        if mode == .pregnancy {
+            // 임신 모드: 배 사진 + 산모 체중을 활성 임신 기록에 저장
+            savePregnancyRecord()
+        } else if let childId = store.selectedChild?.id {
+            // 사진·메모·이정표 중 하나라도 있으면 DiaryEntry 기록
+            let trimmedMemo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
+            let milestoneText = selectedMilestones.isEmpty
+                ? nil
+                : selectedMilestones.sorted().joined(separator: ", ")
+            let hasDiaryContent = hasMedia
+                || !trimmedMemo.isEmpty
+                || !selectedMilestones.isEmpty
+            if hasDiaryContent {
+                let content = trimmedMemo.isEmpty ? nil : trimmedMemo
+                // 대상 아이들: 현재 아이 + 함께 선택된 형제·자매. 각 아이가 자기 사진 파일을 소유(삭제 안전).
+                let targetIds = [childId] + selectedExtraChildIds.filter { $0 != childId }
+                for tid in targetIds {
+                    let refs = selectedImages.compactMap { PhotoStore.save($0) }
+                    let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
+                    store.addDiaryEntry(
+                        childId:   tid,
+                        content:   content,
+                        milestone: milestoneText,
+                        photoRef:  refs.first,
+                        photoRefs: refs,
+                        videoRef:  videoFile
+                    )
+                }
             }
-        }
-
-        // 자세히 모드에서 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
-        if showDetail {
-            let heightVal  = Double(heightText.trimmingCharacters(in: .whitespaces))
-            let weightVal  = Double(weightText.trimmingCharacters(in: .whitespaces))
-            if heightVal != nil || weightVal != nil {
-                store.addGrowthRecord(
-                    childId:             childId,
-                    heightCm:            heightVal,
-                    weightKg:            weightVal,
-                    headCircumferenceCm: nil
-                )
+            // 자세히 모드에서 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
+            if showDetail {
+                let heightVal  = Double(heightText.trimmingCharacters(in: .whitespaces))
+                let weightVal  = Double(weightText.trimmingCharacters(in: .whitespaces))
+                if heightVal != nil || weightVal != nil {
+                    store.addGrowthRecord(
+                        childId:             childId,
+                        heightCm:            heightVal,
+                        weightKg:            weightVal,
+                        headCircumferenceCm: nil
+                    )
+                }
             }
+        } else {
+            onSave(); onClose(); return
         }
 
         // 1탭: 저장 버튼 탭 → 보상 오버레이 표시 (+ 성공 햅틱)
