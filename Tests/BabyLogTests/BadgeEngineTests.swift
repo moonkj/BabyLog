@@ -104,15 +104,15 @@ final class BadgeEngineTests: XCTestCase {
             "recordCount=0이어도 consecutiveDays>=30이면 streak_30 부여")
     }
 
-    // MARK: - parenting_master (recordCount >= 50)
+    // MARK: - parenting_pro (recordCount >= 50)
 
     func test_parentingMaster_threshold_49_notAwarded() {
         let badges = BadgeEngine.earnedBadges(
             recordCount: 49, consecutiveDays: 0, tradeCount: 0,
             crewMeetings: 0, postLikes: 0
         )
-        XCTAssertFalse(badges.contains("parenting_master"),
-            "recordCount=49이면 parenting_master 미부여")
+        XCTAssertFalse(badges.contains("parenting_pro"),
+            "recordCount=49이면 parenting_pro 미부여")
     }
 
     func test_parentingMaster_threshold_50_awarded() {
@@ -120,11 +120,11 @@ final class BadgeEngineTests: XCTestCase {
             recordCount: 50, consecutiveDays: 0, tradeCount: 0,
             crewMeetings: 0, postLikes: 0
         )
-        XCTAssertTrue(badges.contains("parenting_master"),
-            "recordCount=50이면 parenting_master 부여")
+        XCTAssertTrue(badges.contains("parenting_pro"),
+            "recordCount=50이면 parenting_pro 부여")
     }
 
-    /// record_start + parenting_master 동시 부여 (recordCount=50)
+    /// record_start + parenting_pro 동시 부여 (recordCount=50)
     func test_parentingMaster_also_awardsRecordStart() {
         let badges = BadgeEngine.earnedBadges(
             recordCount: 50, consecutiveDays: 0, tradeCount: 0,
@@ -132,7 +132,7 @@ final class BadgeEngineTests: XCTestCase {
         )
         XCTAssertTrue(badges.contains("record_start"),
             "recordCount=50이면 record_start(>=1)도 동시 부여")
-        XCTAssertTrue(badges.contains("parenting_master"))
+        XCTAssertTrue(badges.contains("parenting_pro"))
     }
 
     // MARK: - sharing_angel (tradeCount >= 3)
@@ -248,7 +248,7 @@ final class BadgeEngineTests: XCTestCase {
         let expected: Set<String> = [
             "record_start",
             "streak_30",
-            "parenting_master",
+            "parenting_pro",
             "sharing_angel",
             "trade_50",
             "first_crew",
