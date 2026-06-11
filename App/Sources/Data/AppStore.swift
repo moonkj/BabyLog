@@ -33,6 +33,8 @@ final class AppStore: ObservableObject {
     @Published private(set) var joinedCrewIds: Set<String> = []
     @Published private(set) var joinedCrewGroupIds: Set<String> = []
     @Published private(set) var likedCrewPostIds: Set<String> = []
+    @Published private(set) var vaccineHospitals: [String: String] = [:]
+    @Published private(set) var checkupDoneKeys: Set<String> = []
     private var crewSeeded: Bool = false
     /// 저장 파일 디코딩 실패 여부 — true면 자동저장으로 원본을 덮어쓰지 않는다(데이터 보존).
     private var loadDidFail: Bool = false
@@ -152,6 +154,8 @@ final class AppStore: ObservableObject {
                     self.crewSeeded         = saved.crewSeeded
                     self.joinedCrewGroupIds = saved.joinedCrewGroupIds
                     self.likedCrewPostIds   = saved.likedCrewPostIds
+                    self.vaccineHospitals   = saved.vaccineHospitals
+                    self.checkupDoneKeys    = saved.checkupDoneKeys
                 }
             } catch {
                 // 손상 파일 보존(복구용) + 자동저장 차단
@@ -312,7 +316,9 @@ final class AppStore: ObservableObject {
             joinedCrewIds: joinedCrewIds,
             crewSeeded: crewSeeded,
             joinedCrewGroupIds: joinedCrewGroupIds,
-            likedCrewPostIds: likedCrewPostIds
+            likedCrewPostIds: likedCrewPostIds,
+            vaccineHospitals: vaccineHospitals,
+            checkupDoneKeys: checkupDoneKeys
         )
     }
 
@@ -336,6 +342,8 @@ final class AppStore: ObservableObject {
         crewSeeded         = state.crewSeeded
         joinedCrewGroupIds = state.joinedCrewGroupIds
         likedCrewPostIds   = state.likedCrewPostIds
+        vaccineHospitals   = state.vaccineHospitals
+        checkupDoneKeys    = state.checkupDoneKeys
         seedMarketIfNeeded()
         seedCrewIfNeeded()
     }
@@ -646,9 +654,36 @@ final class AppStore: ObservableObject {
         diaryComments[id.uuidString] = nil
     }
 
+    /// 다이어리 항목 수정 (캡션·이정표). 사진/영상은 유지.
+    func updateDiaryEntry(id: UUID, content: String?, milestone: String?) {
+        guard let idx = diaryEntries.firstIndex(where: { $0.id == id }) else { return }
+        diaryEntries[idx].content = content
+        diaryEntries[idx].milestone = milestone
+    }
+
     /// 성장 기록을 삭제한다.
     func deleteGrowthRecord(id: UUID) {
         growthRecords.removeAll { $0.id == id }
+    }
+
+    // MARK: - 접종 병원 / 산전검진 완료
+
+    func vaccineHospital(childId: UUID, vaccineId: String) -> String? {
+        vaccineHospitals["\(childId.uuidString)|\(vaccineId)"]
+    }
+    func setVaccineHospital(childId: UUID, vaccineId: String, hospital: String?) {
+        let key = "\(childId.uuidString)|\(vaccineId)"
+        let trimmed = hospital?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmed, !trimmed.isEmpty { vaccineHospitals[key] = trimmed }
+        else { vaccineHospitals[key] = nil }
+    }
+    func isCheckupDone(pregnancyId: UUID, checkupId: String) -> Bool {
+        checkupDoneKeys.contains("\(pregnancyId.uuidString)|\(checkupId)")
+    }
+    func toggleCheckupDone(pregnancyId: UUID, checkupId: String) {
+        let key = "\(pregnancyId.uuidString)|\(checkupId)"
+        if checkupDoneKeys.contains(key) { checkupDoneKeys.remove(key) }
+        else { checkupDoneKeys.insert(key) }
     }
 
     // MARK: - 좋아요 / 댓글 (가족·조부모 모드 대비, 현재 로컬)
@@ -667,6 +702,13 @@ final class AppStore: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         diaryComments[entryId.uuidString, default: []].append(trimmed)
+    }
+
+    func deleteComment(entryId: UUID, at index: Int) {
+        let key = entryId.uuidString
+        guard var list = diaryComments[key], list.indices.contains(index) else { return }
+        list.remove(at: index)
+        diaryComments[key] = list.isEmpty ? nil : list
     }
 
     // MARK: - 기록 조회

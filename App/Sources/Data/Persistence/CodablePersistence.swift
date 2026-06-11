@@ -39,6 +39,9 @@ struct PersistableState: Codable, Equatable {
     /// 크루 그룹 가입 / 게시판 좋아요 (로컬)
     var joinedCrewGroupIds: Set<String>
     var likedCrewPostIds: Set<String>
+    /// 접종 병원 (key="childId|vaccineId") / 산전검진 완료 (key="pregnancyId|checkupId")
+    var vaccineHospitals: [String: String]
+    var checkupDoneKeys: Set<String>
 
     init(
         pregnancies: [Pregnancy] = [],
@@ -58,7 +61,9 @@ struct PersistableState: Codable, Equatable {
         joinedCrewIds: Set<String> = [],
         crewSeeded: Bool = false,
         joinedCrewGroupIds: Set<String> = [],
-        likedCrewPostIds: Set<String> = []
+        likedCrewPostIds: Set<String> = [],
+        vaccineHospitals: [String: String] = [:],
+        checkupDoneKeys: Set<String> = []
     ) {
         self.pregnancies = pregnancies
         self.children = children
@@ -78,6 +83,8 @@ struct PersistableState: Codable, Equatable {
         self.crewSeeded = crewSeeded
         self.joinedCrewGroupIds = joinedCrewGroupIds
         self.likedCrewPostIds = likedCrewPostIds
+        self.vaccineHospitals = vaccineHospitals
+        self.checkupDoneKeys = checkupDoneKeys
     }
 
     // MARK: - Codable (하위 호환 디코딩)
@@ -89,6 +96,7 @@ struct PersistableState: Codable, Equatable {
         case marketItems, savedMarketIds, marketChats, marketSeeded
         case crews, joinedCrewIds, crewSeeded
         case joinedCrewGroupIds, likedCrewPostIds
+        case vaccineHospitals, checkupDoneKeys
     }
 
     init(from decoder: Decoder) throws {
@@ -111,6 +119,8 @@ struct PersistableState: Codable, Equatable {
         crewSeeded     = try container.decodeIfPresent(Bool.self, forKey: .crewSeeded) ?? false
         joinedCrewGroupIds = try container.decodeIfPresent(Set<String>.self, forKey: .joinedCrewGroupIds) ?? []
         likedCrewPostIds   = try container.decodeIfPresent(Set<String>.self, forKey: .likedCrewPostIds) ?? []
+        vaccineHospitals   = try container.decodeIfPresent([String: String].self, forKey: .vaccineHospitals) ?? [:]
+        checkupDoneKeys    = try container.decodeIfPresent(Set<String>.self, forKey: .checkupDoneKeys) ?? []
     }
 }
 
