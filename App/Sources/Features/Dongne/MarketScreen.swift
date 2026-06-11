@@ -251,11 +251,12 @@ struct MarketScreen: View {
 
     // MARK: 매물 리스트
     private var itemList: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: 0) {
             Text("\(filteredItems.count)개 매물")
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(AppColors.ink3)
                 .padding(.horizontal, 2)
+                .padding(.bottom, Spacing.s2)
 
             ForEach(filteredItems) { item in
                 NavigationLink(value: item) {
@@ -331,123 +332,119 @@ private struct MkNeedSoonCard: View {
 private struct MkItemCard: View {
     let item: MarketItem
 
-    var body: some View {
-        Button { } label: {
-            BLCard(padding: 0) {
-                HStack(alignment: .center, spacing: 0) {
-                    // 사진 영역
-                    photoArea
-                        .frame(width: 112)
+    private let photoSide: CGFloat = 116
 
-                    // 정보 영역
-                    infoArea
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+    var body: some View {
+        HStack(alignment: .top, spacing: 13) {
+            photo
+            VStack(alignment: .leading, spacing: 5) {
+                // 제목
+                Text(item.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.ink)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // 메타: 거리 · 시간
+                Text(metaText)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AppColors.ink3)
+                    .lineLimit(1)
+
+                // 가격
+                Text(item.isFree ? "무료나눔" : "\(item.price.formatted())원")
+                    .font(AppFont.num(16, weight: .heavy))
+                    .foregroundStyle(item.isFree ? AppColors.primary : AppColors.ink)
+                    .padding(.top, 1)
+
+                // 상태/리콜/졸업 칩 (있을 때만)
+                if item.status != .selling || item.hasRecall || item.isGraduate {
+                    HStack(spacing: 5) {
+                        if item.status != .selling {
+                            BLBadge(tone: item.status == .sold ? .grey : .amber, text: item.status.rawValue, systemIcon: nil, dot: false)
+                        }
+                        if item.hasRecall {
+                            BLBadge(tone: .coral, text: "리콜", systemIcon: "exclamationmark.triangle.fill", dot: false)
+                        }
+                        if item.isGraduate {
+                            BLBadge(tone: .mint, text: "졸업템", systemIcon: nil, dot: true)
+                        }
+                    }
+                    .padding(.top, 1)
                 }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // 관심 수 (우하단 정렬)
+            VStack {
+                Spacer(minLength: 0)
+                HStack(spacing: 3) {
+                    Image(systemName: "heart")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("\(item.favoriteCount)")
+                        .font(.system(size: 12.5, weight: .medium))
+                }
+                .foregroundStyle(AppColors.ink3)
             }
         }
-        .buttonStyle(LiquidPressStyle(scale: 0.99))
+        .frame(minHeight: photoSide)
+        .padding(.vertical, Spacing.s3)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(AppColors.line).frame(height: 1)
+        }
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
     }
 
-    private var photoArea: some View {
-        ZStack(alignment: .topLeading) {
-            Group {
-                if let img = PhotoStore.image(item.photoRefs.first) {
-                    Image(uiImage: img).resizable().scaledToFill()
-                } else {
-                    PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
-                }
+    private var photo: some View {
+        Group {
+            if let img = PhotoStore.image(item.photoRefs.first) {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else {
+                PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
             }
-                .frame(width: 112)
-                .overlay(alignment: .topLeading) {
-                    // 리콜 경고 뱃지
-                    if item.hasRecall {
-                        BLBadge(tone: .coral, text: "리콜", systemIcon: "exclamationmark.triangle.fill", dot: false)
-                            .padding(8)
-                    }
-                }
-                .overlay(alignment: .bottomLeading) {
-                    // 졸업템 뱃지
-                    if item.isGraduate {
-                        BLBadge(tone: .mint, text: "졸업템", systemIcon: nil, dot: true)
-                            .padding(8)
-                    }
-                }
         }
-        .clipped()
+        .frame(width: photoSide, height: photoSide)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 0.5)
+        }
+        .overlay(alignment: .topLeading) {
+            if item.isFree {
+                BLBadge(tone: .mint, text: "나눔", systemIcon: nil, dot: false).padding(7)
+            }
+        }
         .accessibilityHidden(true)
     }
 
-    private var infoArea: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // 상태등급 + 월령 태그
-            HStack(spacing: 5) {
-                BLBadge(
-                    tone: item.grade.badgeTone,
-                    text: "\(item.grade.rawValue)등급",
-                    systemIcon: item.grade.systemIcon,
-                    dot: false
-                )
-                BLBadge(tone: .grey, text: item.monthsTag, systemIcon: nil, dot: false)
-            }
-
-            // 제목
-            Text(item.title)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(AppColors.ink)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-
-            // 가격
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(item.isFree ? "무료나눔" : "\(item.price.formatted())원")
-                    .font(AppFont.num(17, weight: .heavy))
-                    .foregroundStyle(item.isFree ? AppColors.primary : AppColors.ink)
-
-                if !item.isFree, let orig = item.originalPrice {
-                    Text("\(orig.formatted())원")
-                        .font(AppFont.num(12))
-                        .foregroundStyle(AppColors.ink3)
-                        .strikethrough(true, color: AppColors.ink3)
-                }
-            }
-
-            // 판매자 미니 뱃지 (이름 + 티어)
-            HStack(spacing: 5) {
-                Text(item.sellerName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppColors.ink2)
-                BLBadge(tone: item.sellerTier.badgeTone, text: item.sellerTier.rawValue, systemIcon: nil, dot: false)
-            }
-
-            // 거리 + 관심
-            HStack(spacing: 4) {
-                Image(systemName: "location.fill")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(AppColors.ink3)
-                Text(item.distanceText)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(AppColors.ink3)
-                Text("·")
-                    .foregroundStyle(AppColors.ink3)
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(AppColors.ink3)
-                Text("관심 \(item.favoriteCount)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(AppColors.ink3)
-            }
-        }
+    private var metaText: String {
+        var parts: [String] = []
+        if !item.distanceText.isEmpty { parts.append(item.distanceText) }
+        parts.append(item.createdAt.blRelativeShort)
+        return parts.joined(separator: " · ")
     }
 
     private var accessibilityDescription: String {
-        let gradeDesc = "\(item.grade.rawValue)등급 \(item.grade.label)"
         let priceDesc = item.isFree ? "무료나눔" : "\(item.price.formatted())원"
         let recallDesc = item.hasRecall ? ", 리콜 이력 있음" : ""
-        let gradDesc = item.isGraduate ? ", 졸업템" : ""
-        return "\(item.title), \(gradeDesc), \(item.monthsTag), \(priceDesc), 판매자 \(item.sellerName) \(item.sellerTier.rawValue), \(item.distanceText)\(recallDesc)\(gradDesc)"
+        return "\(item.title), \(priceDesc), \(item.distanceText), 관심 \(item.favoriteCount)\(recallDesc)"
+    }
+}
+
+private extension Date {
+    /// "방금 전 / N분 전 / N시간 전 / N일 전 / N개월 전"
+    var blRelativeShort: String {
+        let s = Int(Date().timeIntervalSince(self))
+        if s < 60 { return "방금 전" }
+        if s < 3600 { return "\(s/60)분 전" }
+        if s < 86400 { return "\(s/3600)시간 전" }
+        if s < 86400*30 { return "\(s/86400)일 전" }
+        return "\(s/(86400*30))개월 전"
     }
 }
 
