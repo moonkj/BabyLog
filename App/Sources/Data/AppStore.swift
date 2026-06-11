@@ -31,6 +31,8 @@ final class AppStore: ObservableObject {
     // 크루 (로컬 백본)
     @Published private(set) var crews: [CrewMeetup] = []
     @Published private(set) var joinedCrewIds: Set<String> = []
+    @Published private(set) var joinedCrewGroupIds: Set<String> = []
+    @Published private(set) var likedCrewPostIds: Set<String> = []
     private var crewSeeded: Bool = false
     /// 저장 파일 디코딩 실패 여부 — true면 자동저장으로 원본을 덮어쓰지 않는다(데이터 보존).
     private var loadDidFail: Bool = false
@@ -148,6 +150,8 @@ final class AppStore: ObservableObject {
                     self.crews              = saved.crews
                     self.joinedCrewIds      = saved.joinedCrewIds
                     self.crewSeeded         = saved.crewSeeded
+                    self.joinedCrewGroupIds = saved.joinedCrewGroupIds
+                    self.likedCrewPostIds   = saved.likedCrewPostIds
                 }
             } catch {
                 // 손상 파일 보존(복구용) + 자동저장 차단
@@ -187,6 +191,31 @@ final class AppStore: ObservableObject {
     func toggleJoinCrew(_ id: String) {
         if joinedCrewIds.contains(id) { joinedCrewIds.remove(id) }
         else { joinedCrewIds.insert(id) }
+    }
+
+    // 크루 그룹 가입 / 게시판 좋아요 (로컬)
+    func isJoinedGroup(_ id: String) -> Bool { joinedCrewGroupIds.contains(id) }
+    func toggleJoinGroup(_ id: String) {
+        if joinedCrewGroupIds.contains(id) { joinedCrewGroupIds.remove(id) }
+        else { joinedCrewGroupIds.insert(id) }
+    }
+    func isCrewPostLiked(_ id: String) -> Bool { likedCrewPostIds.contains(id) }
+    func toggleCrewPostLike(_ id: String) {
+        if likedCrewPostIds.contains(id) { likedCrewPostIds.remove(id) }
+        else { likedCrewPostIds.insert(id) }
+    }
+
+    // 마켓 구매 (로컬 거래 플로우)
+    /// 구매 확정 — 판매완료로 전환 + 거래 메시지 기록.
+    func purchaseMarketItem(id: String) {
+        guard let idx = marketItems.firstIndex(where: { $0.id == id }) else { return }
+        marketItems[idx].status = .sold
+        sendMarketMessage(itemId: id, text: "거래를 확정했어요. 감사합니다! 🤍", mine: true)
+    }
+    /// 예약중으로 전환.
+    func reserveMarketItem(id: String) {
+        guard let idx = marketItems.firstIndex(where: { $0.id == id }) else { return }
+        marketItems[idx].status = .reserved
     }
 
     // MARK: - 마켓 (로컬 백본 — 추후 Supabase 동기화)
@@ -281,7 +310,9 @@ final class AppStore: ObservableObject {
             marketSeeded: marketSeeded,
             crews: crews,
             joinedCrewIds: joinedCrewIds,
-            crewSeeded: crewSeeded
+            crewSeeded: crewSeeded,
+            joinedCrewGroupIds: joinedCrewGroupIds,
+            likedCrewPostIds: likedCrewPostIds
         )
     }
 
@@ -303,6 +334,8 @@ final class AppStore: ObservableObject {
         crews              = state.crews
         joinedCrewIds      = state.joinedCrewIds
         crewSeeded         = state.crewSeeded
+        joinedCrewGroupIds = state.joinedCrewGroupIds
+        likedCrewPostIds   = state.likedCrewPostIds
         seedMarketIfNeeded()
         seedCrewIfNeeded()
     }
