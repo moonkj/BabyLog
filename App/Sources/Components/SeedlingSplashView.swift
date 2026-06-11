@@ -45,17 +45,17 @@ struct SeedlingSplashView: View {
     private func run() {
         guard !reduceMotion else {
             withAnimation(.easeOut(duration: 0.2)) { sprout = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                withAnimation(.easeIn(duration: 0.3)) { fade = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onFinish() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+                withAnimation(.easeIn(duration: 0.35)) { fade = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onFinish() }
             }
             return
         }
         withAnimation(.spring(response: 0.5, dampingFraction: 0.55)) { sprout = true }
         withAnimation(.easeOut(duration: 0.9)) { ripple = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.95) {
-            withAnimation(.easeIn(duration: 0.35)) { fade = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onFinish() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) {
+            withAnimation(.easeIn(duration: 0.4)) { fade = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onFinish() }
         }
     }
 }
