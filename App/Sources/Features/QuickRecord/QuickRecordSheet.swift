@@ -29,6 +29,7 @@ struct QuickRecordSheet: View {
     @State private var selectedImages: [UIImage] = []
     @State private var selectedVideoURL: URL? = nil
     @State private var carouselIndex = 0
+    @State private var selectedExtraChildIds: Set<UUID> = []
     private var hasMedia: Bool { !selectedImages.isEmpty || selectedVideoURL != nil }
 
     // 자세히 펼치기 입력
@@ -108,6 +109,7 @@ struct QuickRecordSheet: View {
                         .padding(.bottom, Spacing.s4)
                     milestoneRow
                         .padding(.bottom, showDetail ? Spacing.s4 : Spacing.s5)
+                    siblingSelector
                     if showDetail {
                         detailSection
                             .padding(.bottom, Spacing.s3)
@@ -240,6 +242,45 @@ struct QuickRecordSheet: View {
                     .foregroundStyle(.white.opacity(0.9))
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
             }
+        }
+    }
+
+    // 함께 기록할 아이 (형제·자매) — 같이 찍은 사진을 여러 아이에게 동시 기록
+    @ViewBuilder
+    private var siblingSelector: some View {
+        let others = store.children.filter { $0.id != store.selectedChild?.id }
+        if mode == .baby, !others.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                Text("함께 기록할 아이")
+                    .font(AppFont.subhead).foregroundStyle(AppColors.ink2)
+                Text("같이 찍은 사진이면 형제·자매에게도 함께 올려요")
+                    .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.s2) {
+                        ForEach(others) { child in
+                            let on = selectedExtraChildIds.contains(child.id)
+                            Button {
+                                Haptics.selection()
+                                if on { selectedExtraChildIds.remove(child.id) }
+                                else { selectedExtraChildIds.insert(child.id) }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: on ? "checkmark.circle.fill" : "plus.circle")
+                                        .font(.system(size: 13, weight: .bold))
+                                    Text(child.name).font(.system(size: 14, weight: .semibold))
+                                }
+                                .foregroundStyle(on ? Color.white : AppColors.ink2)
+                                .padding(.horizontal, 12).frame(height: 36)
+                                .background(on ? AppColors.primary : AppColors.surface2, in: Capsule())
+                            }
+                            .buttonStyle(LiquidPressStyle(scale: 0.96))
+                            .accessibilityLabel("\(child.name)에게도 함께 기록")
+                            .accessibilityAddTraits(on ? [.isSelected] : [])
+                        }
+                    }
+                }
+            }
+            .padding(.bottom, Spacing.s5)
         }
     }
 
@@ -453,17 +494,22 @@ struct QuickRecordSheet: View {
             || !trimmedMemo.isEmpty
             || !selectedMilestones.isEmpty
         if hasDiaryContent {
-            // 사진·동영상은 로컬에만 저장 (서버 비전송)
-            let refs = selectedImages.compactMap { PhotoStore.save($0) }
-            let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
-            store.addDiaryEntry(
-                childId:   childId,
-                content:   trimmedMemo.isEmpty ? nil : trimmedMemo,
-                milestone: milestoneText,
-                photoRef:  refs.first,
-                photoRefs: refs,
-                videoRef:  videoFile
-            )
+            let content = trimmedMemo.isEmpty ? nil : trimmedMemo
+            // 대상 아이들: 현재 아이 + 함께 선택된 형제·자매. 각 아이가 자기 사진 파일을 소유(삭제 안전).
+            let targetIds = [childId] + selectedExtraChildIds.filter { $0 != childId }
+            for tid in targetIds {
+                // 사진·동영상은 로컬에만 저장(서버 비전송). 아이마다 별도 복사본.
+                let refs = selectedImages.compactMap { PhotoStore.save($0) }
+                let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
+                store.addDiaryEntry(
+                    childId:   tid,
+                    content:   content,
+                    milestone: milestoneText,
+                    photoRef:  refs.first,
+                    photoRefs: refs,
+                    videoRef:  videoFile
+                )
+            }
         }
 
         // 자세히 모드에서 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록

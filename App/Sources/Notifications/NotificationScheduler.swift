@@ -78,6 +78,71 @@ enum NotificationScheduler {
         return requests.sorted { $0.fireDate < $1.fireDate }
     }
 
+    // MARK: - Memory Reminders (1년 전 오늘)
+
+    /// "N년 전 오늘" 추억 사진 알림. 사진이 있는 다이어리의 기념일(1·2·3주년 중 가장 가까운 미래)에
+    /// 오전 10시 알림을 만든다. 너무 잦지 않도록 한 달에 최대 1건, 향후 13개월 이내만.
+    ///
+    /// - Returns: fireDate 오름차순 LocalNotificationRequest 배열 (id: "memory-<entryId>")
+    static func memoryReminders(
+        diaryEntries: [DiaryEntry],
+        childName: String,
+        now: Date,
+        calendar: Calendar = .current,
+        maxCount: Int = 12
+    ) -> [LocalNotificationRequest] {
+        guard let horizon = calendar.date(byAdding: .month, value: 13, to: now) else { return [] }
+        // 사진 있는 기록만, 오래된 순(주년이 먼저 오는 순)으로
+        let photoEntries = diaryEntries
+            .filter { !$0.photoRefList.isEmpty }
+            .sorted { $0.date < $1.date }
+
+        var usedMonths: Set<String> = []
+        var results: [LocalNotificationRequest] = []
+        let mk = DateFormatter(); mk.dateFormat = "yyyy-MM"
+
+        for entry in photoEntries {
+            guard let anniv = nextAnniversary(of: entry.date, after: now, calendar: calendar),
+                  anniv <= horizon,
+                  let fire = fireDate(base: anniv, offsetDays: 0, hour: 10, calendar: calendar),
+                  fire >= now else { continue }
+            let monthKey = mk.string(from: fire)
+            if usedMonths.contains(monthKey) { continue }   // 한 달 1건
+            usedMonths.insert(monthKey)
+
+            let years = max(1, calendar.component(.year, from: fire) - calendar.component(.year, from: entry.date))
+            let body: String
+            if let c = entry.content, !c.isEmpty {
+                body = "\(childName)의 '\(c)' — 그날의 사진을 다시 볼까요? 🤍"
+            } else {
+                body = "\(childName)의 그날 사진을 다시 볼까요? 🤍"
+            }
+            results.append(LocalNotificationRequest(
+                id: "memory-\(entry.id.uuidString)",
+                title: "📸 \(years)년 전 오늘",
+                body: body,
+                fireDate: fire
+            ))
+        }
+        return Array(results.sorted { $0.fireDate < $1.fireDate }.prefix(maxCount))
+    }
+
+    /// 기록 날짜의 월·일을, now 이후로 가장 가까운 미래의 같은 월·일(주년)로 반환.
+    private static func nextAnniversary(of date: Date, after now: Date, calendar: Calendar) -> Date? {
+        let md = calendar.dateComponents([.month, .day], from: date)
+        var year = calendar.component(.year, from: now)
+        for _ in 0...2 {
+            var comp = DateComponents(); comp.year = year; comp.month = md.month; comp.day = md.day
+            if let candidate = calendar.date(from: comp),
+               candidate > date,                     // 기록일 이후의 주년
+               calendar.startOfDay(for: candidate) >= calendar.startOfDay(for: now) {
+                return candidate
+            }
+            year += 1
+        }
+        return nil
+    }
+
     // MARK: - Generic Reminder Builder
 
     /// 범용 단일 알림 요청 빌더.

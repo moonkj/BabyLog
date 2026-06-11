@@ -30,5 +30,13 @@ struct BabyLogApp: App {
         let vax = VaccineRecord(id: UUID(), childId: UUID(), vaccineId: "DTaP 4차",
                                 scheduledDate: soon, completedDate: nil, hospital: "행복소아과")
         scheduler.schedule(NotificationScheduler.vaccineReminders([vax], now: Date()))
+
+        // "N년 전 오늘" 추억 사진 알림 (월 1회, 실 다이어리 기반)
+        let memories = NotificationScheduler.memoryReminders(
+            diaryEntries: store.diaryEntries,
+            childName: store.selectedChild?.name ?? "우리 아이",
+            now: Date()
+        )
+        if !memories.isEmpty { scheduler.schedule(memories) }
     }
 }
