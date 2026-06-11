@@ -90,8 +90,8 @@ struct MainTabView: View {
             }
             .tint(AppColors.primary)
 
-            // 빠른 기록 FAB (홈·기록·동네) — 위치는 설정(bl_fab_side, 한손 조작)
-            if tab == .home || tab == .record || tab == .dongne {
+            // 빠른 기록 FAB (홈·기록) — 동네 탭은 팔기/모임 만들기 버튼이 있어 제외
+            if tab == .home || tab == .record {
                 QuickRecordFAB(mode: mode, onQuickRecord: {
                     Haptics.light()
                     // 아이/임신 미등록이면 빠른기록 대신 등록부터

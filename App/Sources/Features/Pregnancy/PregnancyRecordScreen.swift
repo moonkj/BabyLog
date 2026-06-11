@@ -66,13 +66,13 @@ struct PregnancyRecordScreen: View {
                             // ① 태아 히어로 카드
                             heroSection
                                 .padding(.horizontal, Spacing.s5)
-                                .padding(.top, Spacing.s3)
-                                .padding(.bottom, Spacing.s3)
+                                .padding(.top, Spacing.s4)
+                                .padding(.bottom, Spacing.s4)
 
                             // ② 세그먼트 선택
                             segmentBar
                                 .padding(.horizontal, Spacing.s5)
-                                .padding(.bottom, Spacing.s3)
+                                .padding(.bottom, Spacing.s4)
 
                             // ③ 세그먼트 본문
                             switch selectedSegment {
@@ -84,6 +84,7 @@ struct PregnancyRecordScreen: View {
                             // ④ 기록 멈춤 진입점 (민감영역 — 아주 절제된 텍스트 버튼)
                             pauseEntryButton
                                 .padding(.horizontal, Spacing.s5)
+                                .padding(.top, Spacing.s2)
                                 .padding(.bottom, Spacing.s7)
                         }
                     }
@@ -144,15 +145,18 @@ struct PregnancyRecordScreen: View {
                     // 아이콘
                     ZStack {
                         Circle()
-                            .fill(AppColors.surface2)
-                            .frame(width: 72, height: 72)
+                            .fill(Color(hex: 0xFBEAF0))
+                            .frame(width: 80, height: 80)
+                        Circle()
+                            .stroke(AppColors.pregnancyPink.opacity(0.12), lineWidth: 1)
+                            .frame(width: 80, height: 80)
                         Image(systemName: "heart.fill")
                             .font(.system(size: 30, weight: .light))
-                            .foregroundStyle(AppColors.ink3)
+                            .foregroundStyle(AppColors.pregnancyPink.opacity(0.7))
                     }
                     .accessibilityHidden(true)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, Spacing.s2)
+                    .padding(.top, Spacing.s3)
 
                     VStack(spacing: Spacing.s2) {
                         Text("언제든 돌아오세요")
@@ -181,7 +185,7 @@ struct PregnancyRecordScreen: View {
                             .frame(height: 48)
                             .background(
                                 Color(hex: 0xFBEAF0),
-                                in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                             )
                     }
                     .buttonStyle(LiquidPressStyle(scale: 0.97))
@@ -253,12 +257,15 @@ struct PregnancyRecordScreen: View {
                     .offset(x: 28, y: -28)
                     .accessibilityHidden(true)
 
-                HStack(spacing: Spacing.s4) {
+                HStack(spacing: Spacing.s5) {
                     // 과일 원형
                     ZStack {
                         Circle()
                             .fill(AppColors.surface)
                             .frame(width: 88, height: 88)
+                            .overlay {
+                                Circle().stroke(Color.white.opacity(0.6), lineWidth: 1)
+                            }
                             .blShadow(.card)
                         Text(fruit.emoji)
                             .font(.system(size: 44))
@@ -273,7 +280,7 @@ struct PregnancyRecordScreen: View {
                             dot: true
                         )
                         Text(ddayLabel)
-                            .font(AppFont.num(30, weight: .heavy))
+                            .font(AppFont.num(32, weight: .heavy))
                             .foregroundStyle(AppColors.pregnancyPink)
                         Text("\(fruit.name)만 해요 · 출산까지")
                             .font(AppFont.caption)
@@ -296,8 +303,9 @@ struct PregnancyRecordScreen: View {
     // MARK: - ② 세그먼트 바
 
     private var segmentBar: some View {
-        HStack(spacing: Spacing.s1) {
+        HStack(spacing: Spacing.s2) {
             ForEach(PregnancyRecordSegment.allCases) { seg in
+                let isOn = selectedSegment == seg
                 Button {
                     guard selectedSegment != seg else { return }
                     Haptics.selection()
@@ -307,17 +315,24 @@ struct PregnancyRecordScreen: View {
                 } label: {
                     Text(seg.label)
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(selectedSegment == seg ? Color.white : AppColors.ink2)
+                        .foregroundStyle(isOn ? Color.white : AppColors.ink2)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 40)
+                        .frame(height: 42)
                         .background(
-                            selectedSegment == seg ? AppColors.ink : AppColors.surface,
+                            isOn ? AppColors.ink : AppColors.surface,
                             in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                         )
+                        .overlay {
+                            if !isOn {
+                                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                    .stroke(AppColors.line, lineWidth: 1)
+                            }
+                        }
+                        .blShadow(isOn ? .card : .chip)
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.96))
                 .accessibilityLabel(seg.label)
-                .accessibilityAddTraits(selectedSegment == seg ? .isSelected : [])
+                .accessibilityAddTraits(isOn ? .isSelected : [])
             }
         }
     }

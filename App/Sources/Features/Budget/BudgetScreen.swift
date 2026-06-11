@@ -117,8 +117,9 @@ struct BudgetScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                BLScreenHeader(title: "가계부")
-                VStack(alignment: .leading, spacing: Spacing.s4) {
+                BLScreenHeader(title: "가계부", subtitle: "지원금과 지출을 한눈에")
+                // 섹션 간 호흡 — 주요 블록은 s6로 리듬 통일
+                VStack(alignment: .leading, spacing: Spacing.s6) {
 
                     // 1. 정부지원금 전면 배치
                     subsidySection
@@ -143,6 +144,7 @@ struct BudgetScreen: View {
                     Spacer().frame(height: 80)
                 }
                 .padding(.horizontal, Spacing.s4)
+                .padding(.top, Spacing.s2)
                 }
             }
             .background(AppColors.canvas.ignoresSafeArea())
@@ -213,7 +215,7 @@ struct BudgetScreen: View {
                                 .frame(maxWidth: 200)
                         }
                         .frame(maxWidth: .infinity)
-                        BLSkeleton(width: 52, height: 36, cornerRadius: 11)
+                        BLSkeleton(width: 52, height: 36, cornerRadius: Radius.sm)
                     }
                 }
             }
@@ -230,7 +232,7 @@ struct BudgetScreen: View {
                     donutChart
 
                     // 카테고리 범례
-                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                    VStack(alignment: .leading, spacing: Spacing.s3) {
                         ForEach(categoryBreakdown, id: \.category) { item in
                             HStack(spacing: Spacing.s2) {
                                 RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -241,10 +243,11 @@ struct BudgetScreen: View {
                                 Text(item.category.displayName)
                                     .font(AppFont.caption)
                                     .foregroundStyle(AppColors.ink2)
+                                    .lineLimit(1)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
                                 Text(amountShort(item.amount))
-                                    .font(.system(size: 12.5, weight: .bold).monospacedDigit())
+                                    .font(AppFont.num(12.5, weight: .bold))
                                     .foregroundStyle(AppColors.ink)
                             }
                             .accessibilityElement(children: .combine)
@@ -259,7 +262,7 @@ struct BudgetScreen: View {
 
                 HStack(spacing: 0) {
                     miniStat(value: amountFull(monthlyTotal), label: "이번 달 총 지출")
-                    Divider().frame(height: 32)
+                    Divider().frame(height: 30).background(AppColors.line)
                     if let pct = monthOverMonthPct {
                         miniStat(value: "\(pct > 0 ? "+" : "")\(pct)%",
                                  label: "전월 대비",
@@ -267,7 +270,7 @@ struct BudgetScreen: View {
                     } else {
                         miniStat(value: "—", label: "전월 대비")
                     }
-                    Divider().frame(height: 32)
+                    Divider().frame(height: 30).background(AppColors.line)
                     miniStat(value: "\(currentMonthExpenses.count)건", label: "이번 달 기록")
                 }
                 .accessibilityElement(children: .combine)
@@ -296,12 +299,13 @@ struct BudgetScreen: View {
             .frame(width: 130, height: 130)
 
             // 중앙 텍스트
-            VStack(spacing: 2) {
+            VStack(spacing: 3) {
                 Text("이번 달")
                     .font(AppFont.micro)
+                    .tracking(0.5)
                     .foregroundStyle(AppColors.ink3)
                 Text(amountShort(monthlyTotal))
-                    .font(.system(size: 17, weight: .heavy).monospacedDigit())
+                    .font(AppFont.num(17, weight: .heavy))
                     .foregroundStyle(AppColors.ink)
             }
             .accessibilityHidden(true)
@@ -310,15 +314,19 @@ struct BudgetScreen: View {
     }
 
     private func miniStat(value: String, label: String, valueTone: Color? = nil) -> some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 14.5, weight: .heavy).monospacedDigit())
+                .font(AppFont.num(14.5, weight: .heavy))
                 .foregroundStyle(valueTone ?? AppColors.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Text(label)
                 .font(.system(size: 10.5, weight: .medium))
                 .foregroundStyle(AppColors.ink3)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
+        .padding(.horizontal, Spacing.s1)
     }
 
     // MARK: 3. 카테고리 분해 리스트
@@ -340,7 +348,7 @@ struct BudgetScreen: View {
                         HStack(spacing: Spacing.s3) {
                             // 아이콘 뱃지 (색+아이콘 2중)
                             ZStack {
-                                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                                     .fill(item.category.badgeTone.bg)
                                     .frame(width: 40, height: 40)
                                 Image(systemName: item.category.systemIcon)
@@ -359,7 +367,7 @@ struct BudgetScreen: View {
                             // 금액 + 비율
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(amountFull(item.amount))
-                                    .font(.system(size: 14, weight: .bold).monospacedDigit())
+                                    .font(AppFont.num(14, weight: .bold))
                                     .foregroundStyle(AppColors.ink)
 
                                 let pct = monthlyTotal > 0
@@ -415,7 +423,9 @@ struct BudgetScreen: View {
                 .font(AppFont.caption)
                 .foregroundStyle(AppColors.ink3)
                 .multilineTextAlignment(.center)
+                .lineSpacing(3)
                 .frame(maxWidth: .infinity)
+                .padding(.top, Spacing.s1)
                 .accessibilityLabel("자동 수집 안내: 마켓 거래와 구독은 자동으로 기록되며 큰 지출만 직접 추가하세요.")
         }
     }
@@ -424,10 +434,10 @@ struct BudgetScreen: View {
 
     private var guideCard: some View {
         BLCard(flat: true) {
-            HStack(spacing: Spacing.s3) {
+            HStack(alignment: .top, spacing: Spacing.s3) {
                 // 아이콘 박스
                 ZStack {
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                         .fill(AppColors.surface)
                         .frame(width: 44, height: 44)
                         .blShadow(.chip)
@@ -436,10 +446,11 @@ struct BudgetScreen: View {
                 }
                 .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text(guide.title)
                         .font(.system(size: 14.5, weight: .bold))
                         .foregroundStyle(AppColors.ink)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text(guide.body)
                         .font(.system(size: 13, weight: .regular))
@@ -447,6 +458,7 @@ struct BudgetScreen: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .lineSpacing(3)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .background(
@@ -567,7 +579,7 @@ private struct SubsidyCard: View {
 
                         HStack(spacing: 4) {
                             Text(amountStr(info.amountKRW))
-                                .font(.system(size: 13, weight: .bold).monospacedDigit())
+                                .font(AppFont.num(13, weight: .bold))
                                 .foregroundStyle(isUrgent ? AppColors.gold : AppColors.primary)
                             Text("·")
                                 .font(AppFont.caption)
@@ -627,7 +639,7 @@ private struct SubsidyCard: View {
 
     private var iconBox: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                 .fill(isUrgent ? AppColors.goldTint : AppColors.primaryTint)
                 .frame(width: 46, height: 46)
 
@@ -647,7 +659,7 @@ private struct SubsidyCard: View {
                 .foregroundStyle(AppColors.onPrimary)
                 .padding(.horizontal, Spacing.s4)
                 .frame(height: 38)
-                .background(isUrgent ? AppColors.gold : AppColors.ink, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(isUrgent ? AppColors.gold : AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         }
         .buttonStyle(LiquidPressStyle())
         .frame(minWidth: 44, minHeight: 44)
@@ -683,7 +695,7 @@ private struct ExpenseRow: View {
         HStack(spacing: Spacing.s3) {
             // 카테고리 아이콘 (색+아이콘 2중)
             ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(expense.category.badgeTone.bg)
                     .frame(width: 40, height: 40)
                 Image(systemName: expense.category.systemIcon)
@@ -723,7 +735,7 @@ private struct ExpenseRow: View {
 
             // 금액
             Text(amountFull(expense.amount))
-                .font(.system(size: 14.5, weight: .heavy).monospacedDigit())
+                .font(AppFont.num(14.5, weight: .heavy))
                 .foregroundStyle(AppColors.ink)
         }
         .padding(.horizontal, Spacing.s4)
