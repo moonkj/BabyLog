@@ -99,14 +99,30 @@ iOS 가족   ── CloudKit 동기화(애플 호스팅, 무료) ──┐
 ```
 
 - **유일 고정비**: Apple Developer Program($99/년, App Store 출시에 어차피 필요). **월 서버비 0원.**
-- 웹 뷰어: [`web/family-viewer/index.html`](../web/family-viewer/index.html) — CloudKit JS로 공유 레코드를 읽어 사진·동영상·캡션 표시. 정적 파일이라 무료 호스팅에 그대로 배포.
+- 웹 뷰어: [`web/family-viewer/index.html`](../web/family-viewer/index.html) — **피드 방식**. CloudKit JS로 그 아이의 공유 기록 전체를 최신순으로 표시. 정적 파일이라 무료 호스팅에 그대로 배포.
+
+### 피드 방식 = 링크 한 번만 공유하면 계속 업데이트
+- 링크는 **아이별** `?c=<childId>` (게시물별 아님).
+- 부모가 새 사진/영상을 "가족 공유"로 올리면, 조부모는 **같은 링크를 다시 열 때(또는 1분 자동 새로고침/앱 복귀 시) 새 항목이 계속** 보임. 인스타 피드처럼.
+- 한 번 카톡으로 보내두면 끝 — 매번 새 링크 보낼 필요 없음.
 
 ### 활성화 절차 (CloudKit 활성화에 이어서)
-1. **CloudKit Console**(developer.apple.com)에서 **API Token**(Web Services) 발급.
+1. **CloudKit Console**(developer.apple.com)에서 **API Token**(Web Services) 발급 + `SharedMoment` 레코드타입 스키마 등록(아래).
 2. `web/family-viewer/index.html`의 `CONTAINER_ID`, `API_TOKEN` 채우기.
 3. `web/` 폴더를 **GitHub Pages / Cloudflare Pages**(무료)에 배포 → 도메인 확보.
-4. iOS 앱 "공유"(가족 보기): 해당 기록을 **CloudKit 공개 DB**에 추측 불가한 recordName으로 push(사진·동영상=CKAsset) → 링크 `https://<도메인>/family-viewer/?r=<recordName>` 생성 → 카톡 등으로 전달.
-   - (이 push/공유 링크 생성 코드는 CloudKit 활성화 후 `CloudSyncService`에 `shareToFamily(entry:)`로 추가 — 계정 연결 시 작업)
+4. iOS 앱 "가족 공유": 선택 기록을 **공개 DB `SharedMoment`**에 push → 링크 `https://<도메인>/family-viewer/?c=<childId>` 생성 → 카톡 전달.
+   - (push/링크 생성 코드는 CloudKit 활성화 후 `CloudSyncService`에 `shareToFamily(entry:)`로 추가 — 계정 연결 시)
+
+### `SharedMoment` 공개 DB 스키마
+| 필드 | 타입 | 비고 |
+|---|---|---|
+| `childId` | String (QUERYABLE) | 피드 필터 키 |
+| `date` | Date/Time (SORTABLE) | 최신순 정렬 |
+| `childName` | String | 표시 |
+| `caption` | String | 캡션 |
+| `milestone` | String | 이정표(선택) |
+| `photoAssets` | Asset List | 사진(최대 5) |
+| `videoAsset` | Asset | 동영상(선택) |
 
 ### 프라이버시 (아동 사진 — 필수)
 - 공개 DB에 올리되 **추측 불가능한 recordName**(UUID) + **공유한 항목만** 올림(전체 백업 아님).

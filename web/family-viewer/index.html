@@ -5,94 +5,103 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>베이비로그 · 가족 보기</title>
 <!--
-  베이비로그 가족 웹 뷰어 (하이브리드 — 안드로이드/PC 조부모용)
-  · 서버 0원: 데이터·미디어는 CloudKit(애플 호스팅), 이 페이지는 정적 호스팅(GitHub/Cloudflare Pages 무료)
-  · CloudKit JS로 공유 레코드를 읽어 사진·동영상·캡션을 보여준다.
-  · 링크 형식:  https://<your-pages-domain>/family-viewer/?r=<recordName>
-  · 활성화 전 채울 값:  CONTAINER_ID, API_TOKEN  (Apple Developer > CloudKit Console에서 발급)
-  · 프라이버시(아동 사진): 추측 불가한 recordName + 공개 DB의 최소 필드 + 만료 정책(앱에서 관리) 권장.
+  베이비로그 가족 웹 뷰어 (하이브리드 — 안드로이드/PC 조부모용) · 서버 0원
+  · 데이터·미디어 = CloudKit(애플 호스팅), 이 페이지 = 무료 정적 호스팅(GitHub/Cloudflare Pages)
+  · 피드 방식: 링크 한 번만 공유하면, 부모가 새로 올린 공유 사진/영상을 계속(열 때마다·자동 새로고침) 본다.
+  · 링크 형식:  https://<도메인>/family-viewer/?c=<childId>   (아이별 피드)
+  · 활성화 전 채울 값: CONTAINER_ID, API_TOKEN (Apple Developer > CloudKit Console)
+  · iOS 앱이 공유 시 공개 DB recordType "SharedMoment"에 push:
+      childId(String), date(Timestamp), caption, milestone, childName,
+      photoAssets([CKAsset]), videoAsset(CKAsset)
 -->
 <style>
-  :root { --ink:#1A1B2E; --ink3:#737373; --canvas:#FAFAF7; --gold:#C9A961; }
+  :root { --ink:#1A1B2E; --ink3:#737373; --canvas:#FAFAF7; }
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
          background:var(--canvas); color:var(--ink); -webkit-font-smoothing:antialiased; }
-  header { padding:18px 16px; font-weight:800; font-size:20px; letter-spacing:-0.4px; }
+  header { position:sticky; top:0; background:rgba(250,250,247,0.92); backdrop-filter:blur(8px);
+           padding:16px; font-weight:800; font-size:19px; letter-spacing:-0.4px;
+           display:flex; align-items:center; justify-content:space-between; z-index:10; }
   header small { display:block; font-weight:600; font-size:12px; color:var(--ink3); margin-top:2px; }
-  .wrap { max-width:560px; margin:0 auto; padding:0 12px 48px; }
+  .refresh { font-size:13px; font-weight:700; color:#3B6FA8; background:none; border:none; cursor:pointer; padding:8px; }
+  .wrap { max-width:560px; margin:0 auto; padding:8px 12px 64px; }
   .card { background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 6px 22px rgba(40,33,24,0.08); margin-bottom:16px; }
+  .meta { padding:12px 14px; font-size:13px; color:var(--ink3); display:flex; justify-content:space-between; }
+  .meta b { color:var(--ink); font-size:14px; }
   .media img, .media video { width:100%; display:block; background:#000; }
-  .dots { text-align:center; font-size:12px; color:var(--ink3); padding:6px; }
-  .caption { padding:12px 14px 16px; font-size:15px; line-height:1.5; }
-  .badge { display:inline-block; background:#FBF0D8; color:#98711E; font-weight:800; font-size:11px;
-           padding:3px 8px; border-radius:999px; margin:0 0 8px; }
-  .state { text-align:center; color:var(--ink3); padding:64px 24px; font-size:15px; line-height:1.6; }
   .swipe { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; }
   .swipe > * { flex:0 0 100%; scroll-snap-align:start; }
+  .caption { padding:12px 14px 16px; font-size:15px; line-height:1.5; }
+  .badge { display:inline-block; background:#FBF0D8; color:#98711E; font-weight:800; font-size:11px;
+           padding:3px 8px; border-radius:999px; margin-bottom:8px; }
+  .state { text-align:center; color:var(--ink3); padding:64px 24px; font-size:15px; line-height:1.6; }
 </style>
 </head>
 <body>
-<header>베이비로그<small>가족과 함께 보는 우리 아이 기록</small></header>
-<div class="wrap" id="root">
-  <div class="state" id="state">불러오는 중…</div>
-</div>
+<header>
+  <div>베이비로그<small id="sub">가족과 함께 보는 우리 아이 기록</small></div>
+  <button class="refresh" onclick="load()">↻ 새로고침</button>
+</header>
+<div class="wrap" id="root"><div class="state" id="state">불러오는 중…</div></div>
 
-<!-- CloudKit JS (Apple 제공 CDN, 무료) -->
 <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
 <script>
-  // ⚠️ 활성화 시 채우기 (CloudKit Console에서 발급)
   var CONTAINER_ID = "iCloud.com.babylog.app";
   var API_TOKEN    = "API_TOKEN_PLACEHOLDER";
-  var ENVIRONMENT  = "production"; // 또는 "development"
+  var ENVIRONMENT  = "production";
+  var configured = false;
 
-  function qs(name){ return new URLSearchParams(location.search).get(name); }
-  function setState(msg){ var s=document.getElementById('state'); if(s) s.textContent=msg; }
+  function qs(n){ return new URLSearchParams(location.search).get(n); }
+  function setState(m){ document.getElementById('root').innerHTML = '<div class="state">'+m+'</div>'; }
 
-  function render(record){
-    var root = document.getElementById('root');
-    var f = record.fields || {};
-    // 공유 레코드 스키마(앱이 push): photoURLs[](CKAsset), videoURL(CKAsset), caption, milestone, childName, date
+  function fmtDate(ts){ try { return new Date(ts).toLocaleDateString('ko-KR',{month:'long',day:'numeric'}); } catch(e){ return ''; } }
+
+  function cardHTML(rec){
+    var f = rec.fields || {};
     var photos = (f.photoAssets && f.photoAssets.value) || [];
     var video  = f.videoAsset && f.videoAsset.value;
     var caption = (f.caption && f.caption.value) || "";
     var milestone = (f.milestone && f.milestone.value) || "";
-    var childName = (f.childName && f.childName.value) || "우리 아이";
-
+    var name = (f.childName && f.childName.value) || "우리 아이";
+    var date = f.date && f.date.value ? fmtDate(f.date.value) : "";
     var media = '<div class="swipe">';
-    photos.forEach(function(a){ if(a && a.downloadURL) media += '<div class="media"><img src="'+a.downloadURL+'"></div>'; });
-    if(video && video.downloadURL){ media += '<div class="media"><video controls playsinline src="'+video.downloadURL+'"></video></div>'; }
+    photos.forEach(function(a){ if(a&&a.downloadURL) media+='<div class="media"><img loading="lazy" src="'+a.downloadURL+'"></div>'; });
+    if(video&&video.downloadURL) media+='<div class="media"><video controls playsinline src="'+video.downloadURL+'"></video></div>';
     media += '</div>';
-    var count = photos.length + (video?1:0);
-
-    root.innerHTML =
-      '<div class="card">' + media +
-      (count>1 ? '<div class="dots">← 옆으로 넘겨보세요 ('+count+') →</div>' : '') +
-      '<div class="caption">' +
-        (milestone ? '<span class="badge">★ '+milestone+'</span><br>' : '') +
-        '<b>'+childName+'</b>  ' + caption +
-      '</div></div>';
+    return '<div class="card"><div class="meta"><b>'+name+'</b><span>'+date+'</span></div>'+media+
+      '<div class="caption">'+(milestone?'<span class="badge">★ '+milestone+'</span><br>':'')+caption+'</div></div>';
   }
 
-  function start(){
-    var recordName = qs('r');
-    if(!recordName){ setState('잘못된 링크예요. 공유 링크를 다시 확인해 주세요.'); return; }
-    if(API_TOKEN === "API_TOKEN_PLACEHOLDER"){
-      setState('아직 가족 보기가 설정되지 않았어요. (CloudKit 연동 후 활성화)'); return;
-    }
+  function load(){
+    var childId = qs('c');
+    if(!childId){ setState('잘못된 링크예요. 공유 링크를 다시 확인해 주세요.'); return; }
+    if(API_TOKEN === "API_TOKEN_PLACEHOLDER"){ setState('아직 가족 보기가 설정되지 않았어요. (CloudKit 연동 후 활성화)'); return; }
     try {
-      CloudKit.configure({ containers: [{
-        containerIdentifier: CONTAINER_ID,
-        apiTokenAuth: { apiToken: API_TOKEN, persist: true },
-        environment: ENVIRONMENT
-      }]});
+      if(!configured){
+        CloudKit.configure({ containers: [{ containerIdentifier: CONTAINER_ID,
+          apiTokenAuth:{ apiToken: API_TOKEN, persist:true }, environment: ENVIRONMENT }]});
+        configured = true;
+      }
       var db = CloudKit.getDefaultContainer().publicCloudDatabase;
-      db.fetchRecords(recordName).then(function(res){
-        if(res.records && res.records.length){ render(res.records[0]); }
-        else { setState('기록을 찾을 수 없어요. 링크가 만료되었을 수 있어요.'); }
+      db.performQuery({
+        recordType: "SharedMoment",
+        filterBy: [{ fieldName:"childId", comparator:"EQUALS", fieldValue:{ value: childId } }],
+        sortBy: [{ fieldName:"date", ascending:false }]
+      }).then(function(res){
+        var recs = res.records || [];
+        if(!recs.length){ setState('아직 공유된 기록이 없어요.'); return; }
+        document.getElementById('root').innerHTML = recs.map(cardHTML).join('');
       }).catch(function(){ setState('불러오지 못했어요. 잠시 후 다시 시도해 주세요.'); });
     } catch(e){ setState('불러오지 못했어요.'); }
   }
-  window.addEventListener('load', start);
+
+  window.addEventListener('load', function(){
+    load();
+    setInterval(load, 60000);                                   // 1분마다 자동 새로고침
+    document.addEventListener('visibilitychange', function(){   // 다시 열 때 최신
+      if(document.visibilityState === 'visible') load();
+    });
+  });
 </script>
 </body>
 </html>
