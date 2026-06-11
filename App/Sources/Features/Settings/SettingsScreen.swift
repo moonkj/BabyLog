@@ -182,7 +182,7 @@ struct SettingsScreen: View {
             }
             .foregroundStyle(selected ? Color.white : AppColors.ink2)
             .frame(maxWidth: .infinity)
-            .frame(height: 40)
+            .frame(height: 52)
             .background(
                 selected ? AppColors.primary : AppColors.surface2,
                 in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)

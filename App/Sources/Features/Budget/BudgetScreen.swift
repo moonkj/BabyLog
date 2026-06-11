@@ -317,6 +317,12 @@ struct BudgetScreen: View {
                                     .frame(width: 9, height: 9)
                                     .accessibilityHidden(true)
 
+                                // 색+아이콘 3중 인코딩 — 색약 대응
+                                Image(systemName: item.category.systemIcon)
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(item.category.badgeTone.ink)
+                                    .accessibilityHidden(true)
+
                                 Text(item.category.displayName)
                                     .font(AppFont.caption)
                                     .foregroundStyle(AppColors.ink2)
@@ -443,19 +449,31 @@ struct BudgetScreen: View {
 
                             Spacer()
 
+                            let pct = monthlyTotal > 0
+                                ? Int(Double(item.amount) / Double(monthlyTotal) * 100)
+                                : 0
+
                             // 금액 + 비율
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(amountFull(item.amount))
                                     .font(AppFont.num(14, weight: .bold))
                                     .foregroundStyle(AppColors.ink)
 
-                                let pct = monthlyTotal > 0
-                                    ? Int(Double(item.amount) / Double(monthlyTotal) * 100)
-                                    : 0
                                 Text("\(pct)%")
                                     .font(AppFont.micro)
                                     .foregroundStyle(AppColors.ink3)
                             }
+
+                            // 비율 바 (색+길이 시각 보조)
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(AppColors.surface3)
+                                    .frame(width: 24, height: 3)
+                                Capsule()
+                                    .fill(item.category.badgeTone.ink)
+                                    .frame(width: 24 * CGFloat(pct) / 100, height: 3)
+                            }
+                            .accessibilityHidden(true)
                         }
                         .padding(.horizontal, Spacing.s4)
                         .padding(.vertical, Spacing.s3)
@@ -618,6 +636,9 @@ private struct SubsidyCard: View {
 
     let info: SubsidyInfo
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulse = false
+
     // D-day 계산 (목업: 첫만남이용권은 D-12, 나머지는 상시)
     private var dDay: Int? {
         switch info.id {
@@ -652,6 +673,7 @@ private struct SubsidyCard: View {
 
                             if let label = dDayLabel {
                                 BLBadge(tone: .amber, text: label, systemIcon: "clock.fill", dot: false)
+                                    .scaleEffect(pulse ? 1.04 : 1.0)
                                     .accessibilityLabel("마감 \(label)")
                             }
                         }
@@ -707,6 +729,13 @@ private struct SubsidyCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(info.name), \(amountStr(info.amountKRW)). \(info.eligibility)\(dDayLabel.map { ". 마감 \($0)" } ?? "")")
+        .onAppear {
+            // 마감 임박 카드만 은은한 D-day 펄스 — 모션 줄이기 ON이면 정지
+            guard isUrgent, !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
     }
 
     // 복지로 공식 사이트로 직접 이동. (mock 딥링크는 세션 의존이라 메인으로; 복지로 API 연동 시 실 딥링크로 대체)

@@ -293,9 +293,11 @@ private struct DiaryTimelineCard: View {
         HStack(spacing: 18) {
             Button { likeWithPop() } label: {
                 Image(systemName: liked ? "heart.fill" : "heart")
-                    .font(.system(size: 22, weight: .regular))
+                    .font(.system(size: 20, weight: .regular))
                     .foregroundStyle(liked ? Color(hex: 0xE8607A) : AppColors.ink)
                     .scaleEffect(heartPop ? 1.25 : 1.0)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel(liked ? "좋아요 취소" : "좋아요")
 
@@ -303,6 +305,8 @@ private struct DiaryTimelineCard: View {
                 Image(systemName: "bubble.right")
                     .font(.system(size: 21, weight: .regular))
                     .foregroundStyle(AppColors.ink)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel("댓글")
 
@@ -312,14 +316,16 @@ private struct DiaryTimelineCard: View {
                     Image(systemName: "paperplane")
                         .font(.system(size: 20, weight: .regular))
                         .foregroundStyle(AppColors.ink)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("공유")
             }
             Spacer()
         }
         .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 4)
+        .padding(.top, 4)
+        .padding(.bottom, 0)
     }
 
     // 좋아요 수 + 캡션 + 댓글
@@ -353,6 +359,7 @@ private struct DiaryTimelineCard: View {
     private var milestoneBadge: some View {
         if let milestone = entry.milestone {
             BLBadge(tone: .amber, text: milestone, systemIcon: "star.fill")
+                .background(.black.opacity(0.12), in: Capsule())
                 .padding(12)
                 .accessibilityLabel("이정표: \(milestone)")
         }

@@ -281,7 +281,7 @@ private struct CrewActiveContent: View {
                         Text("글쓰기").font(.system(size: 13.5, weight: .bold))
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 12).frame(height: 32)
+                    .padding(.horizontal, 12).frame(height: 36)
                     .background(AppColors.primary, in: Capsule())
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.95))
@@ -298,8 +298,8 @@ private struct CrewActiveContent: View {
                             selectedPost = post
                         } label: {
                             CrewPostRow(post: post)
-                                .padding(.horizontal, 15)
-                                .padding(.vertical, 13)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
                                 .overlay(alignment: .top) {
                                     if idx > 0 {
                                         Rectangle()
@@ -451,7 +451,7 @@ private struct CrewGroupCard: View {
                     Text(isJoined ? "가입중" : "가입")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(isJoined ? AppColors.ink2 : Color.white)
-                        .padding(.horizontal, 14).frame(height: 34)
+                        .padding(.horizontal, 14).frame(height: 40)
                         .background(isJoined ? AppColors.surface2 : AppColors.primary,
                                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }

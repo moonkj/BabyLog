@@ -209,13 +209,17 @@ struct MarketDetailSellerCard: View {
                         BLBadge(tone: item.sellerTier.badgeTone, text: item.sellerTier.rawValue, systemIcon: nil, dot: false)
                     }
 
-                    HStack(spacing: 4) {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(AppColors.ink3)
-                        Text(item.mine ? "내가 등록한 매물" : item.distanceText)
-                            .font(AppFont.num(12))
-                            .foregroundStyle(AppColors.ink3)
+                    if item.mine {
+                        BLBadge(tone: .mint, text: "내 매물", systemIcon: nil, dot: false)
+                    } else {
+                        HStack(spacing: 4) {
+                            Image(systemName: "location.fill")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(AppColors.ink3)
+                            Text(item.distanceText)
+                                .font(AppFont.num(12))
+                                .foregroundStyle(AppColors.ink3)
+                        }
                     }
                 }
 

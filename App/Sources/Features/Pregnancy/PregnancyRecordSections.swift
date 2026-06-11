@@ -33,7 +33,7 @@ struct PregnancyFetusGuideSection: View {
                     .background(Color(hex: 0xFBEAF0), in: Capsule())
 
                     // 수치 타일
-                    HStack(spacing: Spacing.s2) {
+                    HStack(spacing: Spacing.s3) {
                         miniTile(value: guide.length, label: "태아 키")
                         miniTile(value: guide.weight, label: "몸무게")
                         miniTile(value: fruit.name, label: "크기 비유")

@@ -375,6 +375,7 @@ struct CrewMeetupDetail: View {
                             .font(.system(size: 16, weight: .bold))
                     }
                     .foregroundStyle(isFull ? AppColors.ink3 : AppColors.onPrimary)
+                    .frame(height: 52)
                 }
                 .frame(maxWidth: 180)
                 .disabled(isFull)

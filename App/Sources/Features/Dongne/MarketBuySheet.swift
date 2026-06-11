@@ -128,7 +128,8 @@ struct MarketBuySheet: View {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) { done = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { dismiss() }
             }) {
-                Text(item.isFree ? "나눔 받기" : "거래 확정하기").frame(maxWidth: .infinity)
+                Text(item.isFree ? "나눔 받기" : "거래 확정하기")
+                    .frame(maxWidth: .infinity).frame(height: 52)
             }
             .accessibilityLabel("거래 확정하기")
         }

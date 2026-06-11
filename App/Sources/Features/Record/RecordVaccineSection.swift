@@ -254,10 +254,17 @@ struct VaccineSection: View {
                 }
                 Spacer()
                 Text(dLabel)
-                    .font(AppFont.num(22, weight: .heavy))
+                    .font(AppFont.num(20, weight: .heavy))
                     .foregroundStyle(AppColors.gold)
                     .accessibilityLabel("\(dNum)일 후")
             }
+        }
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(AppColors.gold)
+                .frame(width: 4)
+                .padding(.vertical, 12)
+                .accessibilityHidden(true)
         }
         .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .accessibilityElement(children: .combine)

@@ -152,7 +152,7 @@ struct MarketChatSheet: View {
             TextField("메시지 보내기", text: $messageText)
                 .font(.system(size: 14, weight: .regular))
                 .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: 52)
                 .background(AppColors.surface2, in: Capsule())
                 .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
                 .accessibilityLabel("메시지 입력")
@@ -176,7 +176,7 @@ struct MarketChatSheet: View {
                     .foregroundStyle(messageText.isEmpty ? AppColors.ink3 : AppColors.primary)
             }
             .disabled(messageText.isEmpty)
-            .frame(width: 44, height: 44)
+            .frame(width: 52, height: 52)
             .accessibilityLabel("전송")
         }
         .padding(.horizontal, Spacing.s4)

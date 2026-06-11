@@ -702,7 +702,8 @@ private struct BadgeTileView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             .badgeShine(badge.isEarned)   // 뱃지 광택 (§8.4)
-            .opacity(badge.isEarned ? 1.0 : 0.65)
+            .grayscale(badge.isEarned ? 0 : 1)
+            .opacity(badge.isEarned ? 1.0 : 0.55)   // 미획득: 흑백+흐림으로 잠금 상태 명확화
             .scaleEffect(tapped ? 1.04 : 1.0)
         }
         .buttonStyle(.plain)

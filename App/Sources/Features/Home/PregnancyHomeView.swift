@@ -226,7 +226,7 @@ struct PregnancyHomeView: View {
 
                         // D-day (모노스페이스 숫자)
                         Text(dday >= 0 ? "D-\(dday)" : "D+\(-dday)")
-                            .font(AppFont.num(28))
+                            .font(AppFont.num(28, weight: .heavy))
                             .foregroundStyle(AppColors.pregnancyPink)
 
                         // 과일 비유 + 안내
@@ -358,7 +358,7 @@ struct PregnancyHomeView: View {
                 }
 
                 // 측정 수치 행
-                HStack(spacing: Spacing.s2) {
+                HStack(spacing: Spacing.s3) {
                     devMiniTile(value: guide.length, label: "태아 키")
                     devMiniTile(value: guide.weight, label: "태아 몸무게")
                     devMiniTile(value: fruitForWeek(week.weeks).name, label: "크기 비유")

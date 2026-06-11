@@ -15,6 +15,7 @@ import UserNotifications
 struct OnboardingView: View {
     var onComplete: () -> Void
     @EnvironmentObject private var store: AppStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // 현재 단계 (0 스플래시 → 4 프리퍼미션)
     @State private var step: Int = 0
@@ -63,7 +64,7 @@ struct OnboardingView: View {
                     insertion: .move(edge: .trailing).combined(with: .opacity),
                     removal: .move(edge: .leading).combined(with: .opacity)
                 ))
-                .animation(.easeInOut(duration: 0.28), value: step)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: step)
             }
         }
     }
@@ -77,7 +78,7 @@ struct OnboardingView: View {
                 Capsule()
                     .fill(i <= step ? AppColors.primary : AppColors.surface3)
                     .frame(height: 4)
-                    .animation(.easeInOut(duration: 0.3), value: step)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: step)
             }
         }
         .accessibilityElement()
@@ -160,7 +161,7 @@ struct OnboardingView: View {
             Spacer()
 
             // CTA 영역
-            VStack(spacing: Spacing.s1) {
+            VStack(spacing: Spacing.s2) {
                 nextButton(title: "시작하기") {
                     advance()
                 }
@@ -235,7 +236,7 @@ struct OnboardingView: View {
                 .padding(.top, Spacing.s4)
 
                 // CTA
-                VStack(spacing: Spacing.s1) {
+                VStack(spacing: Spacing.s2) {
                     nextButton(title: "좋아요, 시작할게요") { advance() }
                     skipButton(title: "나중에 할게요") { onComplete() }
                 }
@@ -317,7 +318,7 @@ struct OnboardingView: View {
             Spacer()
 
             // CTA
-            VStack(spacing: Spacing.s1) {
+            VStack(spacing: Spacing.s2) {
                 nextButton(
                     title: "다음",
                     disabled: density == nil
@@ -415,6 +416,7 @@ struct OnboardingView: View {
                     phaseToggleButton(kind: .baby,      label: "👶 출산했어요")
                     phaseToggleButton(kind: .pregnancy, label: "🤰 임신 중이에요")
                 }
+                .animation(.easeInOut(duration: 0.2), value: phase)
                 .padding(.top, Spacing.s5)
 
                 // 사진 자리
@@ -510,7 +512,7 @@ struct OnboardingView: View {
                 }
 
                 // CTA
-                VStack(spacing: Spacing.s1) {
+                VStack(spacing: Spacing.s2) {
                     nextButton(title: "다음") { advance() }
                     skipButton { advance() }
                 }
@@ -614,7 +616,7 @@ struct OnboardingView: View {
             Spacer()
 
             // CTA
-            VStack(spacing: Spacing.s1) {
+            VStack(spacing: Spacing.s2) {
                 LiquidButton(action: { finish() }) {
                     Text("BabyLog 시작하기")
                 }

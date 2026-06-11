@@ -270,7 +270,7 @@ private struct EmergencyPlaceCard: View {
         .padding(18)
         .background(
             isNearest
-                ? AppColors.danger.opacity(0.08)
+                ? AppColors.danger.opacity(0.12)
                 : AppColors.surface,
             in: RoundedRectangle(cornerRadius: 22, style: .continuous)
         )

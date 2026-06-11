@@ -180,7 +180,7 @@ struct QuickRecordSheet: View {
         }
         .accessibilityLabel(mode == .pregnancy ? "배 사진 추가" : "사진·동영상 추가")
         .accessibilityValue(hasMedia ? "선택됨" : "없음")
-        .animation(.easeInOut(duration: 0.22), value: showDetail)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showDetail)
         .animation(.easeInOut(duration: 0.2), value: hasMedia)
     }
 
@@ -270,7 +270,7 @@ struct QuickRecordSheet: View {
                                     Text(child.name).font(.system(size: 14, weight: .semibold))
                                 }
                                 .foregroundStyle(on ? Color.white : AppColors.ink2)
-                                .padding(.horizontal, 12).frame(height: 36)
+                                .padding(.horizontal, 12).frame(height: 40)
                                 .background(on ? AppColors.primary : AppColors.surface2, in: Capsule())
                             }
                             .buttonStyle(LiquidPressStyle(scale: 0.96))
@@ -318,7 +318,7 @@ struct QuickRecordSheet: View {
                     .foregroundStyle(isOn ? Color.white : AppColors.ink2)
             }
             .padding(.horizontal, 14)
-            .frame(height: 36)
+            .frame(height: 40)
             .background(isOn ? item.color : AppColors.surface, in: Capsule())
             .overlay {
                 Capsule().stroke(isOn ? item.color : AppColors.line, lineWidth: 1)
@@ -347,9 +347,9 @@ struct QuickRecordSheet: View {
                 if memo.isEmpty {
                     Text(memoPlaceholder)
                         .font(AppFont.body)
-                        .foregroundStyle(AppColors.ink3)
-                        .padding(.horizontal, 14)
-                        .padding(.top, 13)
+                        .foregroundStyle(AppColors.ink2)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 17)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
@@ -360,8 +360,8 @@ struct QuickRecordSheet: View {
                     .scrollContentBackground(.hidden)
                     .background(.clear)
                     .frame(minHeight: 60)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
             }
             .accessibilityLabel(memoPlaceholder)
 

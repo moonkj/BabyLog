@@ -82,6 +82,7 @@ struct MainTabView: View {
                 BadgeAwardCard(badge: badge) {
                     withAnimation(.easeOut(duration: 0.25)) { store.pendingBadgeAward = nil }
                 }
+                .frame(maxWidth: min(320, UIScreen.main.bounds.width - 40))
                 .transition(.opacity)
                 .zIndex(20)
             }

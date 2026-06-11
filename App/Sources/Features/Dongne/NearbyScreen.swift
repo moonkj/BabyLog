@@ -485,9 +485,9 @@ struct NearbyScreen: View {
                 }
             )
 
-        case .failed(let error):
+        case .failed:
             BLErrorState(
-                message: error.localizedDescription,
+                message: "주변 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
                 retry: {
                     Task { await loadHospitals() }
                 }

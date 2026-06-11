@@ -307,8 +307,8 @@ struct GrowthChartSection: View {
                 AxisValueLabel {
                     if let m = val.as(Int.self) {
                         Text("\(m)m")
-                            .font(AppFont.num(9))
-                            .foregroundStyle(AppColors.ink3)
+                            .font(AppFont.num(10))
+                            .foregroundStyle(AppColors.ink2)
                     }
                 }
             }
@@ -320,8 +320,8 @@ struct GrowthChartSection: View {
                 AxisValueLabel {
                     if let v = val.as(Double.self) {
                         Text(String(format: "%.0f", v))
-                            .font(AppFont.num(9))
-                            .foregroundStyle(AppColors.ink3)
+                            .font(AppFont.num(10))
+                            .foregroundStyle(AppColors.ink2)
                     }
                 }
             }
@@ -334,7 +334,7 @@ struct GrowthChartSection: View {
     // MARK: 범례
 
     private var chartLegend: some View {
-        HStack(spacing: Spacing.s4) {
+        HStack(spacing: Spacing.s3) {
             legendItem(color: AppColors.primary, style: .solid, label: child.name)
             legendItem(color: AppColors.primary.opacity(0.45), style: .dashed, label: "WHO 중앙(p50)")
             legendItem(color: AppColors.primary.opacity(0.10), style: .area, label: "WHO 정상범위")

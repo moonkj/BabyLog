@@ -16,6 +16,10 @@ struct AddExpenseSheet: View {
     @State private var titleShake = 0
     @State private var amountShake = 0
 
+    // 포커스된 필드에 primary 보더로 입력 위치를 또렷이 안내
+    private enum Field { case title, amount }
+    @FocusState private var focusedField: Field?
+
     private var amount: Int { Int(amountText.filter(\.isNumber)) ?? 0 }
     private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var canSave: Bool { amount > 0 && !trimmedTitle.isEmpty }
@@ -30,9 +34,14 @@ struct AddExpenseSheet: View {
                         Text("제목").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
                         TextField("예: 기저귀", text: $title)
                             .font(.system(size: 18, weight: .bold))
+                            .focused($focusedField, equals: .title)
                             .padding(.horizontal, Spacing.s4)
                             .frame(height: 56)
                             .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                                    .strokeBorder(focusedField == .title ? AppColors.primary : .clear, lineWidth: 1.5)
+                            }
                             .submitLabel(.done)
                             .blShake(titleShake)
                             .accessibilityLabel("지출 제목 입력")
@@ -46,12 +55,17 @@ struct AddExpenseSheet: View {
                                 .keyboardType(.numberPad)
                                 .font(.system(size: 30, weight: .heavy).monospacedDigit())
                                 .foregroundStyle(AppColors.ink)
+                                .focused($focusedField, equals: .amount)
                             Text("원").font(.system(size: 20, weight: .bold))
                                 .foregroundStyle(AppColors.ink3)
                         }
                         .padding(.horizontal, Spacing.s4)
                         .frame(height: 64)
                         .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                                .strokeBorder(focusedField == .amount ? AppColors.primary : .clear, lineWidth: 1.5)
+                        }
                         .blShake(amountShake)
                     }
 

@@ -195,11 +195,14 @@ struct HomeTab: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     layoutContent
+                        .id(currentLayout)
+                        .transition(.opacity)
                     Color.clear.frame(height: 96)
                 }
                 .padding(.horizontal, Spacing.s5)
                 .padding(.top, Spacing.s1)
             }
+            .animation(.easeInOut(duration: 0.2), value: currentLayout)
         }
         .background(AppColors.canvas)
         .fullScreenCover(isPresented: $showEmergency) {
@@ -339,6 +342,8 @@ struct HomeTab: View {
                     .frame(width: 34, height: 34)
                     .background(AppColors.surface, in: Circle())
                     .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(LiquidPressStyle(scale: 0.92))
             .accessibilityLabel("아이 추가")
@@ -349,9 +354,12 @@ struct HomeTab: View {
         HStack(spacing: 6) {
             Text("👶").font(.system(size: 14))
             Text(name).font(.system(size: 14, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
         .foregroundStyle(on ? AppColors.ink : AppColors.ink2)
         .padding(.horizontal, 12).frame(height: 34)
+        .frame(maxWidth: 130)
         .background(on ? AppColors.surface : AppColors.surface2, in: Capsule())
         .overlay { Capsule().stroke(on ? AppColors.primary.opacity(0.4) : AppColors.line, lineWidth: 1) }
         .accessibilityLabel("\(name) 선택\(on ? ", 현재 선택됨" : "")")
@@ -650,8 +658,8 @@ struct HomeTab: View {
             priorityCardCompact
             // 2열 타일 그리드
             LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: Spacing.s3), GridItem(.flexible(), spacing: Spacing.s3)],
-                spacing: Spacing.s3
+                columns: [GridItem(.flexible(), spacing: Spacing.s4), GridItem(.flexible(), spacing: Spacing.s4)],
+                spacing: Spacing.s4
             ) {
                 dashTileBudget
                 dashTilePeer
@@ -765,7 +773,7 @@ struct HomeTab: View {
                 }
             }
             .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 116, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
             .background(AppColors.primaryTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
@@ -801,7 +809,7 @@ struct HomeTab: View {
                 }
             }
             .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 116, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
             .background(bg, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             .blShadow(.card)
         }
@@ -825,11 +833,11 @@ struct HomeTab: View {
             if recentHomeRecords.isEmpty {
                 BLEmptyState(
                     icon: "camera.fill",
-                    title: "아직 기록이 없어요",
-                    message: "오른쪽 아래 버튼으로 오늘의 순간을 남겨보세요."
+                    title: "첫 순간을 담아볼까요?",
+                    message: "사진이 여기 차곡차곡 쌓일 거예요."
                 )
             } else {
-                VStack(spacing: 10) {
+                VStack(spacing: 12) {
                     ForEach(Array(recentHomeRecords.enumerated()), id: \.element.id) { idx, item in
                         timelineRecord(seed: idx + 1, badge: item.badge, caption: item.caption,
                                        day: relativeDay(item.date), tone: item.tone, icon: item.icon,
@@ -886,8 +894,8 @@ struct HomeTab: View {
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.primary)
                     .accessibilityHidden(true)
             }
             .padding(10)

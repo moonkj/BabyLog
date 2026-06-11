@@ -19,14 +19,14 @@ struct DarkControlGroup<Content: View>: View {
                 .tracking(0.8)
                 .foregroundStyle(AppColors.ink3)
 
-            _WrappingHStack(spacing: 7, content: content)
+            _WrappingHStack(spacing: Spacing.s2, content: content)
         }
     }
 }
 
 /// 자동 줄바꿈 HStack (Chip 목록용)
 private struct _WrappingHStack<Content: View>: View {
-    var spacing: CGFloat = 8
+    var spacing: CGFloat = Spacing.s2
     @ViewBuilder var content: () -> Content
 
     var body: some View {

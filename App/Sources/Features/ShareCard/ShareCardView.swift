@@ -186,7 +186,7 @@ struct ShareCardView: View {
                 ShareCardCanvas(vm: vm)
                     .frame(width: previewWidth, height: h)
                     .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-                    .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 10)
+                    .blShadow(.card)
             }
 
             // 배경 사진 변경 버튼 (PhotoPickerButton 연결)

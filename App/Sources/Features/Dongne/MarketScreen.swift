@@ -256,10 +256,10 @@ struct MarketScreen: View {
                                 .font(.system(size: 14, weight: .medium))
                         }
                         .foregroundStyle(selectedCategory == cat ? Color.white : AppColors.ink2)
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, 16)
                         .frame(height: 36)
                         .background(selectedCategory == cat ? AppColors.ink : AppColors.surface, in: Capsule())
-                        .overlay { Capsule().stroke(selectedCategory == cat ? AppColors.ink : AppColors.line, lineWidth: 1) }
+                        .overlay { Capsule().stroke(selectedCategory == cat ? AppColors.ink.opacity(0.25) : AppColors.line, lineWidth: 1) }
                     }
                     .buttonStyle(LiquidPressStyle(scale: 0.96))
                     .accessibilityLabel(cat.rawValue)
@@ -280,11 +280,21 @@ struct MarketScreen: View {
                 .padding(.horizontal, 2)
                 .padding(.bottom, Spacing.s2)
 
-            ForEach(filteredItems) { item in
-                NavigationLink(value: item) {
-                    MkItemCard(item: item)
+            if filteredItems.isEmpty {
+                BLEmptyState(
+                    icon: "tag",
+                    title: "이 카테고리에 매물이 없어요",
+                    message: "다른 카테고리를 둘러보거나 직접 올려보세요."
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.top, Spacing.s4)
+            } else {
+                ForEach(filteredItems) { item in
+                    NavigationLink(value: item) {
+                        MkItemCard(item: item)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(.horizontal, Spacing.s5)
