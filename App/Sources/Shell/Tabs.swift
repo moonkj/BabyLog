@@ -35,6 +35,9 @@ struct HomeTab: View {
     @State private var showEmergency = false
     @State private var showAddChild = false
     @State private var editingChild: Child? = nil
+    @State private var showPeerTip = false
+    @State private var showNoMemory = false
+    @State private var memoryViewerPhoto: UIImage? = nil
 
     // MARK: 선택 아이 상태 — nil이면 children.first를 사용
     @State private var selectedChildId: UUID? = nil
@@ -192,6 +195,34 @@ struct HomeTab: View {
         }
         .sheet(item: $editingChild) { child in
             AddChildSheet(editing: child).environmentObject(store)
+        }
+        .alert(peerAgeMonths.map { "\($0)개월 또래 이야기" } ?? "또래 이야기",
+               isPresented: $showPeerTip) {
+            Button("확인", role: .cancel) {}
+        } message: { Text(peerTip) }
+        .alert("1년 전 오늘", isPresented: $showNoMemory) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("아직 1년 전 오늘의 기록이 없어요. 오늘의 순간을 남기면 내년에 다시 만나요.")
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { memoryViewerPhoto != nil },
+            set: { if !$0 { memoryViewerPhoto = nil } }
+        )) {
+            if let img = memoryViewerPhoto {
+                FullScreenPhotoView(image: img, onClose: { memoryViewerPhoto = nil })
+            }
+        }
+    }
+
+    // 1년 전 오늘 타일 동작: 사진 있으면 전체보기, 없으면 안내
+    private func openMemory() {
+        if let img = PhotoStore.image(memoryEntry?.photoRef) {
+            memoryViewerPhoto = img
+        } else if memoryEntry != nil {
+            onNavigate(.record)
+        } else {
+            showNoMemory = true
         }
     }
 
@@ -652,7 +683,7 @@ struct HomeTab: View {
             title: "또래 이야기",
             sub: "오늘의 발달 팁",
             accessLabel: "또래 이야기 타일: 오늘의 발달 팁",
-            action: { onNavigate(.record) }
+            action: { showPeerTip = true }
         )
     }
 
@@ -664,7 +695,7 @@ struct HomeTab: View {
             title: "1년 전 오늘",
             sub: "추억 돌아보기",
             accessLabel: "추억 타일: 1년 전 오늘",
-            action: { onNavigate(.record) }
+            action: { openMemory() }
         )
     }
 
