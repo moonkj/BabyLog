@@ -55,4 +55,28 @@ final class PhotoStoreTests: XCTestCase {
         store.deleteDiaryEntry(id: id)
         XCTAssertTrue(store.diaryEntries.isEmpty)
     }
+
+    func test_diaryLike_toggle() {
+        let store = AppStore()
+        let id = UUID()
+        XCTAssertFalse(store.isDiaryLiked(id))
+        store.toggleDiaryLike(id)
+        XCTAssertTrue(store.isDiaryLiked(id))
+        store.toggleDiaryLike(id)
+        XCTAssertFalse(store.isDiaryLiked(id))
+    }
+
+    func test_diaryComment_addAndDeleteCleanup() {
+        let store = AppStore()
+        let cid = UUID()
+        store.addDiaryEntry(childId: cid, content: "사진", milestone: nil, photoRef: nil)
+        let id = store.diaryEntries.first!.id
+        store.addComment(entryId: id, text: "예쁘다 ❤️")
+        store.addComment(entryId: id, text: "  ")  // 공백 무시
+        XCTAssertEqual(store.comments(for: id), ["예쁘다 ❤️"])
+        store.toggleDiaryLike(id)
+        store.deleteDiaryEntry(id: id)
+        XCTAssertTrue(store.comments(for: id).isEmpty)
+        XCTAssertFalse(store.isDiaryLiked(id))
+    }
 }

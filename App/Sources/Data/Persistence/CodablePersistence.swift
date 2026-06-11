@@ -14,6 +14,10 @@ struct PersistableState: Codable, Equatable {
     /// VaccineRecord.id가 불안정하므로 안정 키로 영속한다).
     var vaccineCompletions: Set<String>
     var pregnancyLogs: [PregnancyLog]
+    /// 좋아요한 다이어리 id 집합 (가족/조부모 모드 대비 — 현재 로컬)
+    var likedDiaryIds: Set<String>
+    /// 다이어리별 댓글 (key = 다이어리 uuid 문자열)
+    var diaryComments: [String: [String]]
 
     init(
         pregnancies: [Pregnancy] = [],
@@ -22,7 +26,9 @@ struct PersistableState: Codable, Equatable {
         diaryEntries: [DiaryEntry] = [],
         expenses: [Expense] = [],
         vaccineCompletions: Set<String> = [],
-        pregnancyLogs: [PregnancyLog] = []
+        pregnancyLogs: [PregnancyLog] = [],
+        likedDiaryIds: Set<String> = [],
+        diaryComments: [String: [String]] = [:]
     ) {
         self.pregnancies = pregnancies
         self.children = children
@@ -31,6 +37,8 @@ struct PersistableState: Codable, Equatable {
         self.expenses = expenses
         self.vaccineCompletions = vaccineCompletions
         self.pregnancyLogs = pregnancyLogs
+        self.likedDiaryIds = likedDiaryIds
+        self.diaryComments = diaryComments
     }
 
     // MARK: - Codable (하위 호환 디코딩)
@@ -38,6 +46,7 @@ struct PersistableState: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case pregnancies, children, growthRecords, diaryEntries, expenses, vaccineCompletions, pregnancyLogs
+        case likedDiaryIds, diaryComments
     }
 
     init(from decoder: Decoder) throws {
@@ -49,6 +58,8 @@ struct PersistableState: Codable, Equatable {
         expenses       = try container.decodeIfPresent([Expense].self,      forKey: .expenses)      ?? []
         vaccineCompletions = try container.decodeIfPresent(Set<String>.self, forKey: .vaccineCompletions) ?? []
         pregnancyLogs  = try container.decodeIfPresent([PregnancyLog].self, forKey: .pregnancyLogs) ?? []
+        likedDiaryIds  = try container.decodeIfPresent(Set<String>.self, forKey: .likedDiaryIds) ?? []
+        diaryComments  = try container.decodeIfPresent([String: [String]].self, forKey: .diaryComments) ?? [:]
     }
 }
 

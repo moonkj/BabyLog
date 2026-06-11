@@ -19,6 +19,10 @@ final class AppStore: ObservableObject {
     /// 접종 완료 키 집합 (키 = "childId|vaccineId").
     @Published private(set) var vaccineCompletions: Set<String>
     @Published private(set) var pregnancyLogs: [PregnancyLog]
+    /// 좋아요한 다이어리 id(문자열) — 가족/조부모 모드 대비, 현재 로컬
+    @Published private(set) var likedDiaryIds: Set<String>
+    /// 다이어리별 댓글 (key = uuid 문자열)
+    @Published private(set) var diaryComments: [String: [String]]
     @Published var selectedChildId: UUID?
 
     // MARK: - Private
@@ -45,6 +49,8 @@ final class AppStore: ObservableObject {
         expenses: [Expense] = [],
         vaccineCompletions: Set<String> = [],
         pregnancyLogs: [PregnancyLog] = [],
+        likedDiaryIds: Set<String> = [],
+        diaryComments: [String: [String]] = [:],
         bus: EventBus = .shared,
         persistence: LocalPersistence? = nil
     ) {
@@ -55,6 +61,8 @@ final class AppStore: ObservableObject {
         self.expenses = expenses
         self.vaccineCompletions = vaccineCompletions
         self.pregnancyLogs = pregnancyLogs
+        self.likedDiaryIds = likedDiaryIds
+        self.diaryComments = diaryComments
         self.bus = bus
         self.persistence = persistence
 
@@ -68,6 +76,8 @@ final class AppStore: ObservableObject {
             self.expenses           = saved.expenses
             self.vaccineCompletions = saved.vaccineCompletions
             self.pregnancyLogs      = saved.pregnancyLogs
+            self.likedDiaryIds      = saved.likedDiaryIds
+            self.diaryComments      = saved.diaryComments
         }
     }
 
@@ -104,7 +114,9 @@ final class AppStore: ObservableObject {
             diaryEntries:  diaryEntries,
             expenses:      expenses,
             vaccineCompletions: vaccineCompletions,
-            pregnancyLogs: pregnancyLogs
+            pregnancyLogs: pregnancyLogs,
+            likedDiaryIds: likedDiaryIds,
+            diaryComments: diaryComments
         )
     }
 
@@ -117,6 +129,8 @@ final class AppStore: ObservableObject {
         expenses           = state.expenses
         vaccineCompletions = state.vaccineCompletions
         pregnancyLogs      = state.pregnancyLogs
+        likedDiaryIds      = state.likedDiaryIds
+        diaryComments      = state.diaryComments
     }
 
     // MARK: - 선택 아이 / 온보딩
@@ -395,11 +409,31 @@ final class AppStore: ObservableObject {
             PhotoStore.delete(entry.photoRef)
         }
         diaryEntries.removeAll { $0.id == id }
+        likedDiaryIds.remove(id.uuidString)
+        diaryComments[id.uuidString] = nil
     }
 
     /// 성장 기록을 삭제한다.
     func deleteGrowthRecord(id: UUID) {
         growthRecords.removeAll { $0.id == id }
+    }
+
+    // MARK: - 좋아요 / 댓글 (가족·조부모 모드 대비, 현재 로컬)
+
+    func isDiaryLiked(_ id: UUID) -> Bool { likedDiaryIds.contains(id.uuidString) }
+
+    func toggleDiaryLike(_ id: UUID) {
+        let key = id.uuidString
+        if likedDiaryIds.contains(key) { likedDiaryIds.remove(key) }
+        else { likedDiaryIds.insert(key) }
+    }
+
+    func comments(for id: UUID) -> [String] { diaryComments[id.uuidString] ?? [] }
+
+    func addComment(entryId: UUID, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        diaryComments[entryId.uuidString, default: []].append(trimmed)
     }
 
     // MARK: - 기록 조회

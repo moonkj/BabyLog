@@ -53,8 +53,13 @@ struct QuickRecordSheet: View {
         mode == .pregnancy ? "figure.stand" : "camera.fill"
     }
 
+    private var childAgeMonths: Int {
+        guard let c = store.selectedChild else { return 12 }
+        return AgeCalculator.childAgeMonths(birthDate: c.birthDate, asOf: Date()).months
+    }
+
     private var milestones: [MilestoneItem] {
-        mode == .pregnancy ? pregnancyMilestones : babyMilestones
+        mode == .pregnancy ? pregnancyMilestones : babyMilestones(months: childAgeMonths)
     }
 
     private var modeBadgeTone: BadgeTone {
@@ -524,15 +529,40 @@ private struct MilestoneItem: Identifiable {
     let color: Color       // 색상 인코딩 (3중 인코딩 §2.2)
 }
 
-// 육아 모드 이정표
-private let babyMilestones: [MilestoneItem] = [
-    MilestoneItem(label: "첫 웃음",      icon: "face.smiling",             iconFill: "face.smiling.inverse",        color: AppColors.primary),
-    MilestoneItem(label: "뒤집기",        icon: "arrow.2.circlepath",       iconFill: "arrow.2.circlepath",           color: Color(hex: 0x5B53B0)),
-    MilestoneItem(label: "앉기",          icon: "figure.stand",             iconFill: "figure.stand",                 color: Color(hex: 0x3B6FA8)),
-    MilestoneItem(label: "첫 걸음마",    icon: "figure.walk",              iconFill: "figure.walk",                  color: Color(hex: 0xB45840)),
-    MilestoneItem(label: "첫 단어",      icon: "bubble.left",              iconFill: "bubble.left.fill",             color: Color(hex: 0x98711E)),
-    MilestoneItem(label: "이유식 시작",  icon: "fork.knife",               iconFill: "fork.knife",                   color: Color(hex: 0xB5478A)),
-]
+// 육아 모드 이정표 — 아이 월령에 맞춰 노출
+private func babyMilestones(months: Int) -> [MilestoneItem] {
+    let c1 = AppColors.primary, c2 = Color(hex: 0x5B53B0), c3 = Color(hex: 0x3B6FA8)
+    let c4 = Color(hex: 0xB45840)
+    func mk(_ l: String, _ i: String, _ c: Color) -> MilestoneItem {
+        MilestoneItem(label: l, icon: i, iconFill: i, color: c)
+    }
+    switch months {
+    case 0..<4:
+        return [mk("첫 웃음", "face.smiling", c1), mk("목 가누기", "figure.stand", c2),
+                mk("첫 외출", "stroller", c3), mk("첫 사진", "camera", c4)]
+    case 4..<7:
+        return [mk("뒤집기", "arrow.2.circlepath", c1), mk("옹알이", "bubble.left", c2),
+                mk("이유식 시작", "fork.knife", c3), mk("손 뻗기", "hand.raised", c4)]
+    case 7..<10:
+        return [mk("혼자 앉기", "figure.seated.side", c1), mk("기어다니기", "figure.walk.motion", c2),
+                mk("첫 이앓이", "mouth", c3), mk("까꿍 놀이", "face.smiling", c4)]
+    case 10..<13:
+        return [mk("잡고 서기", "figure.stand", c1), mk("첫 단어", "bubble.left.fill", c2),
+                mk("첫 걸음마", "figure.walk", c3), mk("첫 생일(돌)", "birthday.cake", c4)]
+    case 13..<19:
+        return [mk("걸음마", "figure.walk", c1), mk("새 단어", "bubble.left.fill", c2),
+                mk("컵으로 마시기", "cup.and.saucer", c3), mk("끄적이기", "scribble", c4)]
+    case 19..<25:
+        return [mk("뛰기", "figure.run", c1), mk("두 단어 문장", "text.bubble", c2),
+                mk("숟가락 사용", "fork.knife", c3), mk("신발 신기", "shoe", c4)]
+    case 25..<37:
+        return [mk("대소변 가리기", "toilet", c1), mk("세 단어 문장", "text.bubble.fill", c2),
+                mk("친구와 놀기", "person.2.fill", c3), mk("색칠하기", "paintbrush", c4)]
+    default:
+        return [mk("어린이집/유치원", "building.2", c1), mk("세발자전거", "bicycle", c2),
+                mk("가위질", "scissors", c3), mk("한글 관심", "textformat.abc", c4)]
+    }
+}
 
 // 임신 모드 이정표
 private let pregnancyMilestones: [MilestoneItem] = [
