@@ -79,8 +79,10 @@ struct MkSellFlowSheet: View {
                 MediaPickerButton(maxImages: 5, images: $photos, videoURL: .constant(nil)) {
                     if let first = photos.first {
                         ZStack(alignment: .bottomTrailing) {
-                            Image(uiImage: first).resizable().scaledToFill()
-                                .frame(maxWidth: .infinity).frame(height: 180).clipped()
+                            // 원본 비율 유지(scaledToFit) — 잘림 없이 전체 표시
+                            Image(uiImage: first).resizable().scaledToFit()
+                                .frame(maxWidth: .infinity).frame(maxHeight: 240)
+                                .background(AppColors.surface2)
                                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             BLBadge(tone: .mint, text: "\(photos.count)장", systemIcon: "photo", dot: false)
                                 .padding(10)

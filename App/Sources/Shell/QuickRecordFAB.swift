@@ -9,36 +9,31 @@ struct QuickRecordFAB: View {
     @State private var sheen = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // 리퀴드 글래스 FAB 배경 — 밝은 인디고 그라데이션 + 글로스 + 움직이는 sheen
+    // 글래스 FAB 배경 — 프로스티드(반투명, 뒤가 비침) + 옅은 틴트 + 글로스 (뱃지 카드 톤)
     private var fabBackground: some View {
         ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: 0x5B5EA8), Color(hex: 0x2C2E52)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
-            // 움직이는 리퀴드 sheen
+            Circle().fill(.ultraThinMaterial)            // 프로스티드 글래스
+            Circle().fill(AppColors.primary.opacity(0.12)) // 살짝 틴트
+            // 움직이는 sheen (은은)
             Circle()
                 .fill(
                     AngularGradient(
-                        gradient: Gradient(colors: [.clear, .white.opacity(0.28), .clear, .clear, .clear]),
+                        gradient: Gradient(colors: [.clear, .white.opacity(0.35), .clear, .clear, .clear]),
                         center: .center,
                         angle: .degrees(sheen ? 360 : 0)
                     )
                 )
                 .blendMode(.plusLighter)
-            // 상단 글래스 글로스
+            // 상단 글로스
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [.white.opacity(0.4), .clear],
-                        center: .topLeading, startRadius: 1, endRadius: 44
+                        colors: [.white.opacity(0.55), .clear],
+                        center: .topLeading, startRadius: 1, endRadius: 46
                     )
                 )
             // 림 라이트
-            Circle().strokeBorder(.white.opacity(0.22), lineWidth: 1)
+            Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1)
         }
         .onAppear {
             guard !reduceMotion else { return }
@@ -86,13 +81,14 @@ struct QuickRecordFAB: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.primary)
                     .frame(width: 60, height: 60)
                     .background(fabBackground)
+                    .clipShape(Circle())
                     .rotationEffect(.degrees(open ? 45 : 0))
             }
             .buttonStyle(LiquidPressStyle())
-            .shadow(color: Color(hex: 0x3A3D6E).opacity(0.5), radius: 13, x: 0, y: 7)
+            .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)
             .accessibilityLabel("빠른 기록")
         }
     }

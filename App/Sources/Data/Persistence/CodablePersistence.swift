@@ -172,6 +172,16 @@ struct LocalPersistence {
 
     // MARK: - Load
 
+    /// 디코딩 실패 등으로 신뢰할 수 없는 상태일 때, 원본을 타임스탬프 백업으로 복사해 보존한다.
+    /// (자동저장이 원본을 덮어쓰기 전에 호출 — 데이터 복구 여지 확보)
+    func backupCorrupt() {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        let ts = Int(Date().timeIntervalSince1970)
+        let backup = url.deletingLastPathComponent()
+            .appendingPathComponent("state.corrupt-\(ts).json")
+        try? FileManager.default.copyItem(at: url, to: backup)
+    }
+
     /// JSON 파일에서 상태를 복원한다. 파일이 없으면 nil 반환.
     func load() throws -> PersistableState? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }

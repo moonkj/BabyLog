@@ -32,6 +32,8 @@ final class AppStore: ObservableObject {
     @Published private(set) var crews: [CrewMeetup] = []
     @Published private(set) var joinedCrewIds: Set<String> = []
     private var crewSeeded: Bool = false
+    /// 저장 파일 디코딩 실패 여부 — true면 자동저장으로 원본을 덮어쓰지 않는다(데이터 보존).
+    private var loadDidFail: Bool = false
     @Published var selectedChildId: UUID?
 
     /// 방금 획득한 뱃지 — 어느 화면에서든 전역 축하 카드로 표시(설정 시 MainTabView가 띄움)
@@ -124,25 +126,34 @@ final class AppStore: ObservableObject {
         self.bus = bus
         self.persistence = persistence
 
-        // persistence가 주입된 경우 저장된 상태로 복원 (파일 없으면 무시)
-        if let persistence = persistence,
-           let saved = try? persistence.load() {
-            self.pregnancies        = saved.pregnancies
-            self.children           = saved.children
-            self.growthRecords      = saved.growthRecords
-            self.diaryEntries       = saved.diaryEntries
-            self.expenses           = saved.expenses
-            self.vaccineCompletions = saved.vaccineCompletions
-            self.pregnancyLogs      = saved.pregnancyLogs
-            self.likedDiaryIds      = saved.likedDiaryIds
-            self.diaryComments      = saved.diaryComments
-            self.marketItems        = saved.marketItems
-            self.savedMarketIds     = saved.savedMarketIds
-            self.marketChats        = saved.marketChats
-            self.marketSeeded       = saved.marketSeeded
-            self.crews              = saved.crews
-            self.joinedCrewIds      = saved.joinedCrewIds
-            self.crewSeeded         = saved.crewSeeded
+        // persistence가 주입된 경우 저장된 상태로 복원.
+        // 파일이 있는데 디코딩이 실패하면(스키마 손상 등) 빈 상태로 시작하되,
+        // 원본을 백업하고 자동저장을 막아 사용자 데이터가 덮어써지지 않게 한다.
+        if let persistence = persistence {
+            do {
+                if let saved = try persistence.load() {
+                    self.pregnancies        = saved.pregnancies
+                    self.children           = saved.children
+                    self.growthRecords      = saved.growthRecords
+                    self.diaryEntries       = saved.diaryEntries
+                    self.expenses           = saved.expenses
+                    self.vaccineCompletions = saved.vaccineCompletions
+                    self.pregnancyLogs      = saved.pregnancyLogs
+                    self.likedDiaryIds      = saved.likedDiaryIds
+                    self.diaryComments      = saved.diaryComments
+                    self.marketItems        = saved.marketItems
+                    self.savedMarketIds     = saved.savedMarketIds
+                    self.marketChats        = saved.marketChats
+                    self.marketSeeded       = saved.marketSeeded
+                    self.crews              = saved.crews
+                    self.joinedCrewIds      = saved.joinedCrewIds
+                    self.crewSeeded         = saved.crewSeeded
+                }
+            } catch {
+                // 손상 파일 보존(복구용) + 자동저장 차단
+                persistence.backupCorrupt()
+                self.loadDidFail = true
+            }
         }
         seedMarketIfNeeded()
         seedCrewIfNeeded()
@@ -234,6 +245,8 @@ final class AppStore: ObservableObject {
     /// 구독은 내부 `cancellables`에 보관되므로 store 생존 중 유지된다.
     func enableAutoPersist() {
         guard persistence != nil else { return }
+        // 디코딩 실패로 빈 상태일 땐 자동저장을 막아 원본(손상 의심) 파일을 덮어쓰지 않는다.
+        guard !loadDidFail else { return }
 
         // 모든 @Published 변경(objectWillChange)을 단일 신호로 받아 0.5s debounce 후 저장한다.
         // combineLatest 4-arity 한계 없이 상태 종류가 늘어나도 그대로 확장된다.
