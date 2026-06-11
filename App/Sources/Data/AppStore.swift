@@ -23,6 +23,11 @@ final class AppStore: ObservableObject {
     @Published private(set) var likedDiaryIds: Set<String>
     /// 다이어리별 댓글 (key = uuid 문자열)
     @Published private(set) var diaryComments: [String: [String]]
+    // 마켓 (로컬 백본)
+    @Published private(set) var marketItems: [MarketItem] = []
+    @Published private(set) var savedMarketIds: Set<String> = []
+    @Published private(set) var marketChats: [String: [ChatMessage]] = [:]
+    private var marketSeeded: Bool = false
     @Published var selectedChildId: UUID?
 
     /// 방금 획득한 뱃지 — 어느 화면에서든 전역 축하 카드로 표시(설정 시 MainTabView가 띄움)
@@ -127,7 +132,60 @@ final class AppStore: ObservableObject {
             self.pregnancyLogs      = saved.pregnancyLogs
             self.likedDiaryIds      = saved.likedDiaryIds
             self.diaryComments      = saved.diaryComments
+            self.marketItems        = saved.marketItems
+            self.savedMarketIds     = saved.savedMarketIds
+            self.marketChats        = saved.marketChats
+            self.marketSeeded       = saved.marketSeeded
         }
+        seedMarketIfNeeded()
+    }
+
+    // MARK: - 마켓 (로컬 백본 — 추후 Supabase 동기화)
+
+    /// 첫 실행 시 데모 매물 시드(1회). 이후 사용자가 등록/삭제 가능.
+    func seedMarketIfNeeded() {
+        guard !marketSeeded else { return }
+        if marketItems.isEmpty { marketItems = MarketItem.seedSamples }
+        marketSeeded = true
+    }
+
+    func addMarketItem(_ item: MarketItem) {
+        marketItems.insert(item, at: 0)
+    }
+
+    func deleteMarketItem(id: String) {
+        if let item = marketItems.first(where: { $0.id == id }) {
+            for ref in item.photoRefs { PhotoStore.delete(ref) }
+        }
+        marketItems.removeAll { $0.id == id }
+        savedMarketIds.remove(id)
+        marketChats[id] = nil
+    }
+
+    func setMarketStatus(id: String, _ status: MarketStatus) {
+        guard let idx = marketItems.firstIndex(where: { $0.id == id }) else { return }
+        marketItems[idx].status = status
+    }
+
+    func isMarketSaved(_ id: String) -> Bool { savedMarketIds.contains(id) }
+
+    func toggleMarketSaved(_ id: String) {
+        guard let idx = marketItems.firstIndex(where: { $0.id == id }) else { return }
+        if savedMarketIds.contains(id) {
+            savedMarketIds.remove(id)
+            marketItems[idx].favoriteCount = max(0, marketItems[idx].favoriteCount - 1)
+        } else {
+            savedMarketIds.insert(id)
+            marketItems[idx].favoriteCount += 1
+        }
+    }
+
+    func marketMessages(itemId: String) -> [ChatMessage] { marketChats[itemId] ?? [] }
+
+    func sendMarketMessage(itemId: String, text: String, mine: Bool = true) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        marketChats[itemId, default: []].append(ChatMessage(text: t, mine: mine))
     }
 
     // MARK: - Auto Persist
@@ -165,7 +223,11 @@ final class AppStore: ObservableObject {
             vaccineCompletions: vaccineCompletions,
             pregnancyLogs: pregnancyLogs,
             likedDiaryIds: likedDiaryIds,
-            diaryComments: diaryComments
+            diaryComments: diaryComments,
+            marketItems: marketItems,
+            savedMarketIds: savedMarketIds,
+            marketChats: marketChats,
+            marketSeeded: marketSeeded
         )
     }
 
@@ -180,6 +242,11 @@ final class AppStore: ObservableObject {
         pregnancyLogs      = state.pregnancyLogs
         likedDiaryIds      = state.likedDiaryIds
         diaryComments      = state.diaryComments
+        marketItems        = state.marketItems
+        savedMarketIds     = state.savedMarketIds
+        marketChats        = state.marketChats
+        marketSeeded       = state.marketSeeded
+        seedMarketIfNeeded()
     }
 
     // MARK: - 선택 아이 / 온보딩

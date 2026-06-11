@@ -1,5 +1,14 @@
 import Foundation
 
+// MARK: - ChatMessage (마켓 로컬 채팅)
+
+struct ChatMessage: Identifiable, Codable, Equatable, Hashable {
+    var id: String = UUID().uuidString
+    var text: String
+    var mine: Bool
+    var date: Date = Date()
+}
+
 // MARK: - PersistableState
 
 /// 앱 전체 인메모리 상태의 Codable 스냅샷.
@@ -18,6 +27,11 @@ struct PersistableState: Codable, Equatable {
     var likedDiaryIds: Set<String>
     /// 다이어리별 댓글 (key = 다이어리 uuid 문자열)
     var diaryComments: [String: [String]]
+    // 마켓 (로컬 백본 — 추후 Supabase 동기화)
+    var marketItems: [MarketItem]
+    var savedMarketIds: Set<String>
+    var marketChats: [String: [ChatMessage]]
+    var marketSeeded: Bool
 
     init(
         pregnancies: [Pregnancy] = [],
@@ -28,7 +42,11 @@ struct PersistableState: Codable, Equatable {
         vaccineCompletions: Set<String> = [],
         pregnancyLogs: [PregnancyLog] = [],
         likedDiaryIds: Set<String> = [],
-        diaryComments: [String: [String]] = [:]
+        diaryComments: [String: [String]] = [:],
+        marketItems: [MarketItem] = [],
+        savedMarketIds: Set<String> = [],
+        marketChats: [String: [ChatMessage]] = [:],
+        marketSeeded: Bool = false
     ) {
         self.pregnancies = pregnancies
         self.children = children
@@ -39,6 +57,10 @@ struct PersistableState: Codable, Equatable {
         self.pregnancyLogs = pregnancyLogs
         self.likedDiaryIds = likedDiaryIds
         self.diaryComments = diaryComments
+        self.marketItems = marketItems
+        self.savedMarketIds = savedMarketIds
+        self.marketChats = marketChats
+        self.marketSeeded = marketSeeded
     }
 
     // MARK: - Codable (하위 호환 디코딩)
@@ -47,6 +69,7 @@ struct PersistableState: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case pregnancies, children, growthRecords, diaryEntries, expenses, vaccineCompletions, pregnancyLogs
         case likedDiaryIds, diaryComments
+        case marketItems, savedMarketIds, marketChats, marketSeeded
     }
 
     init(from decoder: Decoder) throws {
@@ -60,6 +83,10 @@ struct PersistableState: Codable, Equatable {
         pregnancyLogs  = try container.decodeIfPresent([PregnancyLog].self, forKey: .pregnancyLogs) ?? []
         likedDiaryIds  = try container.decodeIfPresent(Set<String>.self, forKey: .likedDiaryIds) ?? []
         diaryComments  = try container.decodeIfPresent([String: [String]].self, forKey: .diaryComments) ?? [:]
+        marketItems    = try container.decodeIfPresent([MarketItem].self, forKey: .marketItems) ?? []
+        savedMarketIds = try container.decodeIfPresent(Set<String>.self, forKey: .savedMarketIds) ?? []
+        marketChats    = try container.decodeIfPresent([String: [ChatMessage]].self, forKey: .marketChats) ?? [:]
+        marketSeeded   = try container.decodeIfPresent(Bool.self, forKey: .marketSeeded) ?? false
     }
 }
 

@@ -9,11 +9,23 @@ import Foundation
 // MARK: - MkSellFlowSheet (판매 플로우 3단계)
 
 struct MkSellFlowSheet: View {
+    @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var step: Int = 0
     @State private var selectedGrade: MarketItemGrade = .a
-    @State private var priceText: String = "95,000"
+    @State private var selectedCategory: MarketCategory = .cloth
+    @State private var title: String = ""
+    @State private var monthsTag: String = ""
+    @State private var photos: [UIImage] = []
+    @State private var priceText: String = ""
+    @State private var isFree: Bool = false
+    @State private var desc: String = ""
     @State private var showComplete = false
+
+    private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
+    private var priceValue: Int { Int(priceText.filter(\.isNumber)) ?? 0 }
+    private var canRegister: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var sellCategories: [MarketCategory] { MarketCategory.allCases.filter { $0 != .all } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,68 +66,83 @@ struct MkSellFlowSheet: View {
         .frame(maxHeight: .infinity)
     }
 
-    // MARK: Step 0 — 사진 + AI 분류
+    // MARK: Step 0 — 사진 + 제목 + 카테고리
     private var sellStep0: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("무엇을 정리할까요?")
-                .font(.system(size: 19, weight: .heavy))
-                .foregroundStyle(AppColors.ink)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("무엇을 정리할까요?")
+                    .font(.system(size: 19, weight: .heavy))
+                    .foregroundStyle(AppColors.ink)
 
-            Text("사진을 올리면 AI가 자동 분류해드려요.")
-                .font(.system(size: 13.5, weight: .regular))
-                .foregroundStyle(AppColors.ink2)
-
-            // 사진 영역
-            ZStack {
-                PhotoPlaceholder(seed: 0, cornerRadius: 18)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 180)
-                VStack(spacing: 8) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                    Text("사진 추가 (최소 2장)")
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                }
-            }
-            .accessibilityLabel("사진 추가 영역. 최소 2장")
-
-            // AI 자동 인식 카드
-            BLCard(padding: 13, flat: true) {
-                HStack(alignment: .center, spacing: 10) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(AppColors.primary)
-                        .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("AI 자동 인식")
-                            .font(.system(size: 13.5, weight: .bold))
-                            .foregroundStyle(AppColors.ink)
-                        Text("식사 의자 · 6개월+ 로 분류했어요")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AppColors.ink2)
+                // 사진 (최대 5장)
+                MediaPickerButton(maxImages: 5, images: $photos, videoURL: .constant(nil)) {
+                    if let first = photos.first {
+                        ZStack(alignment: .bottomTrailing) {
+                            Image(uiImage: first).resizable().scaledToFill()
+                                .frame(maxWidth: .infinity).frame(height: 180).clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            BLBadge(tone: .mint, text: "\(photos.count)장", systemIcon: "photo", dot: false)
+                                .padding(10)
+                        }
+                    } else {
+                        ZStack {
+                            PhotoPlaceholder(seed: 0, cornerRadius: 18)
+                                .frame(maxWidth: .infinity).frame(height: 180)
+                            VStack(spacing: 8) {
+                                Image(systemName: "camera.fill").font(.system(size: 30, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                Text("사진 추가 (최대 5장)").font(.system(size: 13.5, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                        }
                     }
-
-                    Spacer(minLength: 0)
-
-                    BLBadge(tone: .mint, text: "온디바이스", systemIcon: nil, dot: true)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .background(AppColors.primaryTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                    .stroke(AppColors.line, lineWidth: 1)
-            }
-            .accessibilityLabel("AI 자동 인식. 식사 의자 6개월+로 분류했어요. 온디바이스 처리.")
+                .buttonStyle(LiquidPressStyle(scale: 0.98))
 
-            LiquidButton(action: { withAnimation { step = 1 } }) {
-                Text("다음")
-                    .font(.system(size: 16, weight: .bold))
+                // 제목
+                TextField("제목 (예: 스토케 식사의자)", text: $title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .padding(.horizontal, 14).frame(height: 52)
+                    .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 13, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
+
+                // 월령 태그
+                TextField("월령 태그 (예: 6개월+)", text: $monthsTag)
+                    .font(.system(size: 15, weight: .medium))
+                    .padding(.horizontal, 14).frame(height: 48)
+                    .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 13, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
+
+                // 카테고리
+                Text("카테고리").font(.system(size: 12.5, weight: .bold)).foregroundStyle(AppColors.ink3)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(sellCategories, id: \.self) { cat in
+                            Button { selectedCategory = cat } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: cat.systemIcon).font(.system(size: 13, weight: .semibold))
+                                    Text(cat.rawValue).font(.system(size: 14, weight: .medium))
+                                }
+                                .foregroundStyle(selectedCategory == cat ? .white : AppColors.ink2)
+                                .padding(.horizontal, 14).frame(height: 36)
+                                .background(selectedCategory == cat ? AppColors.ink : AppColors.surface, in: Capsule())
+                                .overlay { Capsule().stroke(selectedCategory == cat ? AppColors.ink : AppColors.line, lineWidth: 1) }
+                            }
+                            .buttonStyle(LiquidPressStyle(scale: 0.96))
+                        }
+                    }
+                }
+
+                LiquidButton(fill: canRegister ? AppColors.primary : AppColors.ink3, action: {
+                    guard canRegister else { return }
+                    withAnimation { step = 1 }
+                }) {
+                    Text("다음").font(.system(size: 16, weight: .bold))
+                }
+                .accessibilityLabel("다음 단계로")
+                .padding(.top, 4)
             }
-            .accessibilityLabel("다음 단계로")
+            .padding(.bottom, 20)
         }
     }
 
@@ -167,34 +194,38 @@ struct MkSellFlowSheet: View {
                 }
             }
 
-            // 가격 입력
-            VStack(alignment: .leading, spacing: 8) {
-                Text("가격 · AI 시세 제안")
-                    .font(.system(size: 12.5, weight: .bold))
-                    .foregroundStyle(AppColors.ink3)
-
-                HStack(alignment: .center, spacing: 10) {
-                    Text(priceText)
-                        .font(AppFont.num(22, weight: .heavy))
-                        .foregroundStyle(AppColors.ink)
-
-                    Text("원")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(AppColors.ink2)
-
-                    Spacer(minLength: 0)
-
-                    BLBadge(tone: .mint, text: "비슷한 매물 평균", systemIcon: nil, dot: true)
-                }
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(AppColors.line, lineWidth: 1)
-                }
-                .accessibilityLabel("제안 가격 \(priceText)원. 비슷한 매물 평균 기준.")
+            // 무료나눔 토글
+            Toggle(isOn: $isFree) {
+                Text("무료나눔으로 등록")
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink)
             }
+            .tint(AppColors.primary)
+
+            // 가격 입력
+            if !isFree {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("가격").font(.system(size: 12.5, weight: .bold)).foregroundStyle(AppColors.ink3)
+                    HStack(alignment: .center, spacing: 10) {
+                        TextField("0", text: $priceText)
+                            .keyboardType(.numberPad)
+                            .font(AppFont.num(22, weight: .heavy))
+                            .foregroundStyle(AppColors.ink)
+                        Text("원").font(.system(size: 15, weight: .medium)).foregroundStyle(AppColors.ink2)
+                    }
+                    .padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 56)
+                    .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
+                }
+            }
+
+            // 설명
+            TextField("설명 (선택)", text: $desc, axis: .vertical)
+                .font(.system(size: 14, weight: .regular))
+                .lineLimit(2...4)
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 13, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
 
             LiquidButton(action: { withAnimation { step = 2 } }) {
                 Text("다음")
@@ -211,27 +242,52 @@ struct MkSellFlowSheet: View {
                 .font(.system(size: 19, weight: .heavy))
                 .foregroundStyle(AppColors.ink)
 
-            // 요약 카드
+            // 요약 카드 (실 입력)
             BLCard(padding: 14, flat: true) {
                 VStack(alignment: .leading, spacing: 8) {
-                    SellSummaryRow(icon: "photo.on.rectangle", label: "사진", value: "2장 첨부됨")
+                    SellSummaryRow(icon: "photo.on.rectangle", label: "사진", value: photos.isEmpty ? "없음" : "\(photos.count)장")
+                    SellSummaryRow(icon: "tag.fill", label: "제목", value: title.isEmpty ? "-" : title)
+                    SellSummaryRow(icon: selectedCategory.systemIcon, label: "카테고리", value: selectedCategory.rawValue)
                     SellSummaryRow(icon: selectedGrade.systemIcon, label: "등급", value: "\(selectedGrade.rawValue)등급 · \(selectedGrade.label)")
-                    SellSummaryRow(icon: "wonsign.circle.fill", label: "가격", value: "\(priceText)원")
-                    SellSummaryRow(icon: "sparkles", label: "AI 분류", value: "식사 의자 · 6개월+")
+                    SellSummaryRow(icon: "wonsign.circle.fill", label: "가격", value: isFree ? "무료나눔" : "\(priceValue.formatted())원")
                 }
             }
             .accessibilityElement(children: .contain)
 
-            LiquidButton(action: {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showComplete = true
-                }
-            }) {
+            LiquidButton(action: { register() }) {
                 Text("등록하기")
                     .font(.system(size: 16, weight: .bold))
             }
             .accessibilityLabel("매물 등록하기")
         }
+    }
+
+    // 실제 등록 — 사진 로컬 저장 후 store에 추가
+    private func register() {
+        let refs = photos.compactMap { PhotoStore.save($0) }
+        let item = MarketItem(
+            title: title.trimmingCharacters(in: .whitespaces),
+            category: selectedCategory,
+            grade: selectedGrade,
+            monthsTag: monthsTag.isEmpty ? "전 월령" : monthsTag,
+            price: isFree ? 0 : priceValue,
+            originalPrice: nil,
+            isFree: isFree,
+            hasRecall: false,
+            isGraduate: true,
+            sellerName: nickname,
+            sellerTier: .new,
+            distanceText: "내 동네",
+            favoriteCount: 0,
+            photoSeed: 0,
+            description: desc,
+            photoRefs: refs,
+            mine: true,
+            status: .selling
+        )
+        store.addMarketItem(item)
+        Haptics.success()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showComplete = true }
     }
 
     // MARK: 등록 완료 보상

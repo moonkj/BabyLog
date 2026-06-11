@@ -14,9 +14,23 @@ struct MarketDetailHeroPhoto: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
+            Group {
+                if let img = PhotoStore.image(item.photoRefs.first) {
+                    Image(uiImage: img).resizable().scaledToFill()
+                } else {
+                    PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
+                }
+            }
                 .frame(maxWidth: .infinity)
                 .frame(height: 280)
+                .clipped()
+
+            // 상태 뱃지 (예약/판매완료)
+            if item.status != .selling {
+                BLBadge(tone: item.status == .sold ? .grey : .amber, text: item.status.rawValue, systemIcon: nil, dot: true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.top, 52).padding(.trailing, Spacing.s5)
+            }
 
             // 리콜 뱃지
             if item.hasRecall {
@@ -143,8 +157,10 @@ struct MarketDetailInfoBlock: View {
                 }
             }
 
-            // 상품 설명
-            Text("\(item.monthsTag) 동안 사용했어요. 큰 하자 없이 깨끗하게 썼고, 위생 상태 체크리스트 항목을 모두 확인했어요. 같은 동네라 직거래 환영합니다 :)")
+            // 상품 설명 (등록 설명 우선, 없으면 기본 안내)
+            Text(item.description.isEmpty
+                 ? "\(item.monthsTag) 동안 사용했어요. 같은 동네라 직거래 환영합니다 :)"
+                 : item.description)
                 .font(.system(size: 14.5, weight: .regular))
                 .foregroundStyle(AppColors.ink2)
                 .lineSpacing(4)
@@ -317,6 +333,7 @@ struct MarketDetailDisclaimerLine: View {
 struct MarketDetailBottomBar: View {
     let item: MarketItem
     @Binding var isFavorited: Bool
+    var isMine: Bool = false
     let onChat: () -> Void
 
     var body: some View {
@@ -341,18 +358,29 @@ struct MarketDetailBottomBar: View {
             .accessibilityLabel(isFavorited ? "관심 해제" : "관심 등록")
             .accessibilityHint("관심 목록에 추가하거나 제거합니다")
 
-            // 채팅하기 버튼
-            LiquidButton(action: onChat) {
+            // 채팅하기 / 내 매물 표시
+            if isMine {
                 HStack(spacing: 8) {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 17, weight: .bold))
-                        .accessibilityHidden(true)
-                    Text("채팅하기")
-                        .font(.system(size: 16, weight: .bold))
+                    Image(systemName: "checkmark.seal.fill").font(.system(size: 15, weight: .bold))
+                    Text(item.status == .sold ? "판매완료된 내 매물" : "내가 등록한 매물")
+                        .font(.system(size: 15, weight: .bold))
                 }
+                .foregroundStyle(AppColors.ink2)
+                .frame(maxWidth: .infinity).frame(height: 50)
+                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            } else {
+                LiquidButton(action: onChat) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(.system(size: 17, weight: .bold))
+                            .accessibilityHidden(true)
+                        Text(item.status == .sold ? "판매완료" : "채팅하기")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                }
+                .accessibilityLabel("채팅하기")
+                .accessibilityHint("\(item.sellerName)에게 채팅 메시지를 보냅니다")
             }
-            .accessibilityLabel("채팅하기")
-            .accessibilityHint("\(item.sellerName)에게 채팅 메시지를 보냅니다")
         }
         .padding(.horizontal, Spacing.s5)
         .padding(.top, 12)

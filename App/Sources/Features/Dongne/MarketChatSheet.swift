@@ -11,15 +11,12 @@ import Foundation
 struct MarketChatSheet: View {
     let item: MarketItem
 
+    @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var messageText = ""
     @State private var sellerTyping = false
 
-    @State private var messages: [(text: String, isMe: Bool)] = [
-        ("안녕하세요! 혹시 직거래 가능할까요?", true),
-        ("네, 가능해요 :) 같은 동네시면 더 편하실 거예요", false),
-        ("오늘 저녁 7시에 정문 앞 어떠세요?", false),
-    ]
+    private var messages: [ChatMessage] { store.marketMessages(itemId: item.id) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,8 +31,13 @@ struct MarketChatSheet: View {
             // 채팅 말풍선
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(messages.indices, id: \.self) { i in
-                        MkChatBubble(text: messages[i].text, isMe: messages[i].isMe)
+                    if messages.isEmpty {
+                        Text("첫 메시지를 보내 거래를 시작해보세요.")
+                            .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                            .frame(maxWidth: .infinity).padding(.vertical, Spacing.s4)
+                    }
+                    ForEach(messages) { msg in
+                        MkChatBubble(text: msg.text, isMe: msg.mine)
                     }
 
                     // 판매자 입력 중 (§8.5 대화 말풍선 점)
@@ -141,18 +143,15 @@ struct MarketChatSheet: View {
             Button {
                 let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else { return }
-                withAnimation(.easeOut(duration: 0.2)) {
-                    messages.append((text: text, isMe: true))
-                }
+                store.sendMarketMessage(itemId: item.id, text: text, mine: true)
                 messageText = ""
                 Haptics.light()
-                // 데모: 판매자 입력 중 → 응답 (샘플 화면)
+                // 데모: 판매자 입력 중 → 자동 응답 (백엔드 연동 전)
                 withAnimation { sellerTyping = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                    withAnimation {
-                        sellerTyping = false
-                        messages.append((text: "네, 확인했어요! 😊 편하신 시간 알려주세요.", isMe: false))
-                    }
+                    withAnimation { sellerTyping = false }
+                    store.sendMarketMessage(itemId: item.id,
+                                            text: "네, 확인했어요! 😊 편하신 시간 알려주세요.", mine: false)
                 }
             } label: {
                 Image(systemName: "arrow.up.circle.fill")

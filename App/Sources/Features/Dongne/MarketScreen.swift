@@ -79,23 +79,40 @@ enum MarketCategory: String, CaseIterable {
     }
 }
 
-struct MarketItem: Identifiable, Hashable {
-    let id: Int
-    let title: String
-    let category: MarketCategory
-    let grade: MarketItemGrade
-    let monthsTag: String        // 예: "6–12개월"
-    let price: Int               // 0 = 무료나눔
-    let originalPrice: Int?
-    let isFree: Bool
-    let hasRecall: Bool
-    let isGraduate: Bool         // 졸업템
-    let sellerName: String
-    let sellerTier: MarketSellerTier
-    let distanceText: String
-    let favoriteCount: Int
-    let photoSeed: Int
+enum MarketStatus: String, Codable, CaseIterable {
+    case selling  = "판매중"
+    case reserved = "예약중"
+    case sold     = "판매완료"
 }
+
+struct MarketItem: Identifiable, Hashable, Codable {
+    var id: String = UUID().uuidString
+    var title: String
+    var category: MarketCategory
+    var grade: MarketItemGrade
+    var monthsTag: String        // 예: "6–12개월"
+    var price: Int               // 0 = 무료나눔
+    var originalPrice: Int?
+    var isFree: Bool
+    var hasRecall: Bool
+    var isGraduate: Bool         // 졸업템
+    var sellerName: String
+    var sellerTier: MarketSellerTier
+    var distanceText: String
+    var favoriteCount: Int
+    var photoSeed: Int
+    // 실데이터(사용자 등록)
+    var description: String = ""
+    var photoRefs: [String] = []
+    var mine: Bool = false
+    var status: MarketStatus = .selling
+    var createdAt: Date = Date()
+}
+
+// enum들 Codable 적합성 (rawValue String)
+extension MarketItemGrade: Codable {}
+extension MarketSellerTier: Codable {}
+extension MarketCategory: Codable {}
 
 /// "곧 필요해요" 월령 연동 추천 아이템
 struct MarketNeedSoonItem: Identifiable {
@@ -115,32 +132,36 @@ private let mkNeedSoonItems: [MarketNeedSoonItem] = [
     MarketNeedSoonItem(id: 5, title: "유아 체온계",      reason: "지금 당장 필요해요",  photoSeed: 4),
 ]
 
-private let mkItems: [MarketItem] = [
-    MarketItem(id: 1,  title: "스토케 트립트랩 식사의자",  category: .meal,  grade: .s, monthsTag: "6개월+",    price: 180_000, originalPrice: 350_000, isFree: false, hasRecall: false, isGraduate: false, sellerName: "보리맘",  sellerTier: .golden, distanceText: "210m",  favoriteCount: 34, photoSeed: 5),
-    MarketItem(id: 2,  title: "에어웨이브 공기청정 유모차", category: .ride,  grade: .a, monthsTag: "0–36개월",  price: 95_000,  originalPrice: 280_000, isFree: false, hasRecall: false, isGraduate: true,  sellerName: "하준이네", sellerTier: .warm,   distanceText: "480m",  favoriteCount: 21, photoSeed: 1),
-    MarketItem(id: 3,  title: "코니 바운서 아기 그네",     category: .toy,   grade: .b, monthsTag: "0–6개월",   price: 35_000,  originalPrice: 89_000,  isFree: false, hasRecall: true,  isGraduate: true,  sellerName: "민서맘",  sellerTier: .warm,   distanceText: "320m",  favoriteCount: 12, photoSeed: 3),
-    MarketItem(id: 4,  title: "모유 냉동 보관팩 80매",     category: .feed,  grade: .s, monthsTag: "전 월령",    price: 0,       originalPrice: nil,     isFree: true,  hasRecall: false, isGraduate: false, sellerName: "서연이네", sellerTier: .golden, distanceText: "90m",   favoriteCount: 8,  photoSeed: 2),
-    MarketItem(id: 5,  title: "노르딕 방수 점프수트",      category: .cloth, grade: .a, monthsTag: "12–18개월",  price: 22_000,  originalPrice: 68_000,  isFree: false, hasRecall: false, isGraduate: true,  sellerName: "지우맘",  sellerTier: .new,    distanceText: "560m",  favoriteCount: 5,  photoSeed: 4),
-    MarketItem(id: 6,  title: "베이비뵨 바운서 블리스",    category: .toy,   grade: .s, monthsTag: "0–8개월",   price: 120_000, originalPrice: 249_000, isFree: false, hasRecall: false, isGraduate: false, sellerName: "태양맘",  sellerTier: .warm,   distanceText: "740m",  favoriteCount: 27, photoSeed: 0),
-]
+extension MarketItem {
+    /// 데모 시드(첫 실행 시 AppStore에 1회 주입). 이후 사용자가 등록/삭제 가능.
+    static let seedSamples: [MarketItem] = [
+        MarketItem(id: "s1", title: "스토케 트립트랩 식사의자",  category: .meal,  grade: .s, monthsTag: "6개월+",    price: 180_000, originalPrice: 350_000, isFree: false, hasRecall: false, isGraduate: false, sellerName: "보리맘",  sellerTier: .golden, distanceText: "210m",  favoriteCount: 34, photoSeed: 5),
+        MarketItem(id: "s2", title: "에어웨이브 공기청정 유모차", category: .ride,  grade: .a, monthsTag: "0–36개월",  price: 95_000,  originalPrice: 280_000, isFree: false, hasRecall: false, isGraduate: true,  sellerName: "하준이네", sellerTier: .warm,   distanceText: "480m",  favoriteCount: 21, photoSeed: 1),
+        MarketItem(id: "s3", title: "코니 바운서 아기 그네",     category: .toy,   grade: .b, monthsTag: "0–6개월",   price: 35_000,  originalPrice: 89_000,  isFree: false, hasRecall: true,  isGraduate: true,  sellerName: "민서맘",  sellerTier: .warm,   distanceText: "320m",  favoriteCount: 12, photoSeed: 3),
+        MarketItem(id: "s4", title: "모유 냉동 보관팩 80매",     category: .feed,  grade: .s, monthsTag: "전 월령",    price: 0,       originalPrice: nil,     isFree: true,  hasRecall: false, isGraduate: false, sellerName: "서연이네", sellerTier: .golden, distanceText: "90m",   favoriteCount: 8,  photoSeed: 2),
+        MarketItem(id: "s5", title: "노르딕 방수 점프수트",      category: .cloth, grade: .a, monthsTag: "12–18개월",  price: 22_000,  originalPrice: 68_000,  isFree: false, hasRecall: false, isGraduate: true,  sellerName: "지우맘",  sellerTier: .new,    distanceText: "560m",  favoriteCount: 5,  photoSeed: 4),
+        MarketItem(id: "s6", title: "베이비뵨 바운서 블리스",    category: .toy,   grade: .s, monthsTag: "0–8개월",   price: 120_000, originalPrice: 249_000, isFree: false, hasRecall: false, isGraduate: false, sellerName: "태양맘",  sellerTier: .warm,   distanceText: "740m",  favoriteCount: 27, photoSeed: 0),
+    ]
+}
 
 // MARK: - MarketScreen
 
 /// DongneTab의 "마켓" 세그먼트에 임베드하는 메인 뷰.
 struct MarketScreen: View {
+    @EnvironmentObject private var store: AppStore
     @State private var selectedCategory: MarketCategory = .all
     @State private var showSellSheet: Bool = false
 
     private var filteredItems: [MarketItem] {
-        if selectedCategory == .all { return mkItems }
-        return mkItems.filter { $0.category == selectedCategory }
+        if selectedCategory == .all { return store.marketItems }
+        return store.marketItems.filter { $0.category == selectedCategory }
     }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    BLSampleNote(message: "지금 매물은 샘플이에요. 동네 거래는 곧 열려요 — 친구를 초대하면 더 빨리 열려요.")
+                    BLSampleNote(message: "내가 등록한 매물은 기기에 저장돼요. 동네 이웃과의 실시간 거래는 곧 열려요.")
                         .padding(.horizontal, Spacing.s5)
                         .padding(.top, Spacing.s3)
                         .padding(.bottom, Spacing.s2)
@@ -158,6 +179,7 @@ struct MarketScreen: View {
         }
         .sheet(isPresented: $showSellSheet) {
             MkSellFlowSheet()
+                .environmentObject(store)
                 .presentationDetents([.large])
         }
         .accessibilityElement(children: .contain)
@@ -331,7 +353,13 @@ private struct MkItemCard: View {
 
     private var photoArea: some View {
         ZStack(alignment: .topLeading) {
-            PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
+            Group {
+                if let img = PhotoStore.image(item.photoRefs.first) {
+                    Image(uiImage: img).resizable().scaledToFill()
+                } else {
+                    PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
+                }
+            }
                 .frame(width: 112)
                 .overlay(alignment: .topLeading) {
                     // 리콜 경고 뱃지
