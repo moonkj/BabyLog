@@ -20,6 +20,7 @@ struct MkSellFlowSheet: View {
     @State private var priceText: String = ""
     @State private var isFree: Bool = false
     @State private var desc: String = ""
+    @State private var hygiene: Set<String> = []
     @State private var showComplete = false
 
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
@@ -148,6 +149,7 @@ struct MkSellFlowSheet: View {
 
     // MARK: Step 1 — 등급 + 가격
     private var sellStep1: some View {
+        ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 16) {
             Text("상태와 가격")
                 .font(.system(size: 19, weight: .heavy))
@@ -227,11 +229,42 @@ struct MkSellFlowSheet: View {
                 .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: 13, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
 
+            // 위생 셀프체크 (아동 안전 — 직접 선택)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("위생 셀프체크 (선택)").font(.system(size: 12.5, weight: .bold)).foregroundStyle(AppColors.ink3)
+                ForEach(MarketItem.hygieneOptions, id: \.self) { opt in
+                    let on = hygiene.contains(opt)
+                    Button {
+                        Haptics.selection()
+                        if on { hygiene.remove(opt) } else { hygiene.insert(opt) }
+                    } label: {
+                        HStack(spacing: 10) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(on ? AppColors.primary : AppColors.surface2)
+                                    .frame(width: 24, height: 24)
+                                    .overlay { RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(on ? AppColors.primary : AppColors.line, lineWidth: 1) }
+                                if on {
+                                    Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                                }
+                            }
+                            Text(opt).font(.system(size: 14, weight: .medium)).foregroundStyle(AppColors.ink2)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(LiquidPressStyle(scale: 0.98))
+                    .accessibilityLabel(opt)
+                    .accessibilityAddTraits(on ? [.isSelected] : [])
+                }
+            }
+
             LiquidButton(action: { withAnimation { step = 2 } }) {
                 Text("다음")
                     .font(.system(size: 16, weight: .bold))
             }
             .accessibilityLabel("다음 단계로")
+        }
+        .padding(.bottom, 20)
         }
     }
 
@@ -250,6 +283,7 @@ struct MkSellFlowSheet: View {
                     SellSummaryRow(icon: selectedCategory.systemIcon, label: "카테고리", value: selectedCategory.rawValue)
                     SellSummaryRow(icon: selectedGrade.systemIcon, label: "등급", value: "\(selectedGrade.rawValue)등급 · \(selectedGrade.label)")
                     SellSummaryRow(icon: "wonsign.circle.fill", label: "가격", value: isFree ? "무료나눔" : "\(priceValue.formatted())원")
+                    SellSummaryRow(icon: "checkmark.shield.fill", label: "위생 체크", value: hygiene.isEmpty ? "선택 안 함" : "\(hygiene.count)개 확인")
                 }
             }
             .accessibilityElement(children: .contain)
@@ -283,7 +317,8 @@ struct MkSellFlowSheet: View {
             description: desc,
             photoRefs: refs,
             mine: true,
-            status: .selling
+            status: .selling,
+            hygieneChecks: MarketItem.hygieneOptions.filter { hygiene.contains($0) }
         )
         store.addMarketItem(item)
         Haptics.success()

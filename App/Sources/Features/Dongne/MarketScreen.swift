@@ -107,6 +107,11 @@ struct MarketItem: Identifiable, Hashable, Codable {
     var mine: Bool = false
     var status: MarketStatus = .selling
     var createdAt: Date = Date()
+    /// 판매자가 직접 체크한 위생 항목 (선택한 것만 상세에 표시)
+    var hygieneChecks: [String] = []
+
+    /// 위생 셀프체크 선택지
+    static let hygieneOptions = ["세척·소독 완료", "부품 누락 없음", "곰팡이·얼룩 없음"]
 }
 
 // enum들 Codable 적합성 (rawValue String)
@@ -134,7 +139,10 @@ private let mkNeedSoonItems: [MarketNeedSoonItem] = [
 
 extension MarketItem {
     /// 데모 시드(첫 실행 시 AppStore에 1회 주입). 이후 사용자가 등록/삭제 가능.
-    static let seedSamples: [MarketItem] = [
+    static let seedSamples: [MarketItem] = rawSeed.map {
+        var i = $0; i.hygieneChecks = hygieneOptions; return i
+    }
+    private static let rawSeed: [MarketItem] = [
         MarketItem(id: "s1", title: "스토케 트립트랩 식사의자",  category: .meal,  grade: .s, monthsTag: "6개월+",    price: 180_000, originalPrice: 350_000, isFree: false, hasRecall: false, isGraduate: false, sellerName: "보리맘",  sellerTier: .golden, distanceText: "210m",  favoriteCount: 34, photoSeed: 5),
         MarketItem(id: "s2", title: "에어웨이브 공기청정 유모차", category: .ride,  grade: .a, monthsTag: "0–36개월",  price: 95_000,  originalPrice: 280_000, isFree: false, hasRecall: false, isGraduate: true,  sellerName: "하준이네", sellerTier: .warm,   distanceText: "480m",  favoriteCount: 21, photoSeed: 1),
         MarketItem(id: "s3", title: "코니 바운서 아기 그네",     category: .toy,   grade: .b, monthsTag: "0–6개월",   price: 35_000,  originalPrice: 89_000,  isFree: false, hasRecall: true,  isGraduate: true,  sellerName: "민서맘",  sellerTier: .warm,   distanceText: "320m",  favoriteCount: 12, photoSeed: 3),

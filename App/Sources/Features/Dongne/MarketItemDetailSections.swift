@@ -70,8 +70,10 @@ struct MarketDetailContent: View {
             // 판매자 카드
             MarketDetailSellerCard(item: item)
 
-            // 위생 셀프체크
-            MarketDetailHygieneChecklist()
+            // 위생 셀프체크 — 판매자가 체크한 항목이 있을 때만
+            if !item.hygieneChecks.isEmpty {
+                MarketDetailHygieneChecklist(checks: item.hygieneChecks)
+            }
 
             // 안심 거래존 안내
             MarketDetailSafeTradeGuide()
@@ -241,8 +243,9 @@ struct MarketDetailSellerCard: View {
 
 // MARK: - MarketDetailHygieneChecklist
 
-/// 위생 셀프체크 리스트
+/// 위생 셀프체크 리스트 — 판매자가 직접 체크한 항목만 표시
 struct MarketDetailHygieneChecklist: View {
+    let checks: [String]
     var body: some View {
         BLCard(padding: 14) {
             VStack(alignment: .leading, spacing: 10) {
@@ -256,7 +259,7 @@ struct MarketDetailHygieneChecklist: View {
                         .foregroundStyle(AppColors.ink)
                 }
 
-                ForEach(["세척·소독 완료", "부품 누락 없음", "곰팡이·얼룩 없음"], id: \.self) { item in
+                ForEach(checks, id: \.self) { item in
                     HStack(spacing: 9) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -277,7 +280,7 @@ struct MarketDetailHygieneChecklist: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("위생 상태 셀프 체크. 세척·소독 완료, 부품 누락 없음, 곰팡이·얼룩 없음 모두 확인됨.")
+        .accessibilityLabel("위생 상태 셀프 체크. \(checks.joined(separator: ", ")) 확인됨.")
     }
 }
 
