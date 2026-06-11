@@ -87,6 +87,33 @@
 
 ---
 
+## 3-1. 하이브리드 — 안드로이드 가족(조부모) 보기 · 서버비 0원
+
+**부모=아이폰, 조부모=안드로이드** 시나리오. 별도 서버/DB/스토리지 없이 해결한다.
+
+```
+iOS 가족   ── CloudKit 동기화(애플 호스팅, 무료) ──┐
+                                                  ├── CloudKit (데이터·미디어, 애플 호스팅)
+안드로이드 ── 정적 웹뷰어(CloudKit JS) ───────────┘
+            (GitHub/Cloudflare Pages 무료 호스팅, 카톡 링크로 접속)
+```
+
+- **유일 고정비**: Apple Developer Program($99/년, App Store 출시에 어차피 필요). **월 서버비 0원.**
+- 웹 뷰어: [`web/family-viewer/index.html`](../web/family-viewer/index.html) — CloudKit JS로 공유 레코드를 읽어 사진·동영상·캡션 표시. 정적 파일이라 무료 호스팅에 그대로 배포.
+
+### 활성화 절차 (CloudKit 활성화에 이어서)
+1. **CloudKit Console**(developer.apple.com)에서 **API Token**(Web Services) 발급.
+2. `web/family-viewer/index.html`의 `CONTAINER_ID`, `API_TOKEN` 채우기.
+3. `web/` 폴더를 **GitHub Pages / Cloudflare Pages**(무료)에 배포 → 도메인 확보.
+4. iOS 앱 "공유"(가족 보기): 해당 기록을 **CloudKit 공개 DB**에 추측 불가한 recordName으로 push(사진·동영상=CKAsset) → 링크 `https://<도메인>/family-viewer/?r=<recordName>` 생성 → 카톡 등으로 전달.
+   - (이 push/공유 링크 생성 코드는 CloudKit 활성화 후 `CloudSyncService`에 `shareToFamily(entry:)`로 추가 — 계정 연결 시 작업)
+
+### 프라이버시 (아동 사진 — 필수)
+- 공개 DB에 올리되 **추측 불가능한 recordName**(UUID) + **공유한 항목만** 올림(전체 백업 아님).
+- **만료/해지**(앱에서 레코드 삭제 → 링크 무효), Pro 한정. CLAUDE.md "사진 서버 비전송(무료)·서버 백업 Pro" 정책 준수.
+
+---
+
 ## 4. StoreKit 2 — Pro 구독
 
 Pro 게이트 위치(현재 정직한 "곧 만나요" 안내 또는 false 고정):
