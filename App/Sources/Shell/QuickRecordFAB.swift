@@ -78,21 +78,23 @@ struct QuickRecordFAB: View {
                 }
             }
 
-            Button {
-                if suppressTap { return }   // 드래그 직후 탭 무시
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { open.toggle() }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(AppColors.primary)
-                    .frame(width: 60, height: 60)
-                    .background(fabBackground)
-                    .clipShape(Circle())
-                    .rotationEffect(.degrees(open ? 45 : 0))
-            }
-            .buttonStyle(LiquidPressStyle())
-            .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)
-            .accessibilityLabel("빠른 기록")
+            // Button 대신 onTapGesture — 이동한 터치는 탭으로 인식되지 않아(드래그와 충돌 없음)
+            // 드래그 후 메뉴가 열리는 문제를 근본적으로 막는다.
+            Image(systemName: "plus")
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(AppColors.primary)
+                .frame(width: 60, height: 60)
+                .background(fabBackground)
+                .clipShape(Circle())
+                .rotationEffect(.degrees(open ? 45 : 0))
+                .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)
+                .contentShape(Circle())
+                .onTapGesture {
+                    if suppressTap { return }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { open.toggle() }
+                }
+                .accessibilityLabel("빠른 기록")
+                .accessibilityAddTraits(.isButton)
         }
     }
 }

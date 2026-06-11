@@ -32,7 +32,12 @@ struct MainTabView: View {
             .onChanged { value in
                 if case .second(true, let drag) = value {
                     if !fabDragging { fabDragging = true; Haptics.light() }
-                    if let drag { fabDrag = drag.translation }
+                    if let drag {
+                        fabDrag = drag.translation
+                        if abs(drag.translation.width) > 6 || abs(drag.translation.height) > 6 {
+                            fabSuppressTap = true   // 드래그 중엔 탭 무시 보장
+                        }
+                    }
                 }
             }
             .onEnded { value in
