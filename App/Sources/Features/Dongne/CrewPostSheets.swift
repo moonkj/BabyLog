@@ -1,0 +1,317 @@
+// CrewPostSheets.swift
+// BabyLog · Features/Dongne
+// 동네 게시판 — 글쓰기 시트 + 글 상세(댓글) 시트
+// Swift 5 / iOS 17 / SwiftUI + Foundation only
+
+import SwiftUI
+import Foundation
+
+// MARK: - CrewPostWriteSheet (글쓰기)
+
+struct CrewPostWriteSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var category: CrewPostCategory = .info
+    @State private var title = ""
+    @State private var body_ = ""
+
+    private var canSave: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s5) {
+                    // 카테고리 선택 — 색+아이콘+레이블 3중 인코딩
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text("카테고리").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
+                        HStack(spacing: Spacing.s2) {
+                            ForEach(CrewPostCategory.allCases, id: \.self) { c in
+                                Button {
+                                    Haptics.selection()
+                                    category = c
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: c.systemIcon).font(.system(size: 13, weight: .semibold))
+                                        Text(c.rawValue).font(.system(size: 13.5, weight: .semibold))
+                                    }
+                                    .foregroundStyle(category == c ? .white : AppColors.ink2)
+                                    .frame(maxWidth: .infinity).frame(height: 44)
+                                    .background(category == c ? AppColors.ink : AppColors.surface2,
+                                                in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                                }
+                                .buttonStyle(LiquidPressStyle(scale: 0.96))
+                                .accessibilityLabel(c.rawValue)
+                                .accessibilityAddTraits(category == c ? .isSelected : [])
+                            }
+                        }
+                    }
+
+                    // 제목
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text("제목").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
+                        TextField("이웃에게 전할 제목을 적어주세요", text: $title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .padding(.horizontal, Spacing.s4).frame(height: 52)
+                            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                            .accessibilityLabel("제목 입력")
+                    }
+
+                    // 내용
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text("내용 (선택)").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
+                        TextField("자세한 내용을 적어주세요", text: $body_, axis: .vertical)
+                            .font(AppFont.body).lineLimit(4...10)
+                            .padding(.horizontal, Spacing.s4).padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                            .accessibilityLabel("내용 입력")
+                    }
+
+                    LiquidButton(fill: canSave ? AppColors.primary : AppColors.ink3, action: {
+                        guard canSave else { return }
+                        store.addCrewPost(category: category, title: title, body: body_)
+                        Haptics.success()
+                        dismiss()
+                    }) {
+                        Text("게시하기").frame(maxWidth: .infinity)
+                    }
+                    .padding(.top, Spacing.s2)
+                }
+                .padding(Spacing.s4)
+            }
+            .background(AppColors.canvas.ignoresSafeArea())
+            .navigationTitle("글쓰기")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } } }
+        }
+    }
+}
+
+// MARK: - CrewPostDetailSheet (글 상세 + 댓글)
+
+struct CrewPostDetailSheet: View {
+    let post: CrewPost
+
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var commentText = ""
+    @State private var showDeleteConfirm = false
+
+    private var isLiked: Bool { store.isCrewPostLiked(post.id) }
+    private var likeCount: Int { post.likeCount + (isLiked ? 1 : 0) }
+    private var comments: [String] { store.crewPostCommentList(postId: post.id) }
+    private var replyCount: Int { store.crewPostReplyCount(post) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    postBody
+                    Divider().overlay(AppColors.line)
+                    commentsSection
+                }
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, Spacing.s4)
+                .padding(.bottom, 16)
+            }
+
+            inputBar
+        }
+        .background(AppColors.canvas)
+        .accessibilityElement(children: .contain)
+        .confirmationDialog("이 글을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("삭제", role: .destructive) {
+                store.deleteCrewPost(id: post.id)
+                Haptics.success()
+                dismiss()
+            }
+            Button("취소", role: .cancel) { }
+        } message: {
+            Text("삭제한 글은 복구할 수 없어요.")
+        }
+    }
+
+    // MARK: 헤더
+    private var header: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(AppColors.line2)
+                .frame(width: 36, height: 5)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+                .accessibilityHidden(true)
+
+            HStack {
+                Text("동네 게시판")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(AppColors.ink)
+                Spacer()
+                if post.mine {
+                    Button {
+                        Haptics.light()
+                        showDeleteConfirm = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(AppColors.danger)
+                    }
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel("글 삭제")
+                }
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 24, weight: .regular))
+                        .foregroundStyle(AppColors.ink3)
+                }
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel("닫기")
+            }
+            .padding(.horizontal, Spacing.s5)
+            .padding(.bottom, Spacing.s3)
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(AppColors.line).frame(height: 1)
+        }
+    }
+
+    // MARK: 본문
+    private var postBody: some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            HStack(spacing: 6) {
+                BLBadge(
+                    tone: post.category.badgeTone,
+                    text: post.category.rawValue,
+                    systemIcon: post.category.systemIcon,
+                    dot: false
+                )
+                Text("\(post.authorName) · \(post.timeText)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.ink3)
+            }
+
+            Text(post.title)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(AppColors.ink)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !post.body.isEmpty {
+                Text(post.body)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(AppColors.ink2)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // 좋아요 + 댓글 수
+            HStack(spacing: 14) {
+                Button {
+                    Haptics.selection()
+                    store.toggleCrewPostLike(post.id)
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .font(.system(size: 15))
+                            .foregroundStyle(isLiked ? AppColors.danger : AppColors.ink3)
+                        Text("\(likeCount)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColors.ink3)
+                    }
+                    .padding(.horizontal, 12).frame(height: 36)
+                    .background(AppColors.surface2, in: Capsule())
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.94))
+                .accessibilityLabel(isLiked ? "좋아요 취소, 현재 \(likeCount)개" : "좋아요, 현재 \(likeCount)개")
+
+                HStack(spacing: 5) {
+                    Image(systemName: "bubble.left.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppColors.ink3)
+                    Text("\(replyCount)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.ink3)
+                }
+                .accessibilityLabel("댓글 \(replyCount)개")
+
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    // MARK: 댓글
+    private var commentsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            Text("댓글 \(comments.count)")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AppColors.ink)
+
+            if comments.isEmpty {
+                Text("첫 댓글을 남겨 이웃과 이야기를 시작해보세요.")
+                    .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, Spacing.s5)
+            } else {
+                ForEach(Array(comments.enumerated()), id: \.offset) { _, text in
+                    HStack(alignment: .top, spacing: 10) {
+                        Circle()
+                            .fill(AppColors.surface3)
+                            .frame(width: 30, height: 30)
+                            .overlay {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(AppColors.ink3)
+                            }
+                            .accessibilityHidden(true)
+                        Text(text)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(AppColors.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("댓글: \(text)")
+                }
+            }
+        }
+    }
+
+    // MARK: 입력 바
+    private var inputBar: some View {
+        HStack(spacing: 10) {
+            TextField("댓글을 입력하세요", text: $commentText, axis: .vertical)
+                .font(.system(size: 14, weight: .regular))
+                .lineLimit(1...4)
+                .padding(.horizontal, 16).padding(.vertical, 11)
+                .frame(maxWidth: .infinity)
+                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
+                .accessibilityLabel("댓글 입력")
+
+            Button {
+                let text = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { return }
+                store.addCrewPostComment(postId: post.id, text: text)
+                commentText = ""
+                Haptics.light()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 38, weight: .regular))
+                    .foregroundStyle(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppColors.ink3 : AppColors.primary)
+            }
+            .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .frame(width: 44, height: 44)
+            .accessibilityLabel("댓글 등록")
+        }
+        .padding(.horizontal, Spacing.s4)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
+        .background(AppColors.surface)
+        .overlay(alignment: .top) {
+            Rectangle().fill(AppColors.line).frame(height: 1)
+        }
+    }
+}

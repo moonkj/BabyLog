@@ -13,6 +13,7 @@ struct CrewMeetupDetail: View {
 
     @EnvironmentObject private var store: AppStore
     @State private var showGroupChatGuide = false
+    @State private var showChat = false
     @State private var showDeleteConfirm = false
     @Environment(\.dismiss) private var dismiss
 
@@ -57,6 +58,11 @@ struct CrewMeetupDetail: View {
         .sheet(isPresented: $showGroupChatGuide) {
             CrewGroupChatGuideSheet(meetup: meetup)
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showChat) {
+            CrewChatSheet(meetup: meetup)
+                .presentationDetents([.large])
+                .environmentObject(store)
         }
         .confirmationDialog("이 모임을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("삭제", role: .destructive) {
@@ -266,10 +272,16 @@ struct CrewMeetupDetail: View {
         .accessibilityLabel("호스트 \(meetup.hostName), \(meetup.hostTier.rawValue)")
     }
 
-    // MARK: 그룹 채팅 안내 카드
+    // MARK: 그룹 채팅 카드
+    // 참가자 → 실제 채팅방 열기 / 비참가자 → 안내 시트(기존 동작 유지)
     private var groupChatCard: some View {
         Button {
-            showGroupChatGuide = true
+            Haptics.selection()
+            if isJoined {
+                showChat = true
+            } else {
+                showGroupChatGuide = true
+            }
         } label: {
             BLCard(padding: 14, flat: true) {
                 HStack(spacing: 12) {
@@ -284,27 +296,31 @@ struct CrewMeetupDetail: View {
                     .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("그룹 채팅 자동 생성")
+                        Text(isJoined ? "채팅방 열기" : "그룹 채팅 자동 생성")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(AppColors.ink)
-                        Text("참가하면 모임 전용 채팅방이 만들어져요.")
+                        Text(isJoined
+                             ? "모임 참가자들과 바로 대화해보세요."
+                             : "참가하면 채팅방이 열려요.")
                             .font(.system(size: 12.5, weight: .regular))
                             .foregroundStyle(AppColors.ink2)
                     }
 
                     Spacer(minLength: 0)
 
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppColors.ink3)
+                    Image(systemName: isJoined ? "arrow.right.circle.fill" : "chevron.right")
+                        .font(.system(size: isJoined ? 18 : 13, weight: .semibold))
+                        .foregroundStyle(isJoined ? AppColors.primary : AppColors.ink3)
                         .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .buttonStyle(LiquidPressStyle(scale: 0.99))
-        .accessibilityLabel("그룹 채팅 자동 생성")
-        .accessibilityHint("참가하면 모임 전용 채팅방이 만들어집니다. 자세히 보기")
+        .accessibilityLabel(isJoined ? "채팅방 열기" : "그룹 채팅 자동 생성")
+        .accessibilityHint(isJoined
+                           ? "모임 참가자들과 대화하는 채팅방을 엽니다."
+                           : "참가하면 모임 전용 채팅방이 열립니다. 자세히 보기")
     }
 
     // MARK: 안전 수칙

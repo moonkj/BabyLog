@@ -199,6 +199,9 @@ struct CrewScreen: View {
 
 private struct CrewActiveContent: View {
     @EnvironmentObject private var store: AppStore
+    @State private var showWrite = false
+    @State private var selectedPost: CrewPost?
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
@@ -208,6 +211,16 @@ private struct CrewActiveContent: View {
                 boardSection
                     .padding(.bottom, 100)
             }
+        }
+        .sheet(isPresented: $showWrite) {
+            CrewPostWriteSheet()
+                .environmentObject(store)
+                .presentationDetents([.large])
+        }
+        .sheet(item: $selectedPost) { post in
+            CrewPostDetailSheet(post: post)
+                .environmentObject(store)
+                .presentationDetents([.large])
         }
     }
 
@@ -254,25 +267,48 @@ private struct CrewActiveContent: View {
     // MARK: 동네 게시판
     private var boardSection: some View {
         VStack(alignment: .leading, spacing: 11) {
-            BLSectionHead(
-                eyebrow: "동네 이야기",
-                title: "동네 게시판"
-            )
+            HStack(alignment: .firstTextBaseline) {
+                BLSectionHead(
+                    eyebrow: "동네 이야기",
+                    title: "동네 게시판"
+                )
+                Button {
+                    Haptics.light()
+                    showWrite = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.and.pencil").font(.system(size: 13, weight: .bold))
+                        Text("글쓰기").font(.system(size: 13.5, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12).frame(height: 32)
+                    .background(AppColors.primary, in: Capsule())
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.95))
+                .accessibilityLabel("글쓰기")
+                .accessibilityHint("동네 게시판에 새 글을 작성합니다")
+            }
             .padding(.horizontal, Spacing.s5)
 
             BLCard(padding: 0) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(store.crewPosts.enumerated()), id: \.element.id) { idx, post in
-                        CrewPostRow(post: post)
-                            .padding(.horizontal, 15)
-                            .padding(.vertical, 13)
-                            .overlay(alignment: .top) {
-                                if idx > 0 {
-                                    Rectangle()
-                                        .fill(AppColors.line)
-                                        .frame(height: 1)
+                        Button {
+                            Haptics.light()
+                            selectedPost = post
+                        } label: {
+                            CrewPostRow(post: post)
+                                .padding(.horizontal, 15)
+                                .padding(.vertical, 13)
+                                .overlay(alignment: .top) {
+                                    if idx > 0 {
+                                        Rectangle()
+                                            .fill(AppColors.line)
+                                            .frame(height: 1)
+                                    }
                                 }
-                            }
+                        }
+                        .buttonStyle(LiquidPressStyle(scale: 0.985))
                     }
                 }
             }
@@ -434,6 +470,7 @@ private struct CrewPostRow: View {
     let post: CrewPost
     private var isLiked: Bool { store.isCrewPostLiked(post.id) }
     private var likeCount: Int { post.likeCount + (isLiked ? 1 : 0) }
+    private var replyCount: Int { store.crewPostReplyCount(post) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -461,11 +498,11 @@ private struct CrewPostRow: View {
                     Image(systemName: "bubble.left.fill")
                         .font(.system(size: 13))
                         .foregroundStyle(AppColors.ink3)
-                    Text("\(post.replyCount)")
+                    Text("\(replyCount)")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppColors.ink3)
                 }
-                .accessibilityLabel("댓글 \(post.replyCount)개")
+                .accessibilityLabel("댓글 \(replyCount)개")
 
                 Button {
                     Haptics.selection()
