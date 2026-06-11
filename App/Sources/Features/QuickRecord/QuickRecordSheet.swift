@@ -7,11 +7,16 @@ import SwiftUI
 
 struct QuickRecordSheet: View {
     var mode: AppMode           // baby / pregnancy (MainTabView에 정의)
-    var childName: String = "지호"
     var onSave: () -> Void = {}
     var onClose: () -> Void = {}
 
     @EnvironmentObject private var store: AppStore
+
+    /// 현재 선택된 아이 이름 (하드코딩 금지 — store 기준)
+    private var childName: String {
+        if mode == .pregnancy { return store.activePregnancy?.nickname ?? "우리 아기" }
+        return store.selectedChild?.name ?? "우리 아기"
+    }
 
     // MARK: Internal state
     @State private var showDetail = false
@@ -170,6 +175,7 @@ struct QuickRecordSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: dropHeight)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
 
                 // 미선택 상태: 드롭존 안내 오버레이
                 if selectedPhoto == nil {
@@ -541,13 +547,13 @@ private let pregnancyMilestones: [MilestoneItem] = [
 // MARK: - Preview
 #if DEBUG
 #Preview("Baby Mode") {
-    QuickRecordSheet(mode: .baby, childName: "지호")
+    QuickRecordSheet(mode: .baby)
         .presentationDetents([.medium, .large])
         .environmentObject(SampleData.store())
 }
 
 #Preview("Pregnancy Mode") {
-    QuickRecordSheet(mode: .pregnancy, childName: "아기")
+    QuickRecordSheet(mode: .pregnancy)
         .presentationDetents([.medium, .large])
         .environmentObject(SampleData.store())
 }

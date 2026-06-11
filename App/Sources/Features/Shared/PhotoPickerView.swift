@@ -78,10 +78,10 @@ struct SelectedPhotoView<Placeholder: View>: View {
 
     var body: some View {
         if let image {
+            // scaledToFill은 프레임을 넘치므로, 클리핑은 호출부에서 프레임 적용 후 수행한다.
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         } else {
             placeholder()
         }
