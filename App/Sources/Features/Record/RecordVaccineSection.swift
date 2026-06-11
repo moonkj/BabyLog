@@ -10,7 +10,7 @@ struct VaccineSection: View {
     @EnvironmentObject private var store: AppStore
 
     @State private var vaccines: [VaccineRecord] = []
-    @State private var isLoading = false
+    @State private var isLoading = true   // 첫 렌더에 빈상태(실패) 깜빡임 방지 — 로드 완료까지 스켈레톤
 
     // 접종 병원 입력 시트(.alert) 상태
     @State private var hospitalPromptVaccineId: String?   // 입력 대상 vaccineId (nil이면 닫힘)

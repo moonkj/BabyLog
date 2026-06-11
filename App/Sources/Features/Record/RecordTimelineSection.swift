@@ -57,7 +57,7 @@ struct TimelineSection: View {
                         // 날짜 그룹 헤더
                         DateGroupHeader(label: day)
                         // 카드 목록
-                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        ForEach(Array(items.enumerated()), id: \.element.id) { _, item in
                             switch item {
                             case .growth(let r):
                                 GrowthTimelineCard(record: r)
@@ -78,9 +78,16 @@ struct TimelineSection: View {
     }
 }
 
-enum TimelineItem {
+enum TimelineItem: Identifiable {
     case growth(GrowthRecord)
     case diary(DiaryEntry)
+    /// 안정 식별자 — ForEach가 위치(offset)가 아닌 레코드 id로 카드 @State를 보존하게 한다.
+    var id: UUID {
+        switch self {
+        case .growth(let r): return r.id
+        case .diary(let e):  return e.id
+        }
+    }
 }
 
 // 날짜 구분선 헤더
