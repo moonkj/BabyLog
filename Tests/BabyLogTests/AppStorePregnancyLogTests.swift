@@ -49,6 +49,17 @@ final class AppStorePregnancyLogTests: XCTestCase {
         XCTAssertEqual(weights.last?.value, 58.4)
     }
 
+    func test_startUpdateDeletePregnancy() {
+        let store = AppStore()
+        store.startPregnancy(lmp: nil, edd: Date(), nickname: "콩이")
+        XCTAssertEqual(store.activePregnancy?.nickname, "콩이")
+        let id = store.activePregnancy!.id
+        store.updatePregnancy(id: id, nickname: "튼튼이", lmp: nil, edd: Date())
+        XCTAssertEqual(store.activePregnancy?.nickname, "튼튼이")
+        store.deletePregnancy(id: id)
+        XCTAssertNil(store.activePregnancy)
+    }
+
     func test_bellyPhoto_addSortDelete() {
         let store = AppStore()
         let pid = UUID()

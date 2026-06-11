@@ -19,6 +19,9 @@ struct PregnancyHomeView: View {
     /// 홈 카드(요약·진입점) 탭 시 해당 탭으로 이동. MainTabView가 주입.
     var onNavigate: (AppTab) -> Void = { _ in }
 
+    @State private var showPregReg = false
+    @State private var editingPregnancy: Pregnancy? = nil
+
     // MARK: 목업 폴백 (store 없거나 activePregnancy nil 시)
     private let mockLMP: Date = Calendar.current.date(
         byAdding: .day,
@@ -58,37 +61,68 @@ struct PregnancyHomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // 상단 헤더
-                headerSection
+            if activePregnancy == nil {
+                pregnancyEmptyState
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    // 상단 헤더 (태명 탭 → 수정)
+                    headerSection
+                        .padding(.horizontal, Spacing.s5)
+                        .padding(.bottom, Spacing.s4)
+                        .contentShape(Rectangle())
+                        .onTapGesture { editingPregnancy = activePregnancy }
+
+                    // 태아 히어로 카드
+                    heroCard
+                        .padding(.horizontal, Spacing.s5)
+                        .padding(.bottom, Spacing.s3)
+
+                    // 본문 모듈 스택
+                    VStack(spacing: Spacing.s3) {
+                        checkupPriorityCard
+                        weeklyDevelopmentCard
+                        neighborhoodCard
+                        budgetCard
+                    }
                     .padding(.horizontal, Spacing.s5)
-                    .padding(.bottom, Spacing.s4)
-
-                // 태아 히어로 카드
-                heroCard
-                    .padding(.horizontal, Spacing.s5)
-                    .padding(.bottom, Spacing.s3)
-
-                // 본문 모듈 스택
-                VStack(spacing: Spacing.s3) {
-                    // 검진 우선순위 카드
-                    checkupPriorityCard
-
-                    // 주차별 발달 가이드 카드
-                    weeklyDevelopmentCard
-
-                    // 동네 소식 요약
-                    neighborhoodCard
-
-                    // 가계부 요약
-                    budgetCard
+                    .padding(.bottom, Spacing.s7)
                 }
-                .padding(.horizontal, Spacing.s5)
-                .padding(.bottom, Spacing.s7)
             }
         }
         .background(AppColors.canvas.ignoresSafeArea())
         .accessibilityElement(children: .contain)
+        .sheet(isPresented: $showPregReg) {
+            AddPregnancySheet().environmentObject(store)
+        }
+        .sheet(item: $editingPregnancy) { preg in
+            AddPregnancySheet(editing: preg).environmentObject(store)
+        }
+    }
+
+    // 임신 미등록 상태 — 등록 CTA
+    private var pregnancyEmptyState: some View {
+        VStack(spacing: Spacing.s5) {
+            ZStack {
+                Circle().fill(AppColors.pregnancyPink.opacity(0.12)).frame(width: 96, height: 96)
+                Text("🤍").font(.system(size: 44))
+            }
+            .padding(.top, Spacing.s9)
+            VStack(spacing: Spacing.s2) {
+                Text("임신을 등록해보세요")
+                    .font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
+                Text("태명과 출산 예정일을 입력하면\n주차별 가이드와 태동·체중 기록이 시작돼요.")
+                    .font(AppFont.callout).foregroundStyle(AppColors.ink3)
+                    .multilineTextAlignment(.center).lineSpacing(3)
+            }
+            LiquidButton(fill: AppColors.pregnancyPink, cornerRadius: Radius.md) {
+                showPregReg = true
+            } label: {
+                Text("임신 등록하기").frame(maxWidth: 220)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, Spacing.s5)
     }
 
     // MARK: - 헤더
@@ -100,15 +134,21 @@ struct PregnancyHomeView: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(AppColors.ink3)
 
-            // 제목 — 태명 반영
-            Text("\(fetusNickname)를 기다리며")
-                .font(.system(size: 28, weight: .heavy))
-                .tracking(-0.4)
-                .foregroundStyle(AppColors.ink)
+            // 제목 — 태명 반영 (탭하면 수정)
+            HStack(spacing: 6) {
+                Text("\(fetusNickname)를 기다리며")
+                    .font(.system(size: 28, weight: .heavy))
+                    .tracking(-0.4)
+                    .foregroundStyle(AppColors.ink)
+                Image(systemName: "pencil.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(AppColors.pregnancyPink.opacity(0.8))
+            }
         }
         .padding(.top, Spacing.s5)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("좋은 하루예요. \(fetusNickname)를 기다리며")
+        .accessibilityLabel("\(fetusNickname)를 기다리며. 탭하면 임신 정보 수정")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - 태아 히어로 카드

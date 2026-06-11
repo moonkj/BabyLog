@@ -207,6 +207,20 @@ final class AppStore: ObservableObject {
         pregnancies.append(preg)
     }
 
+    /// 임신 정보(태명·예정일·LMP) 수정.
+    func updatePregnancy(id: UUID, nickname: String?, lmp: Date?, edd: Date?) {
+        guard let idx = pregnancies.firstIndex(where: { $0.id == id }) else { return }
+        pregnancies[idx].nickname = nickname?.trimmingCharacters(in: .whitespacesAndNewlines)
+        pregnancies[idx].lmpDate = lmp
+        pregnancies[idx].eddDate = edd
+    }
+
+    /// 임신 기록 삭제 (관련 로그 정리).
+    func deletePregnancy(id: UUID) {
+        pregnancyLogs.removeAll { $0.pregnancyId == id }
+        pregnancies.removeAll { $0.id == id }
+    }
+
     // MARK: - Atomic Birth Transition
 
     /// 임신 → 출산 전환을 원자적으로 수행한다.

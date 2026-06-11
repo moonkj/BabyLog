@@ -14,6 +14,7 @@ struct MainTabView: View {
     @State private var mode: AppMode = .baby
     @State private var showQuickRecord = false
     @State private var showAddChild = false
+    @State private var showAddPregnancy = false
     @State private var showSplash = true
 
     private var fabOnLeft: Bool { fabSide == "left" }
@@ -82,9 +83,11 @@ struct MainTabView: View {
             if tab == .home || tab == .record || tab == .dongne {
                 QuickRecordFAB(mode: mode, onQuickRecord: {
                     Haptics.light()
-                    // 아이 없으면 빠른기록 대신 등록부터 (육아 모드)
+                    // 아이/임신 미등록이면 빠른기록 대신 등록부터
                     if mode == .baby && store.children.isEmpty {
                         showAddChild = true
+                    } else if mode == .pregnancy && store.activePregnancy == nil {
+                        showAddPregnancy = true
                     } else {
                         showQuickRecord = true
                     }
@@ -104,6 +107,9 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $showAddChild) {
             AddChildSheet().environmentObject(store)
+        }
+        .sheet(isPresented: $showAddPregnancy) {
+            AddPregnancySheet().environmentObject(store)
         }
         .sheet(isPresented: $showQuickRecord) {
             QuickRecordSheet(mode: mode, onSave: {}, onClose: { showQuickRecord = false })
