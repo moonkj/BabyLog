@@ -146,7 +146,6 @@ struct NearbyScreen: View {
                 // 지도 뷰 — 스크롤 없이 full-height
                 VStack(spacing: 0) {
                     mapToggleBar
-                    emergencyCTA
                     categoryChips
                     filterChips
                     mapView
@@ -161,7 +160,6 @@ struct NearbyScreen: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
                         mapToggleBar
-                        emergencyCTA
                         categoryChips
                         filterChips
                         listSection
@@ -244,51 +242,6 @@ struct NearbyScreen: View {
         .accessibilityLabel(label)
     }
 
-    // MARK: Emergency CTA
-
-    private var emergencyCTA: some View {
-        NavigationLink {
-            EmergencyScreen(onClose: { })
-        } label: {
-            HStack(spacing: Spacing.s3) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                        .fill(AppColors.danger)
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "cross.case.fill")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.white)
-                }
-                .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("응급 모드")
-                        .font(.system(size: 15.5, weight: .heavy))
-                        .foregroundStyle(Color.white)
-                    Text("지금 갈 수 있는 소아과를 한 번에")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.62))
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.5))
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, Spacing.s4)
-            .padding(.vertical, Spacing.s4)
-            .background(
-                LinearGradient(colors: [Color(hex: 0x2A211D), Color(hex: 0x1A1512)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-            )
-            .shadow(color: Color(hex: 0x282118).opacity(0.22), radius: 10, x: 0, y: 8)
-        }
-        .buttonStyle(LiquidPressStyle(scale: 0.985))
-        .padding(.horizontal, Spacing.s5)
-        .padding(.bottom, Spacing.s4)
-        .accessibilityLabel("응급 모드 — 지금 갈 수 있는 소아과를 한 번에")
-        .accessibilityHint("탭하면 응급 모드 화면을 엽니다")
-    }
 
     // MARK: Category Chips
 
