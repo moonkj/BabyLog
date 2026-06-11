@@ -430,9 +430,8 @@ struct BudgetScreen: View {
                         .fill(AppColors.surface)
                         .frame(width: 44, height: 44)
                         .blShadow(.chip)
-                    Image(systemName: "chart.bar.fill")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(Color(hex: 0x5B53B0))
+                    // 동전 플립 (§8.4 가계부)
+                    CoinFlipView(size: 22, tint: AppColors.gold)
                 }
                 .accessibilityHidden(true)
 

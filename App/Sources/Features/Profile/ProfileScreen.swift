@@ -670,6 +670,7 @@ private struct BadgeTileView: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .badgeShine(badge.isEarned)   // 뱃지 광택 (§8.4)
             .opacity(badge.isEarned ? 1.0 : 0.65)
             .scaleEffect(tapped ? 1.04 : 1.0)
         }

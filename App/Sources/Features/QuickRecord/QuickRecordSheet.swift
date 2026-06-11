@@ -298,10 +298,8 @@ struct QuickRecordSheet: View {
                 showProInfo = true
             } label: {
                 HStack(spacing: Spacing.s2) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppColors.gold)
-                        .accessibilityHidden(true)
+                    // 반짝임 (§8.4 AI)
+                    SparkleTwinkleView(size: 15, tint: AppColors.gold)
                     Text("AI 캡션 초안 만들기")
                         .font(.system(size: 13.5, weight: .semibold))
                         .foregroundStyle(AppColors.ink2)
