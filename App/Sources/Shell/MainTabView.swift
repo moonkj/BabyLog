@@ -138,7 +138,7 @@ struct MainTabView: View {
                     .offset(x: fabDX + fabDrag.width, y: fabDY + fabDrag.height)
                     .scaleEffect(fabDragging ? 1.12 : 1)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: fabDragging)
-                    .gesture(fabMoveGesture)
+                    .simultaneousGesture(fabMoveGesture)
                     .transition(.scale.combined(with: .opacity))
             }
         }
