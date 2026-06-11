@@ -299,7 +299,7 @@ private struct PulseDot: View {
         ZStack {
             Circle()
                 .fill(AppColors.danger.opacity(0.25))
-                .frame(width: 18, height: 18)
+                .frame(width: 20, height: 20)
                 .scaleEffect(pulsing ? 1 : 0.6)
                 .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: pulsing)
 

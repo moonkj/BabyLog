@@ -294,13 +294,13 @@ struct SettingsScreen: View {
                     settingsRow(icon: "arrow.up.circle.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
                         Text(cloudBusy ? "처리 중…" : "지금 백업").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
                     }
-                }.buttonStyle(.plain).disabled(cloudBusy)
+                }.buttonStyle(.plain).disabled(cloudBusy).opacity(cloudBusy ? 0.5 : 1)
                 Divider().overlay(AppColors.line).padding(.leading, 62)
                 Button { Task { await runCloud(.restore) } } label: {
                     settingsRow(icon: "arrow.down.circle.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
                         Text("iCloud에서 복원").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
                     }
-                }.buttonStyle(.plain).disabled(cloudBusy)
+                }.buttonStyle(.plain).disabled(cloudBusy).opacity(cloudBusy ? 0.5 : 1)
                 if let s = cloudStatus {
                     Text(s).font(AppFont.caption).foregroundStyle(AppColors.ink3)
                         .padding(.horizontal, Spacing.s4).padding(.bottom, Spacing.s2)
@@ -451,7 +451,7 @@ struct SettingsScreen: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-            }.buttonStyle(.plain).disabled(backupBusy)
+            }.buttonStyle(.plain).disabled(backupBusy).opacity(backupBusy ? 0.5 : 1)
 
             Divider().overlay(AppColors.line).padding(.leading, 62)
 
@@ -466,7 +466,7 @@ struct SettingsScreen: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-            }.buttonStyle(.plain).disabled(backupBusy)
+            }.buttonStyle(.plain).disabled(backupBusy).opacity(backupBusy ? 0.5 : 1)
         }
     }
 

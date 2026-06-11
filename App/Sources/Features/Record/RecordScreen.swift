@@ -84,7 +84,7 @@ struct RecordScreen: View {
     // MARK: 세그먼트 피커
 
     private var segmentPicker: some View {
-        HStack(spacing: Spacing.s1) {
+        HStack(spacing: Spacing.s3) {
             ForEach(RecordSegment.allCases) { seg in
                 BLChip(text: seg.label, on: segment == seg) {
                     guard segment != seg else { return }

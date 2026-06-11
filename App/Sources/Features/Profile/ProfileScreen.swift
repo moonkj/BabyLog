@@ -487,7 +487,7 @@ struct ProfileScreen: View {
             let totalCount  = displayCatalog.count
 
             BLSectionHead(
-                eyebrow: "COLLECTION",
+                eyebrow: "컬렉션",
                 title: "내 뱃지 \(earnedCount)/\(totalCount)",
                 action: "전체",
                 onAction: { selectedBadgeCategory = nil }
@@ -601,7 +601,7 @@ struct ProfileScreen: View {
             HStack(spacing: Spacing.s3) {
                 // 아이콘 컨테이너 (44pt — 접근성 최소 탭 영역)
                 ZStack {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                         .fill(iconBg)
                     Image(systemName: icon)
                         .font(.system(size: 17, weight: .medium))

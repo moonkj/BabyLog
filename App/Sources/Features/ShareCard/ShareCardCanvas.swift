@@ -139,20 +139,21 @@ struct ShareCardCanvas: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
-            // 수치 행
-            dataStatsRow(textAlign: textAlign, hAlign: hAlign)
+            // 수치 행 — 이름과 동일하게 폭에 비례해 스케일 (계층 일관성)
+            dataStatsRow(textAlign: textAlign, hAlign: hAlign, w: w)
         }
         .padding(Spacing.s4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
     }
 
     @ViewBuilder
-    private func dataStatsRow(textAlign: TextAlignment, hAlign: HorizontalAlignment) -> some View {
+    private func dataStatsRow(textAlign: TextAlignment, hAlign: HorizontalAlignment, w: CGFloat) -> some View {
         let items: [String] = buildStatItems()
+        let numFont = w * 0.045
         if !items.isEmpty {
-            FlexRow(items: items, hAlign: hAlign) { item in
+            FlexRow(items: items, hAlign: hAlign, separatorSize: numFont) { item in
                 Text(item)
-                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                    .font(.system(size: numFont, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.92))
             }
         }
@@ -191,7 +192,7 @@ struct ShareCardCanvas: View {
             Text("BabyLog")
                 .font(.system(size: 11, weight: .heavy))
                 .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+                .shadow(color: Color(hex: 0x282118).opacity(0.5), radius: 2, x: 0, y: 1)
         }
     }
 }
@@ -203,6 +204,7 @@ struct FlexRow<Item, Content: View>: View {
     let items: [Item]
     var hAlign: HorizontalAlignment = .leading
     var spacing: CGFloat = 10
+    var separatorSize: CGFloat = 13
     @ViewBuilder let content: (Item) -> Content
 
     var body: some View {
@@ -213,7 +215,7 @@ struct FlexRow<Item, Content: View>: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
                     if idx > 0 {
                         Text("·")
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.system(size: separatorSize, weight: .regular))
                             .foregroundStyle(.white.opacity(0.5))
                     }
                     content(item)

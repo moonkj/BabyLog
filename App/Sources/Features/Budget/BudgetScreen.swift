@@ -408,7 +408,9 @@ struct BudgetScreen: View {
             Text(label)
                 .font(.system(size: 10.5, weight: .medium))
                 .foregroundStyle(AppColors.ink3)
-                .lineLimit(1)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Spacing.s1)
@@ -545,7 +547,7 @@ struct BudgetScreen: View {
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text(guide.title)
-                        .font(.system(size: 14.5, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(AppColors.ink)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -867,7 +869,8 @@ private struct ExpenseRow: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "M월 d일"
         formatter.locale = Locale(identifier: "ko_KR")
-        return formatter.string(from: date)
+        let label = formatter.string(from: date)
+        return Calendar.current.isDateInToday(date) ? "오늘 · \(label)" : label
     }
 }
 

@@ -168,6 +168,10 @@ struct CrewChatSheet: View {
                 Spacer(minLength: 0)
             }
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 1)
+        }
         .accessibilityLabel("모임: \(meetup.place), 주최 \(meetup.hostName)")
     }
 

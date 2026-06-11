@@ -272,7 +272,7 @@ struct CrewPostDetailSheet: View {
                             .frame(width: 30, height: 30)
                             .overlay {
                                 Image(systemName: "person.fill")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(AppColors.ink3)
                             }
                             .accessibilityHidden(true)

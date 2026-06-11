@@ -70,6 +70,10 @@ struct MarketBuySheet: View {
                 Spacer(minLength: 0)
             }
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 1)
+        }
     }
 
     private var methodPicker: some View {
@@ -109,6 +113,10 @@ struct MarketBuySheet: View {
             }
         }
         .background(Color(hex: 0xE6F1FB), in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 1)
+        }
     }
 
     private var bottomBar: some View {

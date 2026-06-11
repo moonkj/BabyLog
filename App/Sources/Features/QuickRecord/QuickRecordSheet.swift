@@ -449,9 +449,9 @@ struct QuickRecordSheet: View {
                 ZStack {
                     Circle()
                         .fill(AppColors.primaryTint)
-                        .frame(width: 84, height: 84)
+                        .frame(width: 76, height: 76)
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 38))
+                        .font(.system(size: 34))
                         .foregroundStyle(AppColors.primary)
                         .accessibilityHidden(true)
                 }

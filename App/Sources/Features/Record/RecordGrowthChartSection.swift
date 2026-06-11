@@ -121,9 +121,9 @@ struct GrowthChartSection: View {
                 // 1개 데이터 단일 포인트 안내
                 if records.count == 1 {
                     BLCard(padding: 14, flat: true) {
-                        HStack(spacing: 10) {
+                        HStack(spacing: 12) {
                             Image(systemName: "info.circle.fill")
-                                .font(.system(size: 18, weight: .medium))
+                                .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.primary)
                                 .accessibilityHidden(true)
                             Text("측정이 2회 이상 쌓이면 추이 그래프가 그려져요")
@@ -373,12 +373,12 @@ struct GrowthChartSection: View {
         HStack {
             statCell(value: currentValue.map { String(format: "%.1f\(metric.unit)", $0) } ?? "–",
                      label: "현재 \(metric.label)")
-            Divider().frame(height: 36).background(AppColors.line)
+            Divider().frame(height: 32).background(AppColors.line2)
             statCell(value: recentDelta.map { (d: Double) in
                 let sign = d >= 0 ? "+" : ""
                 return "\(sign)\(String(format: "%.1f", d))\(metric.unit)"
             } ?? "–", label: "최근 2개월")
-            Divider().frame(height: 36).background(AppColors.line)
+            Divider().frame(height: 32).background(AppColors.line2)
             statCell(value: "\(records.count)회", label: "총 측정 횟수")
         }
         .frame(maxWidth: .infinity)
@@ -387,7 +387,7 @@ struct GrowthChartSection: View {
     private func statCell(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(AppFont.num(18, weight: .heavy))
+                .font(AppFont.num(17, weight: .heavy))
                 .foregroundStyle(AppColors.ink)
             Text(label)
                 .font(.system(size: 11.5))

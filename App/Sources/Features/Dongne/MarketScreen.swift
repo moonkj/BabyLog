@@ -275,7 +275,7 @@ struct MarketScreen: View {
     private var itemList: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("\(filteredItems.count)개 매물")
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppColors.ink3)
                 .padding(.horizontal, 2)
                 .padding(.bottom, Spacing.s2)
@@ -431,7 +431,7 @@ private struct MkItemCard: View {
         .frame(minHeight: photoSide)
         .padding(.vertical, Spacing.s3)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(AppColors.line).frame(height: 1)
+            Rectangle().fill(AppColors.line2).frame(height: 1)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

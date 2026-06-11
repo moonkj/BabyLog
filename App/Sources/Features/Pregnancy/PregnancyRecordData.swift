@@ -119,7 +119,7 @@ struct BellyPhotoCell: View {
                     .frame(width: 104, height: 132)
                 // D라인 아이콘 힌트
                 Image(systemName: "figure.stand")
-                    .font(.system(size: 36, weight: .ultraLight))
+                    .font(.system(size: 32, weight: .light))
                     .foregroundStyle(Color.white.opacity(0.7))
                     .accessibilityHidden(true)
             }

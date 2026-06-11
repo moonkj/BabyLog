@@ -144,6 +144,10 @@ struct MarketChatSheet: View {
                 Spacer(minLength: 0)
             }
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 1)
+        }
         .accessibilityLabel("매물: \(item.title), \(item.isFree ? "무료나눔" : "\(item.price.formatted())원")")
     }
 

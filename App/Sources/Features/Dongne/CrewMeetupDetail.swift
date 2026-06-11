@@ -200,7 +200,7 @@ struct CrewMeetupDetail: View {
                             .overlay { Circle().stroke(AppColors.surface, lineWidth: 2) }
 
                         Text(CrewAvatarPalette.name(for: i))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(AppColors.ink3)
                             .lineLimit(1)
                     }
@@ -267,6 +267,10 @@ struct CrewMeetupDetail: View {
                     BLBadge(tone: .mint, text: "내 모임", systemIcon: nil, dot: false)
                 }
             }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("호스트 \(meetup.hostName), \(meetup.hostTier.rawValue)")

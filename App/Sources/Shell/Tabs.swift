@@ -605,6 +605,9 @@ struct HomeTab: View {
     }
     private var peerCard: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let m = peerAgeMonths {
+                BLBadge(tone: .purple, text: "\(m)개월")
+            }
             Label(peerAgeMonths.map { "\($0)개월 또래 이야기" } ?? "또래 이야기", systemImage: "sparkles")
                 .font(.system(size: 12.5, weight: .bold))
                 .foregroundStyle(Color(hex: 0x5B53B0))
@@ -629,12 +632,12 @@ struct HomeTab: View {
                 .frame(width: 100)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
-                BLBadge(tone: .pink, text: "1년 전 오늘", systemIcon: "clock")
+                BLBadge(tone: .pink, text: "1년 전 오늘", systemIcon: "clock.badge")
                 Text(memoryEntry?.content ?? memoryEntry?.milestone ?? "소중한 순간을 남긴 날 🥰")
-                    .font(.system(size: 14.5, weight: .semibold))
+                    .font(AppFont.callout)
                     .foregroundStyle(AppColors.ink)
                     .lineSpacing(2)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -695,11 +698,11 @@ struct HomeTab: View {
                     PhotoPlaceholder(seed: 2, cornerRadius: Radius.md)
                 }
             }
-            .frame(width: 56, height: 56)
+            .frame(width: 64, height: 64)
             .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(childName).font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
+                Text(childName).font(.system(size: 24, weight: .heavy)).foregroundStyle(AppColors.ink)
                 Text(statLine)
                     .font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
             }
@@ -889,7 +892,7 @@ struct HomeTab: View {
                         .foregroundStyle(AppColors.ink)
                         .lineLimit(1)
                     Text(day)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(AppFont.micro)
                         .foregroundStyle(AppColors.ink3)
                 }
                 Spacer()

@@ -504,7 +504,7 @@ struct NearbyScreen: View {
                 .foregroundStyle(AppColors.ink3)
                 .accessibilityHidden(true)
             Text("영업 정보는 공공데이터 기반이며 실시간과 다를 수 있어요. 방문 전 전화 확인을 권장합니다.")
-                .font(.system(size: 11.5, weight: .regular))
+                .font(.system(size: 12.5, weight: .regular))
                 .foregroundStyle(AppColors.ink3)
                 .multilineTextAlignment(.leading)
                 .lineSpacing(2)

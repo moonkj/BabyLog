@@ -146,6 +146,11 @@ struct PregnancyRecordScreen: View {
                 .foregroundStyle(AppColors.ink3)
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
+                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                        .stroke(AppColors.line, lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("기록 멈춤 또는 종료")
@@ -336,13 +341,13 @@ struct PregnancyRecordScreen: View {
                     ZStack {
                         Circle()
                             .fill(AppColors.surface)
-                            .frame(width: 88, height: 88)
+                            .frame(width: 80, height: 80)
                             .overlay {
                                 Circle().stroke(Color.white.opacity(0.6), lineWidth: 1)
                             }
                             .blShadow(.card)
                         Text(fruit.emoji)
-                            .font(.system(size: 44))
+                            .font(.system(size: 40))
                     }
                     .accessibilityHidden(true)
 

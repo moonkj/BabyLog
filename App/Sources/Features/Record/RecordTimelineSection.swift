@@ -92,8 +92,8 @@ private struct DateGroupHeader: View {
                 .font(.system(size: 13, weight: .heavy))
                 .foregroundStyle(AppColors.ink2)
             Rectangle()
-                .fill(AppColors.line)
-                .frame(height: 1)
+                .fill(AppColors.line2)
+                .frame(height: 1.5)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
@@ -109,7 +109,7 @@ private struct GrowthTimelineCard: View {
                 // 색+아이콘 인코딩
                 ZStack {
                     RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                        .fill(Color(hex: 0xE6F1FB))
+                        .fill(AppColors.primaryTint)
                         .frame(width: 46, height: 46)
                     Image(systemName: "ruler.fill")
                         .font(.system(size: 20, weight: .semibold))
@@ -120,7 +120,7 @@ private struct GrowthTimelineCard: View {
                     Text("성장 측정")
                         .font(.system(size: 14.5, weight: .bold))
                         .foregroundStyle(AppColors.ink)
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         if let h = record.heightCm {
                             Text("키 \(String(format: "%.1f", h))cm")
                         }

@@ -687,7 +687,7 @@ struct OnboardingView: View {
         case .denied:
             Text("설정에서 변경")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppColors.ink3)
+                .foregroundStyle(AppColors.ink2)
         }
     }
 

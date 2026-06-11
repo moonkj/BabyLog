@@ -39,7 +39,7 @@ struct MkSellFlowSheet: View {
                 .accessibilityHidden(true)
 
             // 단계 인디케이터
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 ForEach(0..<3, id: \.self) { i in
                     Capsule()
                         .fill(i <= step ? AppColors.ink : AppColors.line2)
@@ -178,7 +178,7 @@ struct MkSellFlowSheet: View {
                             }
                             .foregroundStyle(selectedGrade == grade ? Color.white : AppColors.ink2)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 56)
+                            .frame(height: 60)
                             .background(
                                 selectedGrade == grade ? AppColors.ink : AppColors.surface,
                                 in: RoundedRectangle(cornerRadius: 13, style: .continuous)

@@ -226,6 +226,10 @@ struct MarketDetailSellerCard: View {
                 Spacer(minLength: 0)
             }
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 1)
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("판매자 \(item.sellerName), \(item.sellerTier.rawValue), \(item.mine ? "내 매물" : item.distanceText)")
         .accessibilityHint("판매자 프로필 보기")
@@ -301,6 +305,10 @@ struct MarketDetailSafeTradeGuide: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(hex: 0xE6F1FB), in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 1)
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("안심 거래존 이용 권장. 주민센터·공공도서관 앞 등 공공장소에서 거래하면 더 안전해요.")
     }
