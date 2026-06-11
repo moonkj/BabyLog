@@ -169,14 +169,25 @@ struct HomeTab: View {
     }
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            // 헤더 + 아이 칩은 ScrollView 밖 고정 — 매초 갱신(생애시계)에 탭이 가로채이지 않게,
+            // 그리고 아이 전환/추가가 항상 닿게.
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 header
                 childChips
-                layoutContent
-                Color.clear.frame(height: 96)
             }
-            .padding(Spacing.s5)
+            .padding(.horizontal, Spacing.s5)
+            .padding(.top, Spacing.s5)
+            .padding(.bottom, Spacing.s3)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    layoutContent
+                    Color.clear.frame(height: 96)
+                }
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, Spacing.s1)
+            }
         }
         .background(AppColors.canvas)
         .fullScreenCover(isPresented: $showEmergency) {
