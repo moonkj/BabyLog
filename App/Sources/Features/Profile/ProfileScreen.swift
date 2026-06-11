@@ -721,15 +721,15 @@ private struct BadgeDetailOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.55).ignoresSafeArea()
+            // 옅은 디밍 — 뒤 뱃지가 비치도록 (TickLab 스타일)
+            Color.black.opacity(0.3).ignoresSafeArea()
                 .onTapGesture { onClose() }
 
             VStack(spacing: Spacing.s5) {
-                // 회전+확대 등장하는 큰 뱃지 카드 (살짝 투명한 프로스티드 글래스 — TickLab 스타일)
+                // 회전+확대 등장하는 큰 뱃지 카드 — 단순 반투명 틴트(블러 없음)라 뒤가 비친다
                 ZStack {
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .fill((badge.isEarned ? badge.tone.ink : AppColors.ink3).opacity(0.5))
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                     Circle()
                         .fill(.white.opacity(0.22))
                         .frame(width: 180, height: 180)
@@ -756,9 +756,10 @@ private struct BadgeDetailOverlay: View {
                         .foregroundStyle(.white)
                     Text(badge.condition)
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.85))
                         .multilineTextAlignment(.center)
                 }
+                .shadow(color: .black.opacity(0.45), radius: 4, y: 1)
 
                 // 장착 / 잠금 안내
                 if badge.isEarned {
