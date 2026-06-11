@@ -144,10 +144,10 @@ struct PregnancyHomeView: View {
             } label: {
                 Text("임신 등록하기").frame(maxWidth: 220)
             }
-            Spacer()
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Spacing.s5)
+        .padding(.bottom, Spacing.s9)
     }
 
     // MARK: - 헤더
