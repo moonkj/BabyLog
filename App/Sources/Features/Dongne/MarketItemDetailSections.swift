@@ -213,30 +213,17 @@ struct MarketDetailSellerCard: View {
                         Image(systemName: "location.fill")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(AppColors.ink3)
-                        Text("\(item.distanceText) · 거래 47회 · 응답률 94%")
+                        Text(item.mine ? "내가 등록한 매물" : item.distanceText)
                             .font(AppFont.num(12))
                             .foregroundStyle(AppColors.ink3)
                     }
-
-                    // 평점 표시
-                    HStack(spacing: 3) {
-                        ForEach(0..<5, id: \.self) { i in
-                            Image(systemName: i < 4 ? "star.fill" : "star.leadinghalf.filled")
-                                .font(.system(size: 11, weight: .regular))
-                                .foregroundStyle(AppColors.gold)
-                        }
-                        Text("4.8")
-                            .font(AppFont.num(11, weight: .semibold))
-                            .foregroundStyle(AppColors.ink2)
-                    }
-                    .padding(.top, 1)
                 }
 
                 Spacer(minLength: 0)
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("판매자 \(item.sellerName), \(item.sellerTier.rawValue), \(item.distanceText), 거래 47회, 응답률 94%, 평점 4.8")
+        .accessibilityLabel("판매자 \(item.sellerName), \(item.sellerTier.rawValue), \(item.mine ? "내 매물" : item.distanceText)")
         .accessibilityHint("판매자 프로필 보기")
     }
 }

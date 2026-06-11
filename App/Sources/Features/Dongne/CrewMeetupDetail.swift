@@ -227,17 +227,13 @@ struct CrewMeetupDetail: View {
 
                 Spacer(minLength: 0)
 
-                Image(systemName: "star.fill")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(AppColors.gold)
-                    .accessibilityHidden(true)
-                Text("4.9")
-                    .font(AppFont.num(12, weight: .semibold))
-                    .foregroundStyle(AppColors.ink2)
+                if meetup.mine {
+                    BLBadge(tone: .mint, text: "내 모임", systemIcon: nil, dot: false)
+                }
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("호스트 \(meetup.hostName), \(meetup.hostTier.rawValue), 평점 4.9")
+        .accessibilityLabel("호스트 \(meetup.hostName), \(meetup.hostTier.rawValue)")
     }
 
     // MARK: 그룹 채팅 안내 카드
