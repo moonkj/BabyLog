@@ -8,7 +8,7 @@ import Foundation
 
 // MARK: - Crew Models
 
-enum CrewPostCategory: String, CaseIterable {
+enum CrewPostCategory: String, CaseIterable, Codable {
     case info    = "정보공유"
     case together = "같이해요"
     case consult  = "고민상담"
@@ -85,14 +85,17 @@ struct CrewGroup: Identifiable {
     let interestTags: [String]
 }
 
-struct CrewPost: Identifiable {
-    let id: String
-    let category: CrewPostCategory
-    let authorName: String
-    let timeText: String
-    let title: String
-    let replyCount: Int
-    let likeCount: Int
+struct CrewPost: Identifiable, Codable, Hashable {
+    var id: String = UUID().uuidString
+    var category: CrewPostCategory
+    var authorName: String
+    var timeText: String
+    var title: String
+    var body: String = ""
+    var replyCount: Int
+    var likeCount: Int
+    var mine: Bool = false
+    var createdAt: Date = Date()
 }
 
 // MARK: - Mock Data
@@ -111,12 +114,14 @@ private let crewGroups: [CrewGroup] = [
     CrewGroup(id: "g3", name: "한강뷰 아파트 이웃들",  memberCount: 17, distanceText: "같은 단지", ageRange: "0–24개월",   interestTags: ["직거래", "공동구매", "놀이터"]),
 ]
 
-private let crewPosts: [CrewPost] = [
-    CrewPost(id: "po1", category: .info,     authorName: "서연이네", timeText: "10분 전",  title: "망원소아과 주말 대기 시간 공유해요 (오늘 기준)",              replyCount: 12, likeCount: 31),
-    CrewPost(id: "po2", category: .together, authorName: "지우맘",   timeText: "1시간 전", title: "내일 한강 나들이 같이 가실 분 계신가요? (유아차 OK)",          replyCount: 8,  likeCount: 14),
-    CrewPost(id: "po3", category: .consult,  authorName: "하준이네", timeText: "3시간 전", title: "8개월인데 아직 뒤집기를 잘 못해요 — 비슷한 경험 있으신 분?",  replyCount: 21, likeCount: 46),
-    CrewPost(id: "po4", category: .info,     authorName: "민서맘",   timeText: "어제",    title: "마포구 유아 발달 지원금 신청 방법 정리했어요",                  replyCount: 5,  likeCount: 28),
-]
+extension CrewPost {
+    static let seedSamples: [CrewPost] = [
+        CrewPost(id: "po1", category: .info,     authorName: "서연이네", timeText: "10분 전",  title: "망원소아과 주말 대기 시간 공유해요 (오늘 기준)",              body: "오늘 오전 기준 대기 12팀이었어요. 오후 2시 이후가 한산합니다.", replyCount: 12, likeCount: 31),
+        CrewPost(id: "po2", category: .together, authorName: "지우맘",   timeText: "1시간 전", title: "내일 한강 나들이 같이 가실 분 계신가요? (유아차 OK)",          body: "내일 오전 10시 망원한강공원에서 산책해요. 댓글 주세요!", replyCount: 8,  likeCount: 14),
+        CrewPost(id: "po3", category: .consult,  authorName: "하준이네", timeText: "3시간 전", title: "8개월인데 아직 뒤집기를 잘 못해요 — 비슷한 경험 있으신 분?",  body: "또래보다 느린 것 같아 걱정이에요. 비슷한 경험 나눠주세요.", replyCount: 21, likeCount: 46),
+        CrewPost(id: "po4", category: .info,     authorName: "민서맘",   timeText: "어제",    title: "마포구 유아 발달 지원금 신청 방법 정리했어요",                  body: "복지로에서 신청 가능하고 서류는 ~~~ 입니다.", replyCount: 5,  likeCount: 28),
+    ]
+}
 
 // MARK: - CrewScreen
 
@@ -257,7 +262,7 @@ private struct CrewActiveContent: View {
 
             BLCard(padding: 0) {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(crewPosts.enumerated()), id: \.element.id) { idx, post in
+                    ForEach(Array(store.crewPosts.enumerated()), id: \.element.id) { idx, post in
                         CrewPostRow(post: post)
                             .padding(.horizontal, 15)
                             .padding(.vertical, 13)

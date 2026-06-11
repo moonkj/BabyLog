@@ -35,7 +35,11 @@ final class AppStore: ObservableObject {
     @Published private(set) var likedCrewPostIds: Set<String> = []
     @Published private(set) var vaccineHospitals: [String: String] = [:]
     @Published private(set) var checkupDoneKeys: Set<String> = []
+    @Published private(set) var crewPosts: [CrewPost] = []
+    @Published private(set) var crewPostComments: [String: [String]] = [:]
+    @Published private(set) var crewChats: [String: [ChatMessage]] = [:]
     private var crewSeeded: Bool = false
+    private var crewPostSeeded: Bool = false
     /// 저장 파일 디코딩 실패 여부 — true면 자동저장으로 원본을 덮어쓰지 않는다(데이터 보존).
     private var loadDidFail: Bool = false
     @Published var selectedChildId: UUID?
@@ -162,6 +166,10 @@ final class AppStore: ObservableObject {
                     self.likedCrewPostIds   = saved.likedCrewPostIds
                     self.vaccineHospitals   = saved.vaccineHospitals
                     self.checkupDoneKeys    = saved.checkupDoneKeys
+                    self.crewPosts          = saved.crewPosts
+                    self.crewPostComments   = saved.crewPostComments
+                    self.crewChats          = saved.crewChats
+                    self.crewPostSeeded     = saved.crewPostSeeded
                 }
             } catch {
                 // 손상 파일 보존(복구용) + 자동저장 차단
@@ -171,6 +179,7 @@ final class AppStore: ObservableObject {
         }
         seedMarketIfNeeded()
         seedCrewIfNeeded()
+        seedCrewPostsIfNeeded()
     }
 
     // MARK: - 크루 (로컬 백본 — 추후 Supabase)
@@ -179,6 +188,50 @@ final class AppStore: ObservableObject {
         guard !crewSeeded else { return }
         if crews.isEmpty { crews = CrewMeetup.seedSamples }
         crewSeeded = true
+    }
+
+    func seedCrewPostsIfNeeded() {
+        guard !crewPostSeeded else { return }
+        if crewPosts.isEmpty { crewPosts = CrewPost.seedSamples }
+        crewPostSeeded = true
+    }
+
+    // MARK: - 크루 게시판 (로컬)
+
+    func addCrewPost(category: CrewPostCategory, title: String, body: String) {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        let nickname = UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님"
+        let post = CrewPost(category: category, authorName: nickname, timeText: "방금 전",
+                            title: t, body: body.trimmingCharacters(in: .whitespacesAndNewlines),
+                            replyCount: 0, likeCount: 0, mine: true)
+        crewPosts.insert(post, at: 0)
+    }
+
+    func deleteCrewPost(id: String) {
+        crewPosts.removeAll { $0.id == id }
+        likedCrewPostIds.remove(id)
+        crewPostComments[id] = nil
+    }
+
+    func crewPostCommentList(postId: String) -> [String] { crewPostComments[postId] ?? [] }
+    func addCrewPostComment(postId: String, text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        crewPostComments[postId, default: []].append(t)
+    }
+    /// 게시글 댓글 수(기본 + 사용자 추가)
+    func crewPostReplyCount(_ post: CrewPost) -> Int {
+        post.replyCount + (crewPostComments[post.id]?.count ?? 0)
+    }
+
+    // MARK: - 크루 모임 채팅 (로컬, 참가자용)
+
+    func crewChat(meetupId: String) -> [ChatMessage] { crewChats[meetupId] ?? [] }
+    func sendCrewChat(meetupId: String, text: String, mine: Bool = true) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        crewChats[meetupId, default: []].append(ChatMessage(text: t, mine: mine))
     }
 
     func addCrew(_ meetup: CrewMeetup) {
@@ -190,6 +243,7 @@ final class AppStore: ObservableObject {
     func deleteCrew(id: String) {
         crews.removeAll { $0.id == id }
         joinedCrewIds.remove(id)
+        crewChats[id] = nil
     }
 
     func isJoinedCrew(_ id: String) -> Bool { joinedCrewIds.contains(id) }
@@ -335,7 +389,11 @@ final class AppStore: ObservableObject {
             joinedCrewGroupIds: joinedCrewGroupIds,
             likedCrewPostIds: likedCrewPostIds,
             vaccineHospitals: vaccineHospitals,
-            checkupDoneKeys: checkupDoneKeys
+            checkupDoneKeys: checkupDoneKeys,
+            crewPosts: crewPosts,
+            crewPostComments: crewPostComments,
+            crewChats: crewChats,
+            crewPostSeeded: crewPostSeeded
         )
     }
 
@@ -361,8 +419,13 @@ final class AppStore: ObservableObject {
         likedCrewPostIds   = state.likedCrewPostIds
         vaccineHospitals   = state.vaccineHospitals
         checkupDoneKeys    = state.checkupDoneKeys
+        crewPosts          = state.crewPosts
+        crewPostComments   = state.crewPostComments
+        crewChats          = state.crewChats
+        crewPostSeeded     = state.crewPostSeeded
         seedMarketIfNeeded()
         seedCrewIfNeeded()
+        seedCrewPostsIfNeeded()
     }
 
     // MARK: - 선택 아이 / 온보딩

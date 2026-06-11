@@ -42,6 +42,11 @@ struct PersistableState: Codable, Equatable {
     /// 접종 병원 (key="childId|vaccineId") / 산전검진 완료 (key="pregnancyId|checkupId")
     var vaccineHospitals: [String: String]
     var checkupDoneKeys: Set<String>
+    // 크루 게시판/채팅 (로컬)
+    var crewPosts: [CrewPost]
+    var crewPostComments: [String: [String]]
+    var crewChats: [String: [ChatMessage]]
+    var crewPostSeeded: Bool
 
     init(
         pregnancies: [Pregnancy] = [],
@@ -63,7 +68,11 @@ struct PersistableState: Codable, Equatable {
         joinedCrewGroupIds: Set<String> = [],
         likedCrewPostIds: Set<String> = [],
         vaccineHospitals: [String: String] = [:],
-        checkupDoneKeys: Set<String> = []
+        checkupDoneKeys: Set<String> = [],
+        crewPosts: [CrewPost] = [],
+        crewPostComments: [String: [String]] = [:],
+        crewChats: [String: [ChatMessage]] = [:],
+        crewPostSeeded: Bool = false
     ) {
         self.pregnancies = pregnancies
         self.children = children
@@ -85,6 +94,10 @@ struct PersistableState: Codable, Equatable {
         self.likedCrewPostIds = likedCrewPostIds
         self.vaccineHospitals = vaccineHospitals
         self.checkupDoneKeys = checkupDoneKeys
+        self.crewPosts = crewPosts
+        self.crewPostComments = crewPostComments
+        self.crewChats = crewChats
+        self.crewPostSeeded = crewPostSeeded
     }
 
     // MARK: - Codable (하위 호환 디코딩)
@@ -97,6 +110,7 @@ struct PersistableState: Codable, Equatable {
         case crews, joinedCrewIds, crewSeeded
         case joinedCrewGroupIds, likedCrewPostIds
         case vaccineHospitals, checkupDoneKeys
+        case crewPosts, crewPostComments, crewChats, crewPostSeeded
     }
 
     init(from decoder: Decoder) throws {
@@ -121,6 +135,10 @@ struct PersistableState: Codable, Equatable {
         likedCrewPostIds   = try container.decodeIfPresent(Set<String>.self, forKey: .likedCrewPostIds) ?? []
         vaccineHospitals   = try container.decodeIfPresent([String: String].self, forKey: .vaccineHospitals) ?? [:]
         checkupDoneKeys    = try container.decodeIfPresent(Set<String>.self, forKey: .checkupDoneKeys) ?? []
+        crewPosts          = try container.decodeIfPresent([CrewPost].self, forKey: .crewPosts) ?? []
+        crewPostComments   = try container.decodeIfPresent([String: [String]].self, forKey: .crewPostComments) ?? [:]
+        crewChats          = try container.decodeIfPresent([String: [ChatMessage]].self, forKey: .crewChats) ?? [:]
+        crewPostSeeded     = try container.decodeIfPresent(Bool.self, forKey: .crewPostSeeded) ?? false
     }
 }
 
