@@ -463,9 +463,8 @@ private struct CrewColdStartContent: View {
                         )
                     )
                     .frame(width: 96, height: 96)
-                Image(systemName: "person.3.fill")
-                    .font(.system(size: 38, weight: .semibold))
-                    .foregroundStyle(AppColors.primary)
+                // 까닥이는 이웃 (§8.4)
+                NoddingNeighborView(size: 40, tint: AppColors.primary)
             }
             .padding(.top, 32)
             .padding(.bottom, 20)

@@ -137,11 +137,59 @@ struct TypingDotsView: View {
     }
 }
 
+// MARK: - 카메라 포커스 (성장 카드 공유) §8.4
+
+/// 렌즈 초점 잡히듯 포커스 브라켓이 좁혀졌다 펴진다.
+struct CameraFocusView: View {
+    var size: CGFloat = 16
+    var tint: Color = .white
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var focus = false
+
+    var body: some View {
+        ZStack {
+            Image(systemName: "camera.viewfinder")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(tint)
+                .scaleEffect(focus ? 0.92 : 1.0)
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) { focus = true }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - 까닥이는 이웃 (동네 크루) §8.4
+
+/// 사람 아이콘이 까닥(좌우 기울임)하며 친근함을 표현.
+struct NoddingNeighborView: View {
+    var size: CGFloat = 30
+    var tint: Color = AppColors.primary
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var nod = false
+
+    var body: some View {
+        Image(systemName: "person.2.fill")
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(tint)
+            .rotationEffect(.degrees(nod ? 6 : -6), anchor: .bottom)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { nod = true }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 #Preview {
     VStack(spacing: 30) {
         CoinFlipView(size: 40)
         SparkleTwinkleView(size: 28)
         MoonSwingView(size: 28, tint: .indigo)
+        CameraFocusView(size: 28, tint: .indigo)
+        NoddingNeighborView(size: 40)
         TypingDotsView()
     }
     .padding()

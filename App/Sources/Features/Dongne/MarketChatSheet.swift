@@ -13,6 +13,7 @@ struct MarketChatSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var messageText = ""
+    @State private var sellerTyping = false
 
     @State private var messages: [(text: String, isMe: Bool)] = [
         ("안녕하세요! 혹시 직거래 가능할까요?", true),
@@ -35,6 +36,16 @@ struct MarketChatSheet: View {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(messages.indices, id: \.self) { i in
                         MkChatBubble(text: messages[i].text, isMe: messages[i].isMe)
+                    }
+
+                    // 판매자 입력 중 (§8.5 대화 말풍선 점)
+                    if sellerTyping {
+                        HStack {
+                            TypingDotsView(tint: AppColors.ink3)
+                                .padding(.horizontal, 14).padding(.vertical, 12)
+                                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            Spacer()
+                        }
                     }
 
                     // 안심 거래존 뱃지
@@ -135,6 +146,14 @@ struct MarketChatSheet: View {
                 }
                 messageText = ""
                 Haptics.light()
+                // 데모: 판매자 입력 중 → 응답 (샘플 화면)
+                withAnimation { sellerTyping = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                    withAnimation {
+                        sellerTyping = false
+                        messages.append((text: "네, 확인했어요! 😊 편하신 시간 알려주세요.", isMe: false))
+                    }
+                }
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 38, weight: .regular))
