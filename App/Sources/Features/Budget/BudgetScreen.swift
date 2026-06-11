@@ -618,12 +618,9 @@ private struct SubsidyCard: View {
         .accessibilityLabel("\(info.name), \(amountStr(info.amountKRW)). \(info.eligibility)\(dDayLabel.map { ". 마감 \($0)" } ?? "")")
     }
 
-    // 복지로 딥링크(mock)가 깨질 수 있어, 이름 기반 검색으로 항상 정상 페이지가 열리게 한다.
-    // (복지로 API 연동 시 info.applyURL 실링크로 자동 대체 가능)
+    // 복지로 공식 사이트로 직접 이동. (mock 딥링크는 세션 의존이라 메인으로; 복지로 API 연동 시 실 딥링크로 대체)
     private func openApplyInfo() {
-        let q = "\(info.name) 복지로 신청"
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "복지로"
-        if let url = URL(string: "https://search.naver.com/search.naver?query=\(q)") {
+        if let url = URL(string: "https://www.bokjiro.go.kr") {
             UIApplication.shared.open(url)
         }
     }
