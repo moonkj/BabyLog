@@ -4,6 +4,8 @@ import SwiftUI
 /// 모드별 액션 분기(육아: 성장측정/사진/메모 · 임신: 태동/배사진/메모).
 struct QuickRecordFAB: View {
     var mode: AppMode
+    /// 방금 드래그로 이동했으면 true — 직후 탭(메뉴 열림)을 무시한다.
+    var suppressTap: Bool = false
     var onQuickRecord: () -> Void = {}
     @State private var open = false
     @State private var sheen = false
@@ -77,6 +79,7 @@ struct QuickRecordFAB: View {
             }
 
             Button {
+                if suppressTap { return }   // 드래그 직후 탭 무시
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { open.toggle() }
             } label: {
                 Image(systemName: "plus")

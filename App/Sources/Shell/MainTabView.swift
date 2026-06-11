@@ -21,6 +21,7 @@ struct MainTabView: View {
     @AppStorage("bl_fab_dy") private var fabDY: Double = 0
     @State private var fabDrag: CGSize = .zero
     @State private var fabDragging = false
+    @State private var fabSuppressTap = false
 
     private var fabOnLeft: Bool { fabSide == "left" }
 
@@ -42,6 +43,11 @@ struct MainTabView: View {
                     let ny = fabDY + drag.translation.height
                     fabDX = fabOnLeft ? min(span, max(0, nx)) : min(0, max(-span, nx))
                     fabDY = min(0, max(-maxUp, ny))
+                    // 실제로 움직였으면 직후 탭(메뉴 열림) 무시
+                    if abs(drag.translation.width) > 6 || abs(drag.translation.height) > 6 {
+                        fabSuppressTap = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { fabSuppressTap = false }
+                    }
                 }
                 fabDrag = .zero
                 fabDragging = false
@@ -122,7 +128,7 @@ struct MainTabView: View {
 
             // 빠른 기록 FAB (홈·기록) — 동네 탭은 팔기/모임 만들기 버튼이 있어 제외
             if tab == .home || tab == .record {
-                QuickRecordFAB(mode: mode, onQuickRecord: {
+                QuickRecordFAB(mode: mode, suppressTap: fabSuppressTap, onQuickRecord: {
                     Haptics.light()
                     // 아이/임신 미등록이면 빠른기록 대신 등록부터
                     if mode == .baby && store.children.isEmpty {
