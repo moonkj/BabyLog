@@ -745,7 +745,6 @@ private struct BadgeDetailOverlay: View {
                 .frame(width: 250, height: 330)
                 .scaleEffect(appeared ? 1 : 0.3)
                 .rotationEffect(.degrees(appeared || reduceMotion ? 0 : -200))
-                .shadow(color: .black.opacity(0.3), radius: 24, y: 12)
 
                 VStack(spacing: Spacing.s2) {
                     Text(badge.name)
