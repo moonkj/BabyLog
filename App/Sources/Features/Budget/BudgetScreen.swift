@@ -117,7 +117,7 @@ struct BudgetScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                BLScreenHeader(title: "가계부", subtitle: "지원금과 지출을 한눈에")
+                BLScreenHeader(title: "가계부", eyebrow: "지원금과 지출을 한눈에")
                 // 섹션 간 호흡 — 주요 블록은 s6로 리듬 통일
                 VStack(alignment: .leading, spacing: Spacing.s6) {
 

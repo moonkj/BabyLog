@@ -189,7 +189,7 @@ struct HomeTab: View {
                 childChips
             }
             .padding(.horizontal, Spacing.s5)
-            .padding(.top, Spacing.s5)
+            .padding(.top, Spacing.s4)
             .padding(.bottom, Spacing.s3)
 
             ScrollView {
@@ -933,23 +933,24 @@ struct DongneTab: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: Spacing.s4) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("내 주변 · 위치 기반")
+                            .font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
                         Text("동네").font(.system(size: 28, weight: .heavy)).tracking(-0.4).foregroundStyle(AppColors.ink)
-                        Label("내 주변 · 위치 기반", systemImage: "mappin")
-                            .font(AppFont.caption).foregroundStyle(AppColors.ink3)
                     }
                     Spacer()
-                    Button { showEmergency = true } label: {
+                    Button { Haptics.light(); showEmergency = true } label: {
                         Label("응급", systemImage: "cross.case.fill")
                             .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
-                            .padding(.horizontal, 14).frame(height: 38)
+                            .padding(.horizontal, 12).frame(height: 44)
                             .background(AppColors.danger, in: Capsule())
                     }
                     .buttonStyle(LiquidPressStyle())
+                    .accessibilityLabel("응급 메뉴 열기")
                 }
                 .padding(.horizontal, Spacing.s5)
-                .padding(.top, Spacing.s5)
+                .padding(.top, Spacing.s4)
 
                 HStack(spacing: 4) {
                     ForEach(segs.indices, id: \.self) { i in
