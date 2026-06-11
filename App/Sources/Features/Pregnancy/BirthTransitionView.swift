@@ -25,6 +25,7 @@ struct BirthTransitionView: View {
     @State private var profilePhoto: UIImage? = nil
     @State private var birthWeight: String = ""
     @State private var birthHeight: String = ""
+    @State private var gender: Gender? = nil
 
     // ── 화면 단계 ────────────────────────────────────────────────────
     @State private var step: TransitionStep = .input
@@ -240,6 +241,14 @@ struct BirthTransitionView: View {
                     }
                     .frame(maxWidth: .infinity)
 
+                    Text("성별 (선택)").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
+                        .padding(.top, Spacing.s2)
+                    HStack(spacing: Spacing.s2) {
+                        genderChip(nil, "선택 안 함")
+                        genderChip(.boy, "남아")
+                        genderChip(.girl, "여아")
+                    }
+
                     Text("출생 정보 (선택)").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
                         .padding(.top, Spacing.s2)
                     HStack(spacing: Spacing.s3) {
@@ -403,6 +412,24 @@ struct BirthTransitionView: View {
         }
     }
 
+    private func genderChip(_ value: Gender?, _ label: String) -> some View {
+        let selected = gender == value
+        return Button {
+            Haptics.selection()
+            gender = value
+        } label: {
+            Text(label)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(selected ? Color.white : AppColors.ink2)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(selected ? AppColors.pregnancyPink : AppColors.surface2,
+                            in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.96))
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
     private func birthMeasureField(label: String, placeholder: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(AppFont.micro).foregroundStyle(AppColors.ink3)
@@ -431,7 +458,7 @@ struct BirthTransitionView: View {
             let input = BirthTransitionInput(
                 childName: trimmed,
                 birthDate: birthDate,
-                gender: nil
+                gender: gender
             )
             let result = store.commitBirthTransition(pregnancyId: preg.id, input: input)
             switch result {
