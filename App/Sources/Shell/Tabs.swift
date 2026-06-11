@@ -507,23 +507,42 @@ struct HomeTab: View {
         .accessibilityLabel("\(name)의 오늘이 궁금해요. 사진 한 장이면 기록 끝")
     }
 
-    // MARK: 또래 이야기 카드
+    // MARK: 또래 이야기 카드 (실 월령 기반)
+    private var peerAgeMonths: Int? {
+        guard let c = selectedChild else { return nil }
+        return AgeCalculator.childAgeMonths(birthDate: c.birthDate, asOf: Date()).months
+    }
+    private var peerTip: String {
+        guard let m = peerAgeMonths else {
+            return "아이를 등록하면 월령에 맞는 또래 발달 이야기를 알려드려요."
+        }
+        switch m {
+        case 0..<3:   return "신생아 시기엔 하루 대부분을 잠으로 보내요. 수유·기저귀 패턴을 기록해두면 리듬이 보여요."
+        case 3..<6:   return "목 가누기가 시작되는 시기예요. 뒤집기와 배밀이를 연습하며 시야가 넓어져요."
+        case 6..<9:   return "이유식을 시작하는 시기예요. 혼자 앉기 시작하고 낯가림이 나타날 수 있어요."
+        case 9..<12:  return "잡고 서기·기어다니기가 활발해져요. 첫 단어가 나오기도 하는 시기예요."
+        case 12..<18: return "걸음마와 첫 단어가 늘어나는 시기예요. '맘마', '아빠' 외 새 단어를 시도하면 대화로 격려해주세요."
+        case 18..<24: return "두 단어를 잇는 짧은 문장이 시작돼요. 자기 주장이 강해지는 자연스러운 시기예요."
+        default:      return "상상 놀이와 어휘가 폭발적으로 늘어요. 함께 그림책을 읽으면 표현이 풍부해져요."
+        }
+    }
     private var peerCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("오늘의 또래 이야기", systemImage: "sparkles")
+            Label(peerAgeMonths.map { "\($0)개월 또래 이야기" } ?? "또래 이야기", systemImage: "sparkles")
                 .font(.system(size: 12.5, weight: .bold))
                 .foregroundStyle(Color(hex: 0x5B53B0))
-            Text("16개월 아이는 이 시기에 한 단어 어휘가 폭발적으로 늘어나요. '맘마', '아빠' 외에 새 단어를 시도한다면 대화로 격려해주세요.")
+            Text(peerTip)
                 .font(.system(size: 14.5, weight: .regular))
                 .foregroundStyle(AppColors.ink)
                 .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(hex: 0xEDEBFB), in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .blShadow(.card)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("또래 이야기: 16개월 아이는 이 시기에 한 단어 어휘가 폭발적으로 늘어나요")
+        .accessibilityLabel("또래 이야기: \(peerTip)")
     }
 
     // MARK: 1년 전 오늘 카드
@@ -847,7 +866,7 @@ struct DongneTab: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("동네").font(.system(size: 28, weight: .heavy)).tracking(-0.4).foregroundStyle(AppColors.ink)
-                        Label("서울 마포구 망원동", systemImage: "mappin")
+                        Label("내 주변 · 위치 기반", systemImage: "mappin")
                             .font(AppFont.caption).foregroundStyle(AppColors.ink3)
                     }
                     Spacer()
