@@ -54,10 +54,23 @@ enum APIConfig {
         let env = ProcessInfo.processInfo.environment[name]
         if let env, !env.isEmpty { return env }
 
-        // 2. Info.plist fallback (Xcode Build Settings 주입 경로)
+        // 2. Secrets.plist (깃 제외 — 특수문자 키 안전 보관, 사용자가 직접 채움)
+        if let s = secrets[name], !s.isEmpty { return s }
+
+        // 3. Info.plist fallback (Xcode Build Settings 주입 경로)
         let plist = Bundle.main.object(forInfoDictionaryKey: name) as? String
         if let plist, !plist.isEmpty { return plist }
 
         return nil
     }
+
+    /// 번들에 포함된 `Secrets.plist`(깃 제외)를 1회 로드해 캐싱.
+    /// 파일이 없으면 빈 딕셔너리 → 키 없음 → Mock 폴백(B4 정책).
+    private static let secrets: [String: String] = {
+        guard let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
+              let dict = NSDictionary(contentsOf: url) as? [String: Any] else { return [:] }
+        var out: [String: String] = [:]
+        for (k, v) in dict { if let s = v as? String { out[k] = s } }
+        return out
+    }()
 }

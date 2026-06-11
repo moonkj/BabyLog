@@ -20,6 +20,10 @@ targets:
     sources:
       - App/Sources
       - App/Resources/Assets.xcassets
+      # 외부 API 키(깃 제외). 없으면 자동 Mock 폴백 — fresh checkout/CI 대비 optional.
+      - path: App/Resources/Secrets.plist
+        optional: true
+        buildPhase: resources
     dependencies:
       - target: BabyLogWidget
         embed: true
