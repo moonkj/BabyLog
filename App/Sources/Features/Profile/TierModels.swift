@@ -137,6 +137,7 @@ struct BadgeCatalogItem: Identifiable, Equatable {
     var isEarned: Bool
 
     enum BadgeCategory: String {
+        case tier       = "등급"
         case milestone  = "성장"
         case record     = "기록"
         case trade      = "거래"

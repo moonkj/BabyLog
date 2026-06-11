@@ -45,7 +45,7 @@ struct ProfileScreen: View {
         ProfileStreak.currentStreak(diaryDates: store.diaryEntries.map(\.date))
     }
     /// 획득 뱃지 수
-    private var earnedBadgeCount: Int { resolvedCatalog.filter(\.isEarned).count }
+    private var earnedBadgeCount: Int { displayCatalog.filter(\.isEarned).count }
 
     private var currentTier: Tier {
         TierCalculator.tier(tradeCount: tradeCount, avgRating: avgRating, joinedMonths: joinedMonths)
@@ -69,19 +69,45 @@ struct ProfileScreen: View {
         }
     }
 
-    /// 닉네임 옆에 장착된 뱃지 (획득 상태일 때만)
-    private var equippedBadge: BadgeCatalogItem? {
-        guard !equippedBadgeId.isEmpty else { return nil }
-        return resolvedCatalog.first { $0.id == equippedBadgeId && $0.isEarned }
+    private func tierRank(_ t: Tier) -> Int { Tier.allCases.firstIndex(of: t) ?? 0 }
+    private func tierReached(_ t: Tier) -> Bool { tierRank(currentTier) >= tierRank(t) }
+    private func tierCondition(_ t: Tier) -> String {
+        switch t {
+        case .sprout:       return "가입하면 시작"
+        case .warmNeighbor: return "거래 3회 이상"
+        case .trusted:      return "거래 10회 이상"
+        case .golden:       return "거래 30회+ · 평점 4.5+"
+        }
+    }
+
+    /// 등급 뱃지 4종 — 다른 뱃지와 동일하게 조건 + 획득/잠금
+    private var tierBadges: [BadgeCatalogItem] {
+        Tier.allCases.map { t in
+            BadgeCatalogItem(id: "tier_\(t.rawValue)", name: t.displayName,
+                             condition: tierCondition(t), tone: t.badgeTone,
+                             systemIcon: t.systemIcon, category: .tier,
+                             isEarned: tierReached(t))
+        }
+    }
+
+    /// 컬렉션 표시용 전체 목록 (등급 + 수집 뱃지)
+    private var displayCatalog: [BadgeCatalogItem] { tierBadges + resolvedCatalog }
+
+    /// 닉네임 옆에 장착된 뱃지 — 기본값은 현재 등급. 장착한(획득) 뱃지가 있으면 그것.
+    private var equippedBadge: BadgeCatalogItem {
+        if let found = displayCatalog.first(where: { $0.id == equippedBadgeId && $0.isEarned }) {
+            return found
+        }
+        return tierBadges.first { $0.id == "tier_\(currentTier.rawValue)" } ?? tierBadges[0]
     }
 
     private var filteredBadges: [BadgeCatalogItem] {
-        guard let cat = selectedBadgeCategory else { return resolvedCatalog }
-        return resolvedCatalog.filter { $0.category == cat }
+        guard let cat = selectedBadgeCategory else { return displayCatalog }
+        return displayCatalog.filter { $0.category == cat }
     }
 
     private let badgeCategories: [BadgeCatalogItem.BadgeCategory?] =
-        [nil, .milestone, .record, .trade, .community, .special]
+        [nil, .tier, .milestone, .record, .trade, .community, .special]
 
     // MARK: Body
 
@@ -172,16 +198,10 @@ struct ProfileScreen: View {
                             Text(nickname)
                                 .font(AppFont.title)
                                 .foregroundStyle(AppColors.ink)
-                            if let eb = equippedBadge {
-                                Image(systemName: eb.systemIcon)
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(eb.tone.ink)
-                                    .padding(5)
-                                    .background(eb.tone.bg, in: Circle())
-                                    .overlay { Circle().stroke(eb.tone.ink.opacity(0.35), lineWidth: 1) }
-                                    .accessibilityLabel("장착한 뱃지: \(eb.name)")
-                            }
-                            tierBadge
+                            // 닉네임 옆 단일 칩 — 기본 등급, 장착한 뱃지가 있으면 그것 (아이콘+이름)
+                            BLBadge(tone: equippedBadge.tone, text: equippedBadge.name,
+                                    systemIcon: equippedBadge.systemIcon, dot: false)
+                                .accessibilityLabel("장착한 뱃지: \(equippedBadge.name)")
                         }
                         Text(childAgeText)
                             .font(AppFont.caption)
@@ -226,17 +246,6 @@ struct ProfileScreen: View {
         .frame(width: 60, height: 60)
         .clipShape(Circle())
         .accessibilityHidden(true)
-    }
-
-    // 티어 뱃지 (색 + 아이콘 + 레이블 3중)
-    private var tierBadge: some View {
-        BLBadge(
-            tone: currentTier.badgeTone,
-            text: currentTier.displayName,
-            systemIcon: currentTier.systemIcon,
-            dot: false
-        )
-        .accessibilityLabel("티어: \(currentTier.displayName)")
     }
 
     // 보조 뱃지 (획득한 것만 최대 3개) — BadgeEngine 결과 기준
@@ -474,8 +483,8 @@ struct ProfileScreen: View {
 
     private var badgeCollectionSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            let earnedCount = resolvedCatalog.filter(\.isEarned).count
-            let totalCount  = resolvedCatalog.count
+            let earnedCount = displayCatalog.filter(\.isEarned).count
+            let totalCount  = displayCatalog.count
 
             BLSectionHead(
                 eyebrow: "COLLECTION",
