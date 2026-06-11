@@ -97,13 +97,13 @@ struct PregnancyHomeView: View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             // 인사 (성별중립 카피)
             Text("좋은 하루예요 🌸")
-                .font(AppFont.caption)
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(AppColors.ink3)
-                .fontWeight(.semibold)
 
             // 제목 — 태명 반영
             Text("\(fetusNickname)를 기다리며")
-                .font(AppFont.h1)
+                .font(.system(size: 28, weight: .heavy))
+                .tracking(-0.4)
                 .foregroundStyle(AppColors.ink)
         }
         .padding(.top, Spacing.s5)

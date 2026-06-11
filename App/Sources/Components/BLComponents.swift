@@ -117,3 +117,47 @@ struct PhotoPlaceholder: View {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
+
+// MARK: - BLScreenHeader
+// 모든 탭/화면 제목의 일관 컴포넌트 — 위치·폰트·여백 통일.
+// 제목 28pt heavy(tracking -0.4), 상단 좌측 정렬, 표준 여백. eyebrow/subtitle/trailing 선택.
+
+struct BLScreenHeader<Trailing: View>: View {
+    let title: String
+    var eyebrow: String? = nil
+    var subtitle: String? = nil
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Spacing.s3) {
+            VStack(alignment: .leading, spacing: 3) {
+                if let eyebrow {
+                    Text(eyebrow)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppColors.ink3)
+                }
+                Text(title)
+                    .font(.system(size: 28, weight: .heavy))
+                    .tracking(-0.4)
+                    .foregroundStyle(AppColors.ink)
+                    .accessibilityAddTraits(.isHeader)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink3)
+                }
+            }
+            Spacer(minLength: 0)
+            trailing()
+        }
+        .padding(.horizontal, Spacing.s5)
+        .padding(.top, Spacing.s4)
+        .padding(.bottom, Spacing.s3)
+    }
+}
+
+extension BLScreenHeader where Trailing == EmptyView {
+    init(title: String, eyebrow: String? = nil, subtitle: String? = nil) {
+        self.init(title: title, eyebrow: eyebrow, subtitle: subtitle, trailing: { EmptyView() })
+    }
+}

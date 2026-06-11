@@ -14,11 +14,8 @@ struct RecordScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // 상단 큰 타이틀
+                // 상단 큰 타이틀 (공용 헤더 — 자체 여백 포함)
                 screenHeader
-                    .padding(.horizontal, Spacing.s5)
-                    .padding(.top, Spacing.s4)
-                    .padding(.bottom, Spacing.s3)
 
                 // 세그먼트 셀렉터
                 segmentPicker
@@ -65,18 +62,10 @@ struct RecordScreen: View {
     // MARK: 상단 헤더
 
     private var screenHeader: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text((store.selectedChild?.name.uppercased() ?? "아이 성장") + " 기록".uppercased())
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(1)
-                    .foregroundStyle(AppColors.ink3)
-                Text(store.selectedChild?.name ?? "기록")
-                    .font(.system(size: 34, weight: .heavy))
-                    .tracking(-0.5)
-                    .foregroundStyle(AppColors.ink)
-            }
-            Spacer()
+        BLScreenHeader(
+            title: store.selectedChild?.name ?? "기록",
+            eyebrow: store.selectedChild != nil ? "성장 기록" : "아이 성장 기록"
+        ) {
             Button {
                 showShareCard = true
             } label: {

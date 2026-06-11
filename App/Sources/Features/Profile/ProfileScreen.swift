@@ -88,19 +88,30 @@ struct ProfileScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Spacing.s4) {
-                profileCard
-                tierProgressCard
-                proUpsellCard
-                badgeCollectionSection
-                privacySection
+            VStack(spacing: 0) {
+                BLScreenHeader(title: "내 정보") {
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(AppColors.ink2)
+                            .frame(width: 44, height: 44)
+                            .background(AppColors.surface, in: Circle())
+                            .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
+                    }
+                    .accessibilityLabel("설정")
+                }
+                VStack(spacing: Spacing.s4) {
+                    profileCard
+                    tierProgressCard
+                    proUpsellCard
+                    badgeCollectionSection
+                    privacySection
+                }
+                .padding(.horizontal, Spacing.s4)
+                .padding(.bottom, Spacing.s8)
             }
-            .padding(.horizontal, Spacing.s4)
-            .padding(.bottom, Spacing.s8)
         }
         .background(AppColors.canvas.ignoresSafeArea())
-        .navigationTitle("내 정보")
-        .navigationBarTitleDisplayMode(.large)
         .alert("Pro — 곧 만나요", isPresented: $showProDetail) {
             Button("확인", role: .cancel) {}
         } message: {
@@ -132,19 +143,6 @@ struct ProfileScreen: View {
                     }
             }
             .environmentObject(store)
-        }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(AppColors.ink2)
-                }
-                .frame(width: 44, height: 44)
-                .accessibilityLabel("설정")
-            }
         }
     }
 

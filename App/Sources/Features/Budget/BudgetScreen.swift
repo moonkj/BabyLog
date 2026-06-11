@@ -116,6 +116,8 @@ struct BudgetScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView {
+                VStack(spacing: 0) {
+                BLScreenHeader(title: "가계부")
                 VStack(alignment: .leading, spacing: Spacing.s4) {
 
                     // 1. 정부지원금 전면 배치
@@ -141,11 +143,10 @@ struct BudgetScreen: View {
                     Spacer().frame(height: 80)
                 }
                 .padding(.horizontal, Spacing.s4)
-                .padding(.top, Spacing.s3)
+                }
             }
             .background(AppColors.canvas.ignoresSafeArea())
-            .navigationTitle("가계부")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarHidden(true)
             .task(id: store.selectedChild?.id) {
                 await loadSubsidies()
             }

@@ -202,8 +202,8 @@ struct HomeTab: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("좋은 오후예요 🌤").font(AppFont.caption).foregroundStyle(AppColors.ink3)
-                Text("우리 동네 육아").font(.system(size: 24, weight: .heavy)).tracking(-0.5)
+                Text("좋은 오후예요 🌤").font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
+                Text("우리 동네 육아").font(.system(size: 28, weight: .heavy)).tracking(-0.4)
                     .foregroundStyle(AppColors.ink)
             }
             Spacer()
@@ -836,7 +836,7 @@ struct DongneTab: View {
             VStack(spacing: Spacing.s4) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("동네").font(.system(size: 24, weight: .heavy)).foregroundStyle(AppColors.ink)
+                        Text("동네").font(.system(size: 28, weight: .heavy)).tracking(-0.4).foregroundStyle(AppColors.ink)
                         Label("서울 마포구 망원동", systemImage: "mappin")
                             .font(AppFont.caption).foregroundStyle(AppColors.ink3)
                     }
