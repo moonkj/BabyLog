@@ -57,6 +57,16 @@ struct HomeTab: View {
         guard let id = selectedChild?.id else { return 0 }
         return store.diaryEntries(for: id).count + store.growthRecords(for: id).count
     }
+    /// 시간대 인사
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12:  return "좋은 아침이에요 ☀️"
+        case 12..<17: return "좋은 오후예요 🌤"
+        case 17..<21: return "좋은 저녁이에요 🌆"
+        default:      return "편안한 밤이에요 🌙"
+        }
+    }
+
     /// 선택 아이 대표 사진 — 프로필 사진 우선, 없으면 최근 기록 사진 (감정 진입점)
     private var heroPhoto: UIImage? {
         guard let child = selectedChild else { return nil }
@@ -202,8 +212,8 @@ struct HomeTab: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("좋은 오후예요 🌤").font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
-                Text("우리 동네 육아").font(.system(size: 28, weight: .heavy)).tracking(-0.4)
+                Text(greeting).font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
+                Text("베이비로그").font(.system(size: 28, weight: .heavy)).tracking(-0.4)
                     .foregroundStyle(AppColors.ink)
             }
             Spacer()
