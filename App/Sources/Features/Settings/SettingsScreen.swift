@@ -17,7 +17,10 @@ struct SettingsScreen: View {
     @AppStorage("bl_fab_side")         private var fabSide: String         = "right"
     @AppStorage("bl_caregiver_title")  private var caregiverTitle: String  = "양육자"
     @AppStorage("bl_nickname")         private var nickname: String        = "양육자님"
+    @AppStorage("bl_cloud_sync")       private var cloudSync: Bool         = false
     @State private var showOpenSource = false
+    @State private var cloudStatus: String? = nil
+    @State private var cloudBusy = false
 
     // MARK: Environment
 
@@ -38,6 +41,7 @@ struct SettingsScreen: View {
                 quickRecordSection
                 caregiverSection
                 notificationSection
+                iCloudSection
                 dataSection
                 infoSection
             }
@@ -236,6 +240,77 @@ struct SettingsScreen: View {
         .buttonStyle(LiquidPressStyle(scale: 0.97))
         .accessibilityLabel("\(title) (\(subtitle))\(selected ? " — 현재 선택됨" : "")")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // MARK: - iCloud 가족 백업 (CloudKit)
+
+    private var iCloudSection: some View {
+        settingsSection(eyebrow: "백업", title: "iCloud 가족 백업") {
+            if CloudSyncService.isAvailableInBuild {
+                // 자동 백업 토글
+                settingsRow(icon: "icloud.fill", iconBg: Color(hex: 0xE6F1FB), iconFg: Color(hex: 0x3B6FA8)) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("iCloud 자동 백업").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                            Spacer()
+                            Toggle("", isOn: $cloudSync).labelsHidden().tint(AppColors.primary)
+                        }
+                        Text("가족(조부모)이 같은 iCloud 계정에서 사진·영상·기록을 함께 봐요")
+                            .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Divider().overlay(AppColors.line).padding(.leading, 62)
+                Button { Task { await runCloud(.backup) } } label: {
+                    settingsRow(icon: "arrow.up.circle.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
+                        Text(cloudBusy ? "처리 중…" : "지금 백업").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                    }
+                }.buttonStyle(.plain).disabled(cloudBusy)
+                Divider().overlay(AppColors.line).padding(.leading, 62)
+                Button { Task { await runCloud(.restore) } } label: {
+                    settingsRow(icon: "arrow.down.circle.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
+                        Text("iCloud에서 복원").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                    }
+                }.buttonStyle(.plain).disabled(cloudBusy)
+                if let s = cloudStatus {
+                    Text(s).font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                        .padding(.horizontal, Spacing.s4).padding(.bottom, Spacing.s2)
+                }
+            } else {
+                settingsRow(icon: "icloud", iconBg: Color(hex: 0xE6F1FB), iconFg: Color(hex: 0x3B6FA8)) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iCloud 가족 백업 (준비됨)").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Text("유료 Apple Developer 계정 + iCloud(CloudKit) 연결 시 켜져요. 켜면 조부모님도 같은 계정에서 사진·영상·기록을 함께 봅니다.")
+                            .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private enum CloudOp { case backup, restore }
+    private func runCloud(_ op: CloudOp) async {
+        cloudBusy = true; cloudStatus = nil
+        defer { cloudBusy = false }
+        do {
+            switch op {
+            case .backup:
+                try await CloudSyncService.shared.push(store.snapshot())
+                cloudStatus = "백업 완료 ✓"
+            case .restore:
+                if let remote = try await CloudSyncService.shared.pull() {
+                    store.restore(remote)
+                    cloudStatus = "복원 완료 ✓"
+                } else {
+                    cloudStatus = "iCloud에 백업이 없어요."
+                }
+            }
+            Haptics.success()
+        } catch {
+            cloudStatus = (error as? CloudSyncError)?.errorDescription ?? "잠시 후 다시 시도해 주세요."
+            Haptics.warning()
+        }
     }
 
     // MARK: - 알림 섹션

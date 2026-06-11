@@ -30,9 +30,14 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # App Group(group.com.babylog.app)는 유료 개발자 계정 + 포털 Capability 등록 필요.
-        # 계정 활성화 후 아래 라인 주석 해제하면 위젯 실데이터(공유 컨테이너)가 켜진다.
+        # ── 유료 계정 연동 시 활성화 ───────────────────────────────────────
+        # App Group(위젯 실데이터) / iCloud·CloudKit(가족 백업)은 유료 개발자 계정 +
+        # 포털 Capability 등록(App Group: group.com.babylog.app, iCloud 컨테이너: iCloud.com.babylog.app) 필요.
+        # 1) 아래 엔타이틀먼트 주석 해제 (App Group + iCloud/CloudKit 키 포함):
         # CODE_SIGN_ENTITLEMENTS: App/Resources/BabyLog.entitlements
+        # 2) CloudKit 동기화 코드 활성화 — 컴파일 플래그 추가:
+        # SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) BL_CLOUDKIT
+        # (그러면 CloudSyncService가 실제 CKContainer로 동작하고 설정에 백업/복원 노출)
   BabyLogWidget:
     type: app-extension
     platform: iOS

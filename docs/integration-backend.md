@@ -64,13 +64,26 @@
 
 ---
 
-## 3. CloudKit — 가족 공유
+## 3. CloudKit — 가족 백업·공유 (스캐폴드 준비됨)
 
-현재 로컬 영속은 Codable JSON(`LocalPersistence`). 가족 동기화는 다음 단계:
+조부모 등 가족이 **다른 기기에서 사진·영상·기록을 보려면 클라우드 동기화가 필수**다(로컬 저장만으론 부모 기기에서만 보임). CloudKit 동기화 코드가 이미 들어가 있고, **유료 계정 연결 + 플래그만** 켜면 활성화된다.
 
-1. CoreData 스택 도입 + 기존 `PersistableState` → CoreData 엔티티 마이그레이션.
-2. `NSPersistentCloudKitContainer`로 CloudKit 동기화(유료 계정 + iCloud Capability).
-3. UI 진입점: 가계부/프로필 등에 "가족 공유" 토글 추가(현재 더미 버튼은 제거된 상태).
+구현 방식: `CloudSyncService`가 전체 상태(`PersistableState`)를 **개인 CloudKit DB의 단일 레코드(JSON)**로 push/pull(last-write-wins). 앱 규모상 충분하며, 추후 per-record + `CKShare`(가족 공유)로 확장 가능.
+
+### 활성화 절차 (유료 Apple Developer 필요)
+1. **Apple Developer 포털**에서 iCloud 컨테이너 `iCloud.com.babylog.app` 생성 + 앱 App ID에 **iCloud(CloudKit)** Capability 연결.
+2. **project.yml** (BabyLog 타깃) 주석 해제:
+   ```yaml
+   CODE_SIGN_ENTITLEMENTS: App/Resources/BabyLog.entitlements   # iCloud/CloudKit 키 포함
+   SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) BL_CLOUDKIT  # CloudKit 코드 컴파일
+   ```
+   (엔타이틀먼트 파일에 `icloud-container-identifiers`·`icloud-services=CloudKit` 이미 포함)
+3. `xcodegen generate` → 빌드. **설정 > iCloud 가족 백업**에 자동백업 토글 + "지금 백업/복원" 노출, 동작.
+
+### 동작 / 정책
+- 미활성(현재): `BL_CLOUDKIT` 없음 → `CloudSyncService`가 CKContainer를 절대 호출하지 않음(빌드/실행 안전). 설정엔 "준비됨" 안내만 표시.
+- 활성 후: 무료=로컬, **iCloud 가족 백업=Pro**(CLAUDE.md 사진 비전송·서버백업 Pro 정책과 일치).
+- 가족(조부모) 공유: 같은 iCloud 계정 → 즉시 동기화. 별도 계정 가족은 `CKShare` 확장 단계에서 지원.
 
 ---
 
