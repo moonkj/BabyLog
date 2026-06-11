@@ -325,6 +325,7 @@ struct MarketDetailBottomBar: View {
     @Binding var isFavorited: Bool
     var isMine: Bool = false
     let onChat: () -> Void
+    var onBuy: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 12) {
@@ -348,8 +349,8 @@ struct MarketDetailBottomBar: View {
             .accessibilityLabel(isFavorited ? "관심 해제" : "관심 등록")
             .accessibilityHint("관심 목록에 추가하거나 제거합니다")
 
-            // 채팅하기 / 내 매물 표시
             if isMine {
+                // 내 매물 — 상태 표시
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.seal.fill").font(.system(size: 15, weight: .bold))
                     Text(item.status == .sold ? "판매완료된 내 매물" : "내가 등록한 매물")
@@ -358,18 +359,29 @@ struct MarketDetailBottomBar: View {
                 .foregroundStyle(AppColors.ink2)
                 .frame(maxWidth: .infinity).frame(height: 50)
                 .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            } else if item.status == .sold {
+                // 판매완료 — 비활성
+                Text("판매완료된 상품")
+                    .font(.system(size: 16, weight: .bold)).foregroundStyle(AppColors.ink3)
+                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             } else {
-                LiquidButton(action: onChat) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.system(size: 17, weight: .bold))
-                            .accessibilityHidden(true)
-                        Text(item.status == .sold ? "판매완료" : "채팅하기")
-                            .font(.system(size: 16, weight: .bold))
-                    }
+                // 채팅(보조) + 구매하기(주)
+                Button { onChat() } label: {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 19, weight: .bold)).foregroundStyle(AppColors.ink2)
+                        .frame(width: 50, height: 50)
+                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
                 }
-                .accessibilityLabel("채팅하기")
-                .accessibilityHint("\(item.sellerName)에게 채팅 메시지를 보냅니다")
+                .buttonStyle(LiquidPressStyle(scale: 0.92))
+                .accessibilityLabel("판매자와 채팅")
+
+                LiquidButton(action: onBuy) {
+                    Text(item.isFree ? "나눔 받기" : "구매하기")
+                        .font(.system(size: 16, weight: .bold)).frame(maxWidth: .infinity)
+                }
+                .accessibilityLabel(item.isFree ? "나눔 받기" : "구매하기")
             }
         }
         .padding(.horizontal, Spacing.s5)

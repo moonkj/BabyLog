@@ -605,13 +605,23 @@ private struct HospitalCard: View {
 
                 Spacer(minLength: 0)
 
-                // 전화 버튼 (44pt)
-                phoneButton
+                // 액션 버튼 (전화 / 길찾기 / 공유)
+                actionButtons
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityDescription)
-        .accessibilityHint("전화 버튼을 탭하면 전화를 겁니다")
+    }
+
+    // 전화 / 길찾기 / 공유 — 세로 스택 (각 44pt 터치 타깃)
+    private var actionButtons: some View {
+        VStack(spacing: Spacing.s2) {
+            phoneButton
+            HStack(spacing: Spacing.s2) {
+                directionsButton
+                shareButton
+            }
+        }
     }
 
     private var phoneButton: some View {
@@ -635,6 +645,47 @@ private struct HospitalCard: View {
         .buttonStyle(LiquidPressStyle(scale: 0.94))
         .accessibilityLabel("전화하기")
         .accessibilityHint("\(hospital.name)에 전화합니다")
+    }
+
+    // 길찾기 — Apple 지도 앱에서 장소명 검색 (좌표는 합성이므로 이름 검색)
+    private var directionsButton: some View {
+        Button {
+            let q = hospital.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            if let url = URL(string: "http://maps.apple.com/?q=\(q)") {
+                UIApplication.shared.open(url)
+            }
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .fill(AppColors.surface2)
+                    .frame(width: 44, height: 44)
+                Image(systemName: "map.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppColors.ink2)
+            }
+            .blShadow(.chip)
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.94))
+        .accessibilityLabel("길찾기")
+        .accessibilityHint("\(hospital.name) 위치를 지도 앱에서 열어봅니다")
+    }
+
+    // 공유 — 이름 + 주소 텍스트 공유
+    private var shareButton: some View {
+        ShareLink(item: "\(hospital.name) \(hospital.address)") {
+            ZStack {
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .fill(AppColors.surface2)
+                    .frame(width: 44, height: 44)
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppColors.ink2)
+            }
+            .blShadow(.chip)
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.94))
+        .accessibilityLabel("공유하기")
+        .accessibilityHint("\(hospital.name) 정보를 공유합니다")
     }
 
     private var accessibilityDescription: String {
@@ -709,13 +760,23 @@ private struct PlaceCard: View {
 
                 Spacer(minLength: 0)
 
-                // 전화 LiquidButton
-                phoneButton
+                // 액션 버튼 (전화 / 길찾기 / 공유)
+                actionButtons
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityDescription)
-        .accessibilityHint("전화 버튼을 탭하면 전화를 겁니다")
+    }
+
+    // 전화 / 길찾기 / 공유 — 세로 스택 (각 44pt 터치 타깃)
+    private var actionButtons: some View {
+        VStack(spacing: Spacing.s2) {
+            phoneButton
+            HStack(spacing: Spacing.s2) {
+                directionsButton
+                shareButton
+            }
+        }
     }
 
     @ViewBuilder
@@ -753,6 +814,52 @@ private struct PlaceCard: View {
         .buttonStyle(LiquidPressStyle(scale: 0.94))
         .accessibilityLabel("전화하기")
         .accessibilityHint("\(place.name)에 전화합니다")
+    }
+
+    // 길찾기 — Apple 지도 앱에서 장소명 검색 (좌표는 합성이므로 이름 검색)
+    private var directionsButton: some View {
+        Button {
+            let q = place.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            if let url = URL(string: "http://maps.apple.com/?q=\(q)") {
+                UIApplication.shared.open(url)
+            }
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .fill(AppColors.surface2)
+                    .frame(width: 44, height: 44)
+                Image(systemName: "map.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppColors.ink2)
+            }
+            .blShadow(.chip)
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.94))
+        .accessibilityLabel("길찾기")
+        .accessibilityHint("\(place.name) 위치를 지도 앱에서 열어봅니다")
+    }
+
+    // 공유 — 이름 + 전화번호 텍스트 공유
+    private var shareButton: some View {
+        ShareLink(item: "\(place.name) \(shareablePhone)") {
+            ZStack {
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .fill(AppColors.surface2)
+                    .frame(width: 44, height: 44)
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppColors.ink2)
+            }
+            .blShadow(.chip)
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.94))
+        .accessibilityLabel("공유하기")
+        .accessibilityHint("\(place.name) 정보를 공유합니다")
+    }
+
+    // place.phone은 "tel://..." 형태이므로 공유용으로 스킴을 제거
+    private var shareablePhone: String {
+        place.phone.replacingOccurrences(of: "tel://", with: "")
     }
 
     private var accessibilityDescription: String {

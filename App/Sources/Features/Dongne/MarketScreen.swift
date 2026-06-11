@@ -125,16 +125,17 @@ struct MarketNeedSoonItem: Identifiable {
     let title: String
     let reason: String
     let photoSeed: Int
+    let category: MarketCategory   // 탭 시 해당 카테고리로 필터
 }
 
 // MARK: - Mock Data
 
 private let mkNeedSoonItems: [MarketNeedSoonItem] = [
-    MarketNeedSoonItem(id: 1, title: "걸음마 보조기",   reason: "10개월쯤 필요해요",    photoSeed: 2),
-    MarketNeedSoonItem(id: 2, title: "식사 의자",        reason: "이유식 시작 전 준비", photoSeed: 5),
-    MarketNeedSoonItem(id: 3, title: "욕조 샴푸의자",    reason: "목 가눌 때 부터",     photoSeed: 3),
-    MarketNeedSoonItem(id: 4, title: "보행기",           reason: "6개월+ 권장",         photoSeed: 0),
-    MarketNeedSoonItem(id: 5, title: "유아 체온계",      reason: "지금 당장 필요해요",  photoSeed: 4),
+    MarketNeedSoonItem(id: 1, title: "걸음마 보조기",   reason: "10개월쯤 필요해요",    photoSeed: 2, category: .ride),
+    MarketNeedSoonItem(id: 2, title: "식사 의자",        reason: "이유식 시작 전 준비", photoSeed: 5, category: .meal),
+    MarketNeedSoonItem(id: 3, title: "욕조 샴푸의자",    reason: "목 가눌 때 부터",     photoSeed: 3, category: .feed),
+    MarketNeedSoonItem(id: 4, title: "보행기",           reason: "6개월+ 권장",         photoSeed: 0, category: .ride),
+    MarketNeedSoonItem(id: 5, title: "유아 체온계",      reason: "지금 당장 필요해요",  photoSeed: 4, category: .feed),
 ]
 
 extension MarketItem {
@@ -215,7 +216,10 @@ struct MarketScreen: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(mkNeedSoonItems) { item in
-                        MkNeedSoonCard(item: item)
+                        MkNeedSoonCard(item: item) {
+                            Haptics.selection()
+                            withAnimation(.easeOut(duration: 0.2)) { selectedCategory = item.category }
+                        }
                     }
                 }
                 .padding(.horizontal, Spacing.s5)
@@ -306,9 +310,10 @@ struct MarketScreen: View {
 
 private struct MkNeedSoonCard: View {
     let item: MarketNeedSoonItem
+    var onTap: () -> Void = {}
 
     var body: some View {
-        Button { } label: {
+        Button { onTap() } label: {
             VStack(alignment: .leading, spacing: 7) {
                 ZStack {
                     PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 14)

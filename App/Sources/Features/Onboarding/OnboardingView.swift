@@ -5,6 +5,8 @@
 
 import SwiftUI
 import Foundation
+import CoreLocation
+import UserNotifications
 
 // MARK: - 진입점
 
@@ -25,6 +27,11 @@ struct OnboardingView: View {
     @State private var nickname: String = ""
     @State private var dueOrBirthDate: Date = Date()
     @State private var dateEntered: Bool = false
+
+    // 4단계: 권한 — 실제 시스템 프롬프트 + 카드 상태 반영
+    @StateObject private var locationCoordinator = LocationPermissionCoordinator()
+    @State private var locationStatus: PermissionUIState = .undetermined
+    @State private var notificationStatus: PermissionUIState = .undetermined
 
     private let totalSteps = 5   // 스텝 0~4, 진행바는 1~3 구간 표시
 
@@ -571,7 +578,7 @@ struct OnboardingView: View {
             }
             .padding(.top, Spacing.s6)
 
-            // 권한 카드들
+            // 권한 카드들 — 탭하면 실제 iOS 시스템 권한 프롬프트
             VStack(spacing: Spacing.s3) {
                 permissionCard(
                     icon: "location.fill",
@@ -579,7 +586,9 @@ struct OnboardingView: View {
                     iconFg: BadgeTone.blue.ink,
                     title: "위치",
                     description: "근처 소아과·약국을 보여드릴게요",
-                    accessibilityHint: "위치 권한 — 근처 소아과와 약국 표시에 사용"
+                    accessibilityHint: "위치 권한 — 근처 소아과와 약국 표시에 사용",
+                    state: locationStatus,
+                    action: requestLocation
                 )
                 permissionCard(
                     icon: "bell.fill",
@@ -587,10 +596,16 @@ struct OnboardingView: View {
                     iconFg: Color(hex: 0x98711E),
                     title: "알림",
                     description: "접종일·지원금 마감을 놓치지 않게요",
-                    accessibilityHint: "알림 권한 — 접종일과 지원금 마감 알림에 사용"
+                    accessibilityHint: "알림 권한 — 접종일과 지원금 마감 알림에 사용",
+                    state: notificationStatus,
+                    action: requestNotifications
                 )
             }
             .padding(.top, Spacing.s5)
+            .onAppear { syncPermissionStates() }
+            .onReceive(locationCoordinator.$authorization) { status in
+                locationStatus = PermissionUIState(location: status)
+            }
 
             Spacer()
 
@@ -608,34 +623,66 @@ struct OnboardingView: View {
         .padding(.horizontal, Spacing.s5)
     }
 
-    private func permissionCard(icon: String, iconBg: Color, iconFg: Color, title: String, description: String, accessibilityHint: String) -> some View {
-        BLCard(padding: 16) {
-            HStack(spacing: Spacing.s3) {
-                // 아이콘 (색+아이콘 2중 인코딩)
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(iconBg)
-                        .frame(width: 48, height: 48)
-                    Image(systemName: icon)
-                        .font(.system(size: 22))
-                        .foregroundStyle(iconFg)
-                }
-                .accessibilityHidden(true)
+    private func permissionCard(icon: String, iconBg: Color, iconFg: Color, title: String, description: String, accessibilityHint: String, state: PermissionUIState, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            BLCard(padding: 16) {
+                HStack(spacing: Spacing.s3) {
+                    // 아이콘 (색+아이콘 2중 인코딩)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(iconBg)
+                            .frame(width: 48, height: 48)
+                        Image(systemName: icon)
+                            .font(.system(size: 22))
+                            .foregroundStyle(iconFg)
+                    }
+                    .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 15.5, weight: .bold))
-                        .foregroundStyle(AppColors.ink)
-                    Text(description)
-                        .font(AppFont.caption)
-                        .foregroundStyle(AppColors.ink2)
-                        .lineSpacing(2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.system(size: 15.5, weight: .bold))
+                            .foregroundStyle(AppColors.ink)
+                        Text(description)
+                            .font(AppFont.caption)
+                            .foregroundStyle(AppColors.ink2)
+                            .lineSpacing(2)
+                    }
+                    .accessibilityElement(children: .combine)
+
+                    Spacer(minLength: Spacing.s2)
+
+                    // 상태 표시 (색+아이콘+레이블 3중 인코딩)
+                    permissionStatusTag(state)
                 }
-                .accessibilityElement(children: .combine)
             }
         }
+        .buttonStyle(LiquidPressStyle(scale: 0.98))
+        .disabled(state == .granted)
         .accessibilityLabel(title)
         .accessibilityHint(accessibilityHint)
+        .accessibilityValue(state.accessibilityValue)
+    }
+
+    @ViewBuilder
+    private func permissionStatusTag(_ state: PermissionUIState) -> some View {
+        switch state {
+        case .undetermined:
+            Text("허용하기")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(AppColors.primary)
+        case .granted:
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13, weight: .bold))
+                Text("허용됨")
+                    .font(.system(size: 13, weight: .bold))
+            }
+            .foregroundStyle(BadgeTone.mint.ink)
+        case .denied:
+            Text("설정에서 변경")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.ink3)
+        }
     }
 
     // MARK: - 단계 전환
@@ -662,9 +709,102 @@ struct OnboardingView: View {
         }
         onComplete()
     }
+
+    // MARK: - 권한 요청
+
+    /// 위치 권한 — CLLocationManager 를 코디네이터가 강하게 보유한 채 시스템 프롬프트.
+    private func requestLocation() {
+        Haptics.light()
+        guard locationStatus == .undetermined else {
+            // 이미 결정됨 → 미결정만 직접 프롬프트, 그 외엔 상태만 갱신.
+            syncPermissionStates()
+            return
+        }
+        locationCoordinator.request()
+    }
+
+    /// 알림 권한 — UNUserNotificationCenter 시스템 프롬프트.
+    private func requestNotifications() {
+        Haptics.light()
+        guard notificationStatus == .undetermined else {
+            syncPermissionStates()
+            return
+        }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
+            DispatchQueue.main.async {
+                notificationStatus = granted ? .granted : .denied
+            }
+        }
+    }
+
+    /// 현재 시스템 권한 상태를 카드 UI 상태로 동기화.
+    private func syncPermissionStates() {
+        locationStatus = PermissionUIState(location: locationCoordinator.authorization)
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                notificationStatus = PermissionUIState(notification: settings.authorizationStatus)
+            }
+        }
+    }
 }
 
 // MARK: - 보조 타입
+
+/// 권한 카드의 단순 UI 상태 (색+아이콘+레이블 3중 인코딩용).
+private enum PermissionUIState: Equatable {
+    case undetermined  // 아직 묻지 않음 → "허용하기"
+    case granted       // 허용됨
+    case denied        // 거부됨 → "설정에서 변경"
+
+    init(location status: CLAuthorizationStatus) {
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse: self = .granted
+        case .denied, .restricted:                    self = .denied
+        case .notDetermined:                          self = .undetermined
+        @unknown default:                             self = .undetermined
+        }
+    }
+
+    init(notification status: UNAuthorizationStatus) {
+        switch status {
+        case .authorized, .provisional, .ephemeral: self = .granted
+        case .denied:                               self = .denied
+        case .notDetermined:                        self = .undetermined
+        @unknown default:                           self = .undetermined
+        }
+    }
+
+    var accessibilityValue: String {
+        switch self {
+        case .undetermined: return "허용하기"
+        case .granted:      return "허용됨"
+        case .denied:       return "거부됨, 설정에서 변경 가능"
+        }
+    }
+}
+
+/// CLLocationManager 를 강하게 보유하고 권한 변경을 게시하는 코디네이터.
+/// (매니저가 프롬프트 표시 전에 해제되지 않도록 @StateObject 로 생존시킴)
+private final class LocationPermissionCoordinator: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    @Published var authorization: CLAuthorizationStatus
+
+    override init() {
+        authorization = manager.authorizationStatus
+        super.init()
+        manager.delegate = self
+    }
+
+    func request() {
+        manager.requestWhenInUseAuthorization()
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        DispatchQueue.main.async {
+            self.authorization = manager.authorizationStatus
+        }
+    }
+}
 
 private enum RecordDensity: Equatable {
     case light, rich

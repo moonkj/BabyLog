@@ -77,7 +77,7 @@ struct CrewMeetup: Identifiable, Hashable, Codable {
 }
 
 struct CrewGroup: Identifiable {
-    let id: Int
+    let id: String
     let name: String
     let memberCount: Int
     let distanceText: String
@@ -86,7 +86,7 @@ struct CrewGroup: Identifiable {
 }
 
 struct CrewPost: Identifiable {
-    let id: Int
+    let id: String
     let category: CrewPostCategory
     let authorName: String
     let timeText: String
@@ -106,16 +106,16 @@ extension CrewMeetup {
 }
 
 private let crewGroups: [CrewGroup] = [
-    CrewGroup(id: 1, name: "망원 8-12개월 크루",    memberCount: 23, distanceText: "반경 500m", ageRange: "8–12개월",   interestTags: ["이유식", "공원 산책", "성장 기록"]),
-    CrewGroup(id: 2, name: "마포 워킹맘 모임",      memberCount: 41, distanceText: "반경 1km",  ageRange: "6–18개월",   interestTags: ["육아 정보", "복직 준비", "어린이집"]),
-    CrewGroup(id: 3, name: "한강뷰 아파트 이웃들",  memberCount: 17, distanceText: "같은 단지", ageRange: "0–24개월",   interestTags: ["직거래", "공동구매", "놀이터"]),
+    CrewGroup(id: "g1", name: "망원 8-12개월 크루",    memberCount: 23, distanceText: "반경 500m", ageRange: "8–12개월",   interestTags: ["이유식", "공원 산책", "성장 기록"]),
+    CrewGroup(id: "g2", name: "마포 워킹맘 모임",      memberCount: 41, distanceText: "반경 1km",  ageRange: "6–18개월",   interestTags: ["육아 정보", "복직 준비", "어린이집"]),
+    CrewGroup(id: "g3", name: "한강뷰 아파트 이웃들",  memberCount: 17, distanceText: "같은 단지", ageRange: "0–24개월",   interestTags: ["직거래", "공동구매", "놀이터"]),
 ]
 
 private let crewPosts: [CrewPost] = [
-    CrewPost(id: 1, category: .info,     authorName: "서연이네", timeText: "10분 전",  title: "망원소아과 주말 대기 시간 공유해요 (오늘 기준)",              replyCount: 12, likeCount: 31),
-    CrewPost(id: 2, category: .together, authorName: "지우맘",   timeText: "1시간 전", title: "내일 한강 나들이 같이 가실 분 계신가요? (유아차 OK)",          replyCount: 8,  likeCount: 14),
-    CrewPost(id: 3, category: .consult,  authorName: "하준이네", timeText: "3시간 전", title: "8개월인데 아직 뒤집기를 잘 못해요 — 비슷한 경험 있으신 분?",  replyCount: 21, likeCount: 46),
-    CrewPost(id: 4, category: .info,     authorName: "민서맘",   timeText: "어제",    title: "마포구 유아 발달 지원금 신청 방법 정리했어요",                  replyCount: 5,  likeCount: 28),
+    CrewPost(id: "po1", category: .info,     authorName: "서연이네", timeText: "10분 전",  title: "망원소아과 주말 대기 시간 공유해요 (오늘 기준)",              replyCount: 12, likeCount: 31),
+    CrewPost(id: "po2", category: .together, authorName: "지우맘",   timeText: "1시간 전", title: "내일 한강 나들이 같이 가실 분 계신가요? (유아차 OK)",          replyCount: 8,  likeCount: 14),
+    CrewPost(id: "po3", category: .consult,  authorName: "하준이네", timeText: "3시간 전", title: "8개월인데 아직 뒤집기를 잘 못해요 — 비슷한 경험 있으신 분?",  replyCount: 21, likeCount: 46),
+    CrewPost(id: "po4", category: .info,     authorName: "민서맘",   timeText: "어제",    title: "마포구 유아 발달 지원금 신청 방법 정리했어요",                  replyCount: 5,  likeCount: 28),
 ]
 
 // MARK: - CrewScreen
@@ -135,7 +135,9 @@ struct CrewScreen: View {
                 CrewColdStartContent(onJoinWaitlist: { })
             }
 
-            previewToggle
+            #if DEBUG
+            previewToggle   // 팀 QA 전용 — 릴리스 빌드 미노출
+            #endif
 
             // 모임 만들기 FAB
             if isActive {
@@ -353,7 +355,10 @@ private struct CrewMeetupCard: View {
 // MARK: - CrewGroupCard
 
 private struct CrewGroupCard: View {
+    @EnvironmentObject private var store: AppStore
     let group: CrewGroup
+    private var isJoined: Bool { store.isJoinedGroup(group.id) }
+    private var memberCount: Int { group.memberCount + (isJoined ? 1 : 0) }
 
     var body: some View {
         BLCard(padding: 14, flat: true) {
@@ -373,7 +378,7 @@ private struct CrewGroupCard: View {
                         .font(.system(size: 14.5, weight: .bold))
                         .foregroundStyle(AppColors.ink)
 
-                    Text("\(group.memberCount)명 · \(group.distanceText) · \(group.ageRange)")
+                    Text("\(memberCount)명 · \(group.distanceText) · \(group.ageRange)")
                         .font(AppFont.num(12))
                         .foregroundStyle(AppColors.ink3)
 
@@ -395,22 +400,33 @@ private struct CrewGroupCard: View {
 
                 Spacer(minLength: 0)
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
-                    .accessibilityHidden(true)
+                // 가입 토글
+                Button {
+                    Haptics.selection()
+                    store.toggleJoinGroup(group.id)
+                } label: {
+                    Text(isJoined ? "가입중" : "가입")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(isJoined ? AppColors.ink2 : Color.white)
+                        .padding(.horizontal, 14).frame(height: 34)
+                        .background(isJoined ? AppColors.surface2 : AppColors.primary,
+                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.94))
+                .accessibilityLabel(isJoined ? "\(group.name) 가입 취소" : "\(group.name) 가입")
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(group.name), \(group.memberCount)명, \(group.distanceText), \(group.ageRange), 관심사: \(group.interestTags.joined(separator: " "))")
-        .accessibilityHint("크루 상세 보기")
+        .accessibilityElement(children: .contain)
     }
 }
 
 // MARK: - CrewPostRow
 
 private struct CrewPostRow: View {
+    @EnvironmentObject private var store: AppStore
     let post: CrewPost
+    private var isLiked: Bool { store.isCrewPostLiked(post.id) }
+    private var likeCount: Int { post.likeCount + (isLiked ? 1 : 0) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -444,24 +460,27 @@ private struct CrewPostRow: View {
                 }
                 .accessibilityLabel("댓글 \(post.replyCount)개")
 
-                HStack(spacing: 4) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppColors.ink3)
-                    Text("\(post.likeCount)")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppColors.ink3)
+                Button {
+                    Haptics.selection()
+                    store.toggleCrewPostLike(post.id)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .font(.system(size: 13))
+                            .foregroundStyle(isLiked ? AppColors.danger : AppColors.ink3)
+                        Text("\(likeCount)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.ink3)
+                    }
                 }
-                .accessibilityLabel("좋아요 \(post.likeCount)개")
+                .buttonStyle(.plain)
+                .accessibilityLabel(isLiked ? "좋아요 취소, 현재 \(likeCount)개" : "좋아요, 현재 \(likeCount)개")
             }
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(post.category.rawValue), \(post.authorName), \(post.timeText), \(post.title), 댓글 \(post.replyCount), 좋아요 \(post.likeCount)")
-        .accessibilityHint("게시글 상세 보기")
-        .accessibilityAddTraits(.isButton)
+        .accessibilityElement(children: .contain)
     }
 }
 

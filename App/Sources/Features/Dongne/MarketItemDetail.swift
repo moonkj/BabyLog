@@ -13,6 +13,7 @@ struct MarketItemDetail: View {
 
     @EnvironmentObject private var store: AppStore
     @State private var showChatSheet = false
+    @State private var showBuySheet = false
     @Environment(\.dismiss) private var dismiss
 
     private var liveItem: MarketItem { store.marketItems.first(where: { $0.id == item.id }) ?? item }
@@ -36,7 +37,8 @@ struct MarketItemDetail: View {
                     set: { _ in store.toggleMarketSaved(item.id) }
                 ),
                 isMine: liveItem.mine,
-                onChat: { showChatSheet = true }
+                onChat: { showChatSheet = true },
+                onBuy: { showBuySheet = true }
             )
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -61,6 +63,11 @@ struct MarketItemDetail: View {
         }
         .sheet(isPresented: $showChatSheet) {
             MarketChatSheet(item: liveItem)
+                .environmentObject(store)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showBuySheet) {
+            MarketBuySheet(item: liveItem, onChat: { showChatSheet = true })
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
