@@ -454,15 +454,14 @@ struct OnboardingView: View {
                             displayedComponents: .date
                         )
                         .labelsHidden()
-                        .datePickerStyle(.compact)
-                        .font(AppFont.body)
+                        .datePickerStyle(.graphical)
                         .tint(AppColors.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, Spacing.s4)
-                        .frame(height: 52)
-                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, Spacing.s2)
+                        .padding(.vertical, Spacing.s2)
+                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                         .overlay(
-                            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                                 .stroke(AppColors.line, lineWidth: 1)
                         )
                         .onChange(of: dueOrBirthDate) { _, _ in

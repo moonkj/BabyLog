@@ -53,7 +53,8 @@ struct AddPregnancySheet: View {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
                         Text("출산 예정일").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
                         DatePicker("", selection: $edd, displayedComponents: .date)
-                            .datePickerStyle(.compact)
+                            .datePickerStyle(.graphical)
+                            .tint(AppColors.pregnancyPink)
                             .labelsHidden()
                     }
 
@@ -66,7 +67,8 @@ struct AddPregnancySheet: View {
                         .tint(AppColors.pregnancyPink)
                         if useLMP {
                             DatePicker("", selection: $lmp, in: ...Date(), displayedComponents: .date)
-                                .datePickerStyle(.compact)
+                                .datePickerStyle(.graphical)
+                                .tint(AppColors.pregnancyPink)
                                 .labelsHidden()
                         }
                     }

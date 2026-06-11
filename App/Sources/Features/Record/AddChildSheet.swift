@@ -84,7 +84,8 @@ struct AddChildSheet: View {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
                         Text("생년월일").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
                         DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                            .datePickerStyle(.compact)
+                            .datePickerStyle(.graphical)
+                            .tint(AppColors.primary)
                             .labelsHidden()
                     }
 

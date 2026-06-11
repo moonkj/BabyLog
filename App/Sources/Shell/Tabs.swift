@@ -39,16 +39,8 @@ struct HomeTab: View {
     @State private var showNoMemory = false
     @State private var memoryViewerPhoto: UIImage? = nil
 
-    // MARK: 선택 아이 상태 — nil이면 children.first를 사용
-    @State private var selectedChildId: UUID? = nil
-
-    /// 현재 선택된 아이. selectedChildId가 없으면 첫 번째 아이.
-    private var selectedChild: Child? {
-        if let id = selectedChildId {
-            return store.children.first(where: { $0.id == id })
-        }
-        return store.children.first
-    }
+    /// 현재 선택된 아이 — store 전역 선택을 단일 소스로 사용(모든 탭과 동기화).
+    private var selectedChild: Child? { store.selectedChild }
 
     // MARK: 실데이터 요약 값
     /// 이번 달 육아비 (store 영속 지출)
@@ -295,23 +287,25 @@ struct HomeTab: View {
     private var childChips: some View {
         HStack(spacing: 8) {
             ForEach(store.children) { child in
-                let isSelected = child.id == (selectedChild?.id)
-                chip(child.name, on: isSelected)
-                    .onTapGesture {
-                        if child.id == selectedChild?.id {
-                            editingChild = child   // 이미 선택된 아이 다시 탭 → 정보 수정
-                        } else {
-                            Haptics.selection()
-                            withAnimation(.easeOut(duration: 0.15)) {
-                                selectedChildId = child.id
-                            }
+                let isSelected = child.id == store.selectedChild?.id
+                Button {
+                    if isSelected {
+                        editingChild = child   // 이미 선택된 아이 다시 탭 → 정보 수정
+                    } else {
+                        Haptics.selection()
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            store.selectedChildId = child.id   // 전역 선택(모든 탭 동기화)
                         }
                     }
-                    .contextMenu {
-                        Button { editingChild = child } label: {
-                            Label("아이 정보 수정", systemImage: "pencil")
-                        }
+                } label: {
+                    chip(child.name, on: isSelected)
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.96))
+                .contextMenu {
+                    Button { editingChild = child } label: {
+                        Label("아이 정보 수정", systemImage: "pencil")
                     }
+                }
             }
             Button {
                 Haptics.light()
