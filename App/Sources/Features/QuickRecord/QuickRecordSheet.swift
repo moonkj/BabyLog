@@ -21,7 +21,6 @@ struct QuickRecordSheet: View {
     // MARK: Internal state
     @State private var showDetail = false
     @State private var savedOverlay = false
-    @State private var showProInfo = false
 
     // 이정표 선택 (다중)
     @State private var selectedMilestones: Set<String> = []
@@ -93,11 +92,6 @@ struct QuickRecordSheet: View {
         }
         // 애니메이션: 완료 오버레이 진입
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: savedOverlay)
-        .alert("AI 캡션 — 곧 제공돼요", isPresented: $showProInfo) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text("사진을 보고 캡션 초안을 만들어주는 프리미엄 기능이에요. 다음 업데이트에서 만나요.")
-        }
     }
 
     // MARK: Main scroll content
@@ -166,24 +160,35 @@ struct QuickRecordSheet: View {
         .padding(.bottom, Spacing.s4)
     }
 
-    // 사진 드롭존 — PhotoPickerButton으로 실제 사진 선택 연결
+    // 사진 드롭존 — 선택 사진은 잘림 없이 원본 비율(전체)로 표시
     private var photoDropZone: some View {
-        let dropHeight: CGFloat = showDetail ? 150 : 210
+        let placeholderHeight: CGFloat = showDetail ? 150 : 210
+        let maxPhotoHeight: CGFloat = showDetail ? 300 : 430
         return PhotoPickerButton(image: $selectedPhoto) {
-            ZStack {
-                // 선택된 이미지 있으면 미리보기, 없으면 플레이스홀더
-                SelectedPhotoView(
-                    image: selectedPhoto,
-                    cornerRadius: Radius.lg
-                ) {
+            if let img = selectedPhoto {
+                // 원본 비율 유지(scaledToFit) — 사진 전체가 보이도록
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: maxPhotoHeight)
+                    .background(AppColors.surface2)
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "photo.badge.arrow.down.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(10)
+                            .background(.black.opacity(0.4), in: Circle())
+                            .padding(10)
+                            .accessibilityHidden(true)
+                    }
+            } else {
+                ZStack {
                     PhotoPlaceholder(seed: mode == .pregnancy ? 3 : 1, cornerRadius: Radius.lg)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: dropHeight)
-                .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-
-                // 미선택 상태: 드롭존 안내 오버레이
-                if selectedPhoto == nil {
+                        .frame(maxWidth: .infinity)
+                        .frame(height: placeholderHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
                     VStack(spacing: Spacing.s2) {
                         Image(systemName: photoCameraIcon)
                             .font(.system(size: 34, weight: .medium))
@@ -194,21 +199,10 @@ struct QuickRecordSheet: View {
                             .foregroundStyle(.white.opacity(0.9))
                             .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                     }
-                } else {
-                    // 선택 완료 상태: 우하단 교체 힌트
-                    Image(systemName: "photo.badge.arrow.down.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .padding(10)
-                        .background(.black.opacity(0.35), in: Circle())
-                        .padding(10)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .accessibilityHidden(true)
                 }
             }
         }
         .buttonStyle(LiquidPressStyle(scale: 0.97))
-        .frame(height: dropHeight)
         .accessibilityLabel(mode == .pregnancy ? "배 사진 추가 버튼" : "사진 추가 버튼")
         .accessibilityValue(selectedPhoto != nil ? "사진 선택됨" : "사진 없음")
         .accessibilityHint("탭하여 사진 라이브러리에서 선택합니다")
@@ -302,42 +296,6 @@ struct QuickRecordSheet: View {
                 numericField(label: heightLabel, placeholder: mode == .pregnancy ? "30.0" : "78.5", text: $heightText, unit: "cm")
                 numericField(label: weightLabel, placeholder: mode == .pregnancy ? "62.5" : "10.2", text: $weightText, unit: "kg")
             }
-
-            // AI 캡션 초안 잠금 버튼 (Pro)
-            Button {
-                Haptics.light()
-                showProInfo = true
-            } label: {
-                HStack(spacing: Spacing.s2) {
-                    // 반짝임 (§8.4 AI)
-                    SparkleTwinkleView(size: 15, tint: AppColors.gold)
-                    Text("AI 캡션 초안 만들기")
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(AppColors.ink2)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 11))
-                        Text("Pro")
-                            .font(.system(size: 12, weight: .bold))
-                    }
-                    .foregroundStyle(AppColors.gold)
-                    .padding(.horizontal, 9)
-                    .frame(height: 24)
-                    .background(AppColors.goldTint, in: Capsule())
-                }
-                .padding(.horizontal, Spacing.s4)
-                .frame(maxWidth: .infinity, minHeight: 44)   // 44pt 터치영역
-                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
-                        .foregroundStyle(AppColors.line2)
-                }
-            }
-            .buttonStyle(LiquidPressStyle(scale: 0.97))
-            .accessibilityLabel("AI 캡션 초안 만들기 Pro 기능")
-            .accessibilityHint("Pro 플랜에서 사용할 수 있습니다")
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
         .animation(.easeInOut(duration: 0.25), value: showDetail)
