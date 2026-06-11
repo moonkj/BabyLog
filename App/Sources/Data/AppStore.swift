@@ -145,6 +145,29 @@ final class AppStore: ObservableObject {
         selectedChildId = child.id
     }
 
+    /// 아이 정보를 수정한다. 빈 이름은 무시(기존 유지).
+    func updateChild(id: UUID, name: String, birthDate: Date, gender: Gender?) {
+        guard let idx = children.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { children[idx].name = trimmed }
+        children[idx].birthDate = birthDate
+        children[idx].gender = gender
+    }
+
+    /// 아이를 삭제한다. 연결된 기록(성장·다이어리 사진 포함)도 함께 정리한다.
+    func deleteChild(id: UUID) {
+        for entry in diaryEntries where entry.childId == id {
+            PhotoStore.delete(entry.photoRef)
+        }
+        diaryEntries.removeAll { $0.childId == id }
+        growthRecords.removeAll { $0.childId == id }
+        // 접종 완료 키 정리
+        let prefix = "\(id.uuidString)|"
+        vaccineCompletions = vaccineCompletions.filter { !$0.hasPrefix(prefix) }
+        children.removeAll { $0.id == id }
+        if selectedChildId == id { selectedChildId = children.first?.id }
+    }
+
     /// 임신 상태 변경 (민감 영역 — 상실·일시중단 포함).
     /// `.loss` 전환 시 `pregnancyEndedInLoss` 이벤트를 발행해 권유 알림을 즉시 자동 차단한다.
     func updatePregnancyStatus(pregnancyId: UUID, to status: PregnancyStatus) {

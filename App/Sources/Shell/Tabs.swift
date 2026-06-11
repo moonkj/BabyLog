@@ -34,6 +34,7 @@ struct HomeTab: View {
     var onNavigate: (AppTab) -> Void = { _ in }
     @State private var showEmergency = false
     @State private var showAddChild = false
+    @State private var editingChild: Child? = nil
 
     // MARK: 선택 아이 상태 — nil이면 children.first를 사용
     @State private var selectedChildId: UUID? = nil
@@ -178,6 +179,9 @@ struct HomeTab: View {
         .sheet(isPresented: $showAddChild) {
             AddChildSheet().environmentObject(store)
         }
+        .sheet(item: $editingChild) { child in
+            AddChildSheet(editing: child).environmentObject(store)
+        }
     }
 
     // MARK: 레이아웃별 콘텐츠
@@ -252,10 +256,18 @@ struct HomeTab: View {
                 let isSelected = child.id == (selectedChild?.id)
                 chip(child.name, on: isSelected)
                     .onTapGesture {
-                        guard child.id != selectedChildId else { return }
-                        Haptics.selection()
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            selectedChildId = child.id
+                        if child.id == selectedChild?.id {
+                            editingChild = child   // 이미 선택된 아이 다시 탭 → 정보 수정
+                        } else {
+                            Haptics.selection()
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                selectedChildId = child.id
+                            }
+                        }
+                    }
+                    .contextMenu {
+                        Button { editingChild = child } label: {
+                            Label("아이 정보 수정", systemImage: "pencil")
                         }
                     }
             }
