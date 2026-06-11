@@ -11,24 +11,6 @@ struct QuickRecordFAB: View {
 
     // 글래스 FAB 배경 — 프로스티드(뒤 화면이 블러로 비침) + 아주 옅은 틴트 + 약한 글로스
     // 뱃지 카드 수준 투명도: 흰 글로스/틴트를 최소화해 ultraThinMaterial 블러가 드러나게 한다.
-    // 글래스 FAB 배경 — 진짜 알파 반투명(세이지)으로 뒤 화면이 그대로 비침.
-    // (ultraThinMaterial은 UIKit 탭뷰 위에선 블러가 안 잡혀 은색 불투명으로 보이므로 미사용)
-    private var fabBackground: some View {
-        ZStack {
-            Circle().fill(BadgeTone.mint.ink.opacity(0.45))   // 반투명 세이지 — 뒤 화면이 비침
-            // 아주 옅은 상단 하이라이트(정적) — 유리 질감만
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [.white.opacity(0.16), .clear],
-                        center: .topLeading, startRadius: 1, endRadius: 30
-                    )
-                )
-            // 얇은 림
-            Circle().strokeBorder(.white.opacity(0.45), lineWidth: 1)
-        }
-    }
-
     private var actions: [(icon: String, label: String)] {
         mode == .pregnancy
             ? [("heart.fill", "태동"), ("photo.fill", "배 사진"), ("square.and.pencil", "메모")]
@@ -70,7 +52,7 @@ struct QuickRecordFAB: View {
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 60, height: 60)
-                .background(fabBackground)
+                .background(FABGlassCircle())
                 .clipShape(Circle())
                 .rotationEffect(.degrees(open ? 45 : 0))
                 .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)

@@ -156,9 +156,7 @@ struct BudgetScreen: View {
                 await loadSubsidies()
             }
         }
-        .overlay(alignment: .bottomTrailing) {
-            addExpenseFAB
-        }
+        .appFAB { Haptics.light(); showAddExpense = true }
         .sheet(isPresented: $showAddExpense) {
             AddExpenseSheet().environmentObject(store)
         }
@@ -573,27 +571,6 @@ struct BudgetScreen: View {
     }
 
     // MARK: FAB
-
-    private var addExpenseFAB: some View {
-        Button {
-            Haptics.light()
-            showAddExpense = true
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(AppColors.primary)
-                    .frame(width: 56, height: 56)
-                    .blShadow(.fab)
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(AppColors.onPrimary)
-            }
-        }
-        .padding(.trailing, Spacing.s4)
-        .padding(.bottom, 30)
-        .accessibilityLabel("지출 추가")
-        .accessibilityHint("탭하면 새 지출 항목을 추가할 수 있어요.")
-    }
 
     // MARK: - Helpers
 

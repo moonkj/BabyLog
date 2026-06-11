@@ -177,25 +177,21 @@ struct MarketScreen: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    BLSampleNote(message: "내가 등록한 매물은 기기에 저장돼요. 동네 이웃과의 실시간 거래는 곧 열려요.")
-                        .padding(.horizontal, Spacing.s5)
-                        .padding(.top, Spacing.s3)
-                        .padding(.bottom, Spacing.s2)
-                    needSoonSection
-                    categoryChips
-                    itemList
-                        .padding(.bottom, 80) // FAB 여백
-                }
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                BLSampleNote(message: "내가 등록한 매물은 기기에 저장돼요. 동네 이웃과의 실시간 거래는 곧 열려요.")
+                    .padding(.horizontal, Spacing.s5)
+                    .padding(.top, Spacing.s3)
+                    .padding(.bottom, Spacing.s2)
+                needSoonSection
+                categoryChips
+                itemList
+                    .padding(.bottom, 80) // FAB 여백
             }
-            .background(AppColors.canvas.ignoresSafeArea())
-
-            sellButton
-                .padding(.trailing, Spacing.s5)
-                .padding(.bottom, Spacing.s6)
         }
+        .background(AppColors.canvas.ignoresSafeArea())
+        // 공용 글래스 FAB — 팔기 (모양·위치는 전 화면 공유, 기능만 다름)
+        .appFAB { Haptics.light(); showSellSheet = true }
         .sheet(isPresented: $showSellSheet) {
             MkSellFlowSheet()
                 .environmentObject(store)
@@ -303,27 +299,6 @@ struct MarketScreen: View {
         }
     }
 
-    // MARK: 팔기 버튼
-    private var sellButton: some View {
-        Button {
-            showSellSheet = true
-        } label: {
-            HStack(spacing: 7) {
-                Image(systemName: "tag.fill")
-                    .font(.system(size: 15, weight: .bold))
-                Text("팔기")
-                    .font(.system(size: 16, weight: .bold))
-            }
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 22)
-            .frame(height: 50)
-            .background(AppColors.ink, in: Capsule())
-            .blShadow(.fab)
-        }
-        .buttonStyle(LiquidPressStyle(scale: 0.95))
-        .accessibilityLabel("팔기")
-        .accessibilityHint("내 물건을 마켓에 등록합니다")
-    }
 }
 
 // MARK: - MkNeedSoonCard

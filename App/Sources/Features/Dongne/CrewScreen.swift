@@ -143,27 +143,10 @@ struct CrewScreen: View {
             #if DEBUG
             previewToggle   // 팀 QA 전용 — 릴리스 빌드 미노출
             #endif
-
-            // 모임 만들기 FAB
-            if isActive {
-                Button { showCreate = true } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "plus").font(.system(size: 15, weight: .bold))
-                        Text("모임 만들기").font(.system(size: 16, weight: .bold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 20).frame(height: 50)
-                    .background(AppColors.ink, in: Capsule())
-                    .blShadow(.fab)
-                }
-                .buttonStyle(LiquidPressStyle(scale: 0.95))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .padding(.trailing, Spacing.s5)
-                .padding(.bottom, Spacing.s6)
-                .accessibilityLabel("모임 만들기")
-            }
         }
         .background(AppColors.canvas.ignoresSafeArea())
+        // 공용 글래스 FAB — 모임 만들기 (모양·위치는 전 화면 공유, 기능만 다름)
+        .appFAB { if isActive { Haptics.light(); showCreate = true } }
         .sheet(isPresented: $showCreate) {
             CrewCreateSheet().environmentObject(store).presentationDetents([.large])
         }
