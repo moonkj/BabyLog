@@ -19,6 +19,8 @@ struct MainTabView: View {
     // FAB 자유 위치(길게 눌러 드래그) — 기준 위치에서의 오프셋 영속
     @AppStorage("bl_fab_dx") private var fabDX: Double = 0
     @AppStorage("bl_fab_dy") private var fabDY: Double = 0
+    /// 화면 밖에 저장된 좌표로 FAB가 사라지는 문제 1회 복구 플래그
+    @AppStorage("bl_fab_pos_reset_1") private var fabPosResetDone = false
     @State private var fabDrag: CGSize = .zero
     @State private var fabDragging = false
     @State private var fabSuppressTap = false
@@ -172,6 +174,15 @@ struct MainTabView: View {
             QuickRecordSheet(mode: mode, onSave: {}, onClose: { showQuickRecord = false })
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .onAppear {
+            // 1회 복구: 화면 밖 좌표로 FAB가 안 보이던 문제 → 기본 위치로
+            if !fabPosResetDone { fabDX = 0; fabDY = 0; fabPosResetDone = true }
+            // 매 로드 안전 보정: 저장 좌표를 항상 화면 안으로 클램프
+            let b = UIScreen.main.bounds
+            let span = b.width - 100, maxUp = b.height - 240
+            fabDX = fabOnLeft ? min(span, max(0, fabDX)) : min(0, max(-span, fabDX))
+            fabDY = min(0, max(-maxUp, fabDY))
         }
     }
 
