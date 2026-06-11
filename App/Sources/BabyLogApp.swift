@@ -15,6 +15,7 @@ struct BabyLogApp: App {
                 .preferredColorScheme(.light)   // 무조건 라이트(데이) 모드 고정
                 .task {
                     store.enableAutoPersist()
+                    store.refreshBadgeAwards()   // 첫 실행 시드 / 닫힌 새 획득 감지
                     notifications.start()
                     await setupNotifications()
                 }

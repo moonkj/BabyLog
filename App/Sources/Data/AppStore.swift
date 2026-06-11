@@ -25,10 +25,59 @@ final class AppStore: ObservableObject {
     @Published private(set) var diaryComments: [String: [String]]
     @Published var selectedChildId: UUID?
 
+    /// 방금 획득한 뱃지 — 어느 화면에서든 전역 축하 카드로 표시(설정 시 MainTabView가 띄움)
+    @Published var pendingBadgeAward: BadgeCatalogItem? = nil
+
     // MARK: - Private
 
     private let bus: EventBus
     private let persistence: LocalPersistence?
+
+    // MARK: - 뱃지 획득 감지 (UserDefaults 로컬 상태)
+
+    private var seenBadgeIds: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "bl_seen_badges") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "bl_seen_badges") }
+    }
+    private var badgesSeeded: Bool {
+        get { UserDefaults.standard.bool(forKey: "bl_badges_seeded") }
+        set { UserDefaults.standard.set(newValue, forKey: "bl_badges_seeded") }
+    }
+
+    /// 현재 획득 상태인 모든 뱃지 ID (엔진 + 마일스톤). ProfileScreen 표시와 동일 기준.
+    var currentEarnedBadgeIds: Set<String> {
+        let recordCount = diaryEntries.count + growthRecords.count
+        let streak = ProfileStreak.currentStreak(diaryDates: diaryEntries.map(\.date))
+        var s = BadgeEngine.earnedBadges(recordCount: recordCount, consecutiveDays: streak,
+                                         tradeCount: 0, crewMeetings: 0, postLikes: 0)
+        let now = Date()
+        if !children.isEmpty { s.insert("first_child") }
+        if children.count >= 2 { s.insert("multi_child") }
+        if !pregnancies.isEmpty { s.insert("pregnancy_logged") }
+        if diaryEntries.contains(where: { !$0.photoRefList.isEmpty }) { s.insert("first_photo") }
+        if diaryEntries.count >= 10 { s.insert("memory_keeper") }
+        if growthRecords.count >= 5 { s.insert("growth_tracker") }
+        if children.contains(where: { AgeCalculator.dPlusDays(birthDate: $0.birthDate, asOf: now) >= 100 }) { s.insert("hundred_days") }
+        if children.contains(where: { AgeCalculator.dPlusDays(birthDate: $0.birthDate, asOf: now) >= 365 }) { s.insert("first_birthday") }
+        return s
+    }
+
+    /// 새로 획득한 뱃지를 감지해 pendingBadgeAward에 올린다. 첫 실행은 축하 없이 시드.
+    func refreshBadgeAwards() {
+        let current = currentEarnedBadgeIds
+        guard badgesSeeded else {
+            seenBadgeIds = current
+            badgesSeeded = true
+            return
+        }
+        let newlyEarned = current.subtracting(seenBadgeIds)
+        seenBadgeIds = seenBadgeIds.union(current)
+        guard let firstId = newlyEarned.sorted().first,
+              var item = BadgeCatalogItem.sampleCatalog.first(where: { $0.id == firstId })
+        else { return }
+        item.isEarned = true
+        pendingBadgeAward = item
+    }
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: Init
@@ -158,6 +207,7 @@ final class AppStore: ObservableObject {
                           profileImageRef: profileImageRef, caregiverRole: nil, pregnancyId: nil)
         children.append(child)
         selectedChildId = child.id
+        refreshBadgeAwards()
     }
 
     /// 아이 정보를 수정한다. 빈 이름은 무시(기존 유지). profileImageRef는 .some일 때만 갱신.
@@ -205,6 +255,7 @@ final class AppStore: ObservableObject {
                              nickname: nickname?.trimmingCharacters(in: .whitespacesAndNewlines),
                              clinic: nil, status: .active)
         pregnancies.append(preg)
+        refreshBadgeAwards()
     }
 
     /// 임신 정보(태명·예정일·LMP) 수정.
@@ -255,6 +306,7 @@ final class AppStore: ObservableObject {
             pregnancies[index] = updatedPregnancy
             children.append(child)
             bus.publish(.recordSaved(childId: child.id))
+            refreshBadgeAwards()
             return .success(child)
         }
     }
@@ -290,6 +342,7 @@ final class AppStore: ObservableObject {
         )
         diaryEntries.append(entry)
         bus.publish(.recordSaved(childId: childId))
+        refreshBadgeAwards()
     }
 
     /// 성장 기록을 추가한다.
@@ -315,6 +368,7 @@ final class AppStore: ObservableObject {
         )
         growthRecords.append(record)
         bus.publish(.recordSaved(childId: childId))
+        refreshBadgeAwards()
     }
 
     // MARK: - 가계부 CRUD

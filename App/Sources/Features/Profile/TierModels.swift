@@ -137,8 +137,9 @@ struct BadgeCatalogItem: Identifiable, Equatable {
     var isEarned: Bool
 
     enum BadgeCategory: String {
-        case trade      = "거래"
+        case milestone  = "성장"
         case record     = "기록"
+        case trade      = "거래"
         case community  = "커뮤니티"
         case special    = "특별"
     }
@@ -147,6 +148,15 @@ struct BadgeCatalogItem: Identifiable, Equatable {
 extension BadgeCatalogItem {
     /// SPEC 7.3 전체 카탈로그 중 ProfileScreen 표시용 10개 샘플
     static let sampleCatalog: [BadgeCatalogItem] = [
+        // 성장(마일스톤) — 실데이터 기반
+        .init(id: "first_child",      name: "첫 아이 등록",  condition: "아이 프로필 만들기",        tone: .mint,   systemIcon: "figure.and.child.holdinghands", category: .milestone, isEarned: false),
+        .init(id: "pregnancy_logged", name: "태교 시작",     condition: "임신 기록 시작",            tone: .pink,   systemIcon: "heart.circle.fill",     category: .milestone, isEarned: false),
+        .init(id: "first_photo",      name: "첫 사진",       condition: "사진 기록 1장",             tone: .blue,   systemIcon: "camera.fill",           category: .milestone, isEarned: false),
+        .init(id: "hundred_days",     name: "백일의 기적",   condition: "아이 100일 달성",           tone: .amber,  systemIcon: "star.circle.fill",      category: .milestone, isEarned: false),
+        .init(id: "first_birthday",   name: "첫 생일",       condition: "아이 첫 돌 달성",           tone: .amber,  systemIcon: "birthday.cake.fill",    category: .milestone, isEarned: false),
+        .init(id: "multi_child",      name: "다둥이 양육자", condition: "아이 2명 이상 등록",        tone: .purple, systemIcon: "person.2.fill",         category: .milestone, isEarned: false),
+        .init(id: "growth_tracker",   name: "성장 기록가",   condition: "성장 측정 5회 이상",        tone: .mint,   systemIcon: "ruler.fill",            category: .milestone, isEarned: false),
+        .init(id: "memory_keeper",    name: "추억 수집가",   condition: "기록 10개 이상",            tone: .purple, systemIcon: "photo.stack.fill",      category: .milestone, isEarned: false),
         // 거래
         .init(id: "first_trade",    name: "첫 거래 완료", condition: "첫 거래 성사",                tone: .grey,   systemIcon: "bag.fill",              category: .trade,     isEarned: true),
         .init(id: "share_angel",    name: "나눔 천사",    condition: "무료나눔 3회 이상",            tone: .mint,   systemIcon: "gift.fill",             category: .trade,     isEarned: true),

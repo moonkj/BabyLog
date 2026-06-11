@@ -20,6 +20,9 @@ struct ProfileScreen: View {
 
     // 성별 중립 닉네임 (설정에서 변경 — 맘/파파/양육자)
     @AppStorage("bl_nickname") private var nickname = "양육자님"
+    // 닉네임 옆에 장착한 뱃지 (TickLab 스타일)
+    @AppStorage("bl_equipped_badge") private var equippedBadgeId = ""
+    @State private var detailBadge: BadgeCatalogItem? = nil
 
     /// 선택 아이 기준 나이 텍스트 (실데이터)
     private var childAgeText: String {
@@ -44,16 +47,6 @@ struct ProfileScreen: View {
     /// 획득 뱃지 수
     private var earnedBadgeCount: Int { resolvedCatalog.filter(\.isEarned).count }
 
-    private var engineEarnedBadgeIds: Set<String> {
-        BadgeEngine.earnedBadges(
-            recordCount:     totalRecordCount,
-            consecutiveDays: streakDays,
-            tradeCount:      tradeCount,    // 마켓 연동 전 0
-            crewMeetings:    crewCount,     // 크루 연동 전 0
-            postLikes:       0              // 커뮤니티 연동 전 0
-        )
-    }
-
     private var currentTier: Tier {
         TierCalculator.tier(tradeCount: tradeCount, avgRating: avgRating, joinedMonths: joinedMonths)
     }
@@ -66,14 +59,20 @@ struct ProfileScreen: View {
         TierCalculator.tradesNeededForNext(currentTier: currentTier, tradeCount: tradeCount)
     }
 
-    /// 카탈로그 항목의 isEarned를 BadgeEngine 결과로 덮어쓴 배열을 반환합니다.
+    /// 카탈로그 항목의 isEarned를 store 획득 집합(엔진+마일스톤 단일 소스)으로 덮어쓴 배열.
     private var resolvedCatalog: [BadgeCatalogItem] {
-        let earned = engineEarnedBadgeIds
+        let earned = store.currentEarnedBadgeIds
         return BadgeCatalogItem.sampleCatalog.map { item in
             var copy = item
             copy.isEarned = earned.contains(item.id)
             return copy
         }
+    }
+
+    /// 닉네임 옆에 장착된 뱃지 (획득 상태일 때만)
+    private var equippedBadge: BadgeCatalogItem? {
+        guard !equippedBadgeId.isEmpty else { return nil }
+        return resolvedCatalog.first { $0.id == equippedBadgeId && $0.isEarned }
     }
 
     private var filteredBadges: [BadgeCatalogItem] {
@@ -82,7 +81,7 @@ struct ProfileScreen: View {
     }
 
     private let badgeCategories: [BadgeCatalogItem.BadgeCategory?] =
-        [nil, .trade, .record, .community, .special]
+        [nil, .milestone, .record, .trade, .community, .special]
 
     // MARK: Body
 
@@ -112,6 +111,22 @@ struct ProfileScreen: View {
             }
         }
         .background(AppColors.canvas.ignoresSafeArea())
+        .overlay {
+            if let badge = detailBadge {
+                BadgeDetailOverlay(
+                    badge: badge,
+                    isEquipped: equippedBadgeId == badge.id,
+                    onEquip: {
+                        equippedBadgeId = (equippedBadgeId == badge.id) ? "" : badge.id
+                        Haptics.success()
+                    },
+                    onClose: { detailBadge = nil }
+                )
+                .transition(.opacity)
+                .zIndex(10)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: detailBadge?.id)
         .alert("Pro — 곧 만나요", isPresented: $showProDetail) {
             Button("확인", role: .cancel) {}
         } message: {
@@ -159,6 +174,15 @@ struct ProfileScreen: View {
                             Text(nickname)
                                 .font(AppFont.title)
                                 .foregroundStyle(AppColors.ink)
+                            if let eb = equippedBadge {
+                                Image(systemName: eb.systemIcon)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(eb.tone.ink)
+                                    .padding(5)
+                                    .background(eb.tone.bg, in: Circle())
+                                    .overlay { Circle().stroke(eb.tone.ink.opacity(0.35), lineWidth: 1) }
+                                    .accessibilityLabel("장착한 뱃지: \(eb.name)")
+                            }
                             tierBadge
                         }
                         Text(childAgeText)
@@ -483,7 +507,7 @@ struct ProfileScreen: View {
             let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 3)
             LazyVGrid(columns: columns, spacing: Spacing.s2) {
                 ForEach(filteredBadges) { badge in
-                    BadgeTileView(badge: badge)
+                    BadgeTileView(badge: badge) { detailBadge = badge }
                 }
             }
         }
@@ -615,13 +639,15 @@ struct ProfileScreen: View {
 /// 뱃지 그리드 셀 — 획득=컬러, 미획득=잠금·흐림 (SPEC 7.6 수집 욕구 자극)
 private struct BadgeTileView: View {
     let badge: BadgeCatalogItem
+    var onTap: () -> Void = {}
     @State private var tapped = false
 
     var body: some View {
         Button {
-            guard badge.isEarned else { return }
+            Haptics.selection()
             withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) { tapped = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { tapped = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { tapped = false }
+            onTap()
         } label: {
             VStack(spacing: Spacing.s2) {
                 // 아이콘 원
@@ -679,6 +705,94 @@ private struct BadgeTileView: View {
                 : "미획득 뱃지: \(badge.name). 조건: \(badge.condition)"
         )
         .accessibilityAddTraits(badge.isEarned ? [] : .isStaticText)
+    }
+}
+
+// MARK: - BadgeDetailOverlay (TickLab 스타일 — 회전+확대 등장, 닉네임 장착)
+
+private struct BadgeDetailOverlay: View {
+    let badge: BadgeCatalogItem
+    let isEquipped: Bool
+    let onEquip: () -> Void
+    let onClose: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+                .onTapGesture { onClose() }
+
+            VStack(spacing: Spacing.s5) {
+                // 회전+확대 등장하는 큰 뱃지 카드
+                ZStack {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(badge.isEarned ? badge.tone.ink : AppColors.ink3)
+                    Circle()
+                        .fill(.white.opacity(0.22))
+                        .frame(width: 180, height: 180)
+                    Image(systemName: badge.isEarned ? badge.systemIcon : "lock.fill")
+                        .font(.system(size: 84, weight: .bold))
+                        .foregroundStyle(.white)
+                    VStack {
+                        Spacer()
+                        Text(badge.name)
+                            .font(.system(size: 22, weight: .heavy))
+                            .foregroundStyle(.white)
+                            .padding(.bottom, 28)
+                    }
+                }
+                .frame(width: 250, height: 330)
+                .scaleEffect(appeared ? 1 : 0.3)
+                .rotationEffect(.degrees(appeared || reduceMotion ? 0 : -200))
+                .opacity(appeared ? 1 : 0)
+                .shadow(color: .black.opacity(0.3), radius: 24, y: 12)
+
+                VStack(spacing: Spacing.s2) {
+                    Text(badge.name)
+                        .font(.system(size: 22, weight: .heavy))
+                        .foregroundStyle(.white)
+                    Text(badge.condition)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                }
+
+                // 장착 / 잠금 안내
+                if badge.isEarned {
+                    Button {
+                        onEquip()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: isEquipped ? "checkmark.seal.fill" : "seal")
+                            Text(isEquipped ? "장착 해제" : "닉네임 옆에 장착")
+                        }
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(isEquipped ? AppColors.ink : badge.tone.ink)
+                        .padding(.horizontal, 22).frame(height: 50)
+                        .background(.white, in: Capsule())
+                    }
+                    .buttonStyle(LiquidPressStyle(scale: 0.96))
+                } else {
+                    Text("아직 잠겨 있어요 · \(badge.condition)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+
+                Button("닫기") { onClose() }
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.horizontal, 24).frame(height: 44)
+                    .overlay { Capsule().stroke(.white.opacity(0.4), lineWidth: 1.5) }
+            }
+            .padding(Spacing.s5)
+        }
+        .onAppear {
+            if reduceMotion { appeared = true }
+            else { withAnimation(.spring(response: 0.55, dampingFraction: 0.62)) { appeared = true } }
+        }
+        .accessibilityAddTraits(.isModal)
     }
 }
 

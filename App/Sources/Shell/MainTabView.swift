@@ -35,6 +35,17 @@ struct MainTabView: View {
                     .zIndex(10)
             }
         }
+        // 전역 뱃지 획득 카드 — 어느 화면에서든 표시
+        .overlay {
+            if let badge = store.pendingBadgeAward {
+                BadgeAwardCard(badge: badge) {
+                    withAnimation(.easeOut(duration: 0.25)) { store.pendingBadgeAward = nil }
+                }
+                .transition(.opacity)
+                .zIndex(20)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: store.pendingBadgeAward?.id)
     }
 
     /// 야간 초저휘도 — 설정 ON 시 22~06시에 은은한 디밍(새벽 수유 배려). 5분마다 시간 재평가.
