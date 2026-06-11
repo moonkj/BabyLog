@@ -12,6 +12,11 @@ struct VaccineSection: View {
     @State private var vaccines: [VaccineRecord] = []
     @State private var isLoading = false
 
+    // 접종 병원 입력 시트(.alert) 상태
+    @State private var hospitalPromptVaccineId: String?   // 입력 대상 vaccineId (nil이면 닫힘)
+    @State private var hospitalPromptName: String = ""     // 다이얼로그 타이틀용 표시명
+    @State private var hospitalInput: String = ""          // TextField 바인딩
+
     /// 현재 선택 아이 ID (접종 완료 영속 키 구성용)
     private var childId: UUID? { store.selectedChild?.id }
 
@@ -86,6 +91,50 @@ struct VaccineSection: View {
                 )
             }
         }
+        // 접종 병원 입력/수정 다이얼로그 (선택 입력 — 건너뛰기 허용)
+        .alert(
+            hospitalPromptName.isEmpty ? "접종 병원" : "\(hospitalPromptName) 접종 병원",
+            isPresented: Binding(
+                get: { hospitalPromptVaccineId != nil },
+                set: { if !$0 { hospitalPromptVaccineId = nil } }
+            )
+        ) {
+            TextField("어디서 접종하셨나요? (선택)", text: $hospitalInput)
+                .textInputAutocapitalization(.never)
+            Button("저장") { saveHospitalPrompt() }
+            Button("건너뛰기", role: .cancel) { hospitalPromptVaccineId = nil }
+        } message: {
+            Text("기록해두면 완료 목록에서 바로 확인하고 지도로 찾아볼 수 있어요.")
+        }
+    }
+
+    // MARK: - 접종 병원 입력
+
+    /// 병원 입력 다이얼로그를 띄운다(신규 완료 시 또는 수정 탭 시).
+    private func presentHospitalPrompt(vaccineId: String, name: String) {
+        guard let cid = childId else { return }
+        hospitalInput = store.vaccineHospital(childId: cid, vaccineId: vaccineId) ?? ""
+        hospitalPromptName = name
+        hospitalPromptVaccineId = vaccineId
+    }
+
+    /// 입력값을 저장한다(빈 값이면 setVaccineHospital이 nil로 정리).
+    private func saveHospitalPrompt() {
+        guard let cid = childId, let vid = hospitalPromptVaccineId else { return }
+        store.setVaccineHospital(childId: cid, vaccineId: vid, hospital: hospitalInput)
+        Haptics.success()
+        hospitalPromptVaccineId = nil
+    }
+
+    /// Apple 지도에서 병원명으로 검색해 연다.
+    private func openInMaps(_ hospital: String) {
+        #if canImport(UIKit)
+        let query = hospital.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? hospital
+        if let url = URL(string: "http://maps.apple.com/?q=\(query)") {
+            Haptics.light()
+            UIApplication.shared.open(url)
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -107,18 +156,28 @@ struct VaccineSection: View {
 
                 // 전체 리스트
                 ForEach(vaccines) { v in
+                    let name = displayName(for: v.vaccineId)
                     VaccineRow(
                         vaccineId: v.vaccineId,
-                        displayName: displayName(for: v.vaccineId),
+                        displayName: name,
                         ageLabel: ageLabel(for: v, birthDate: child.birthDate),
-                        hospital: v.hospital,
+                        // 영속화된 병원만 노출 (목 데이터 v.hospital은 더 이상 사용 안 함)
+                        hospital: store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId),
                         done: isDone(v),
                         dDay: dDayLabel(for: v),
                         onToggle: {
+                            let wasDone = isDone(v)
                             withAnimation(.easeOut(duration: 0.18)) {
                                 store.toggleVaccine(childId: child.id, vaccineId: v.vaccineId)
                             }
-                        }
+                            // 새로 '완료'가 됐고 병원 기록이 없으면 입력 유도
+                            if !wasDone,
+                               store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId) == nil {
+                                presentHospitalPrompt(vaccineId: v.vaccineId, name: name)
+                            }
+                        },
+                        onTapHospital: { openInMaps($0) },
+                        onEditHospital: { presentHospitalPrompt(vaccineId: v.vaccineId, name: name) }
                     )
                 }
 
@@ -224,6 +283,8 @@ private struct VaccineRow: View {
     let done: Bool
     let dDay: String?
     let onToggle: () -> Void
+    let onTapHospital: (String) -> Void
+    let onEditHospital: () -> Void
 
     var body: some View {
         BLCard(padding: 14, flat: true) {
@@ -245,9 +306,41 @@ private struct VaccineRow: View {
                         .foregroundStyle(AppColors.ink)
                     HStack(spacing: 4) {
                         Text(ageLabel)
-                        if let hosp = hospital, done {
+                        if done {
                             Text("·").foregroundStyle(AppColors.ink3)
-                            Text(hosp)
+                            if let hosp = hospital, !hosp.isEmpty {
+                                // 병원명 탭 → Apple 지도 검색
+                                Button { onTapHospital(hosp) } label: {
+                                    HStack(spacing: 2) {
+                                        Text(hosp)
+                                        Image(systemName: "map")
+                                            .font(.system(size: 9, weight: .semibold))
+                                    }
+                                    .foregroundStyle(AppColors.primary)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("접종 병원 \(hosp), 지도에서 보기")
+                                // 병원명 수정
+                                Button(action: onEditHospital) {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundStyle(AppColors.ink3)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("접종 병원 수정")
+                            } else {
+                                // 병원 미기록 → 추가 유도
+                                Button(action: onEditHospital) {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "plus.circle")
+                                            .font(.system(size: 9, weight: .semibold))
+                                        Text("병원 기록")
+                                    }
+                                    .foregroundStyle(AppColors.ink3)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("접종 병원 기록하기")
+                            }
                         }
                     }
                     .font(AppFont.caption)
@@ -286,6 +379,7 @@ private struct VaccineRow: View {
                 .accessibilityLabel(done ? "접종 완료 취소" : "\(displayName) 접종 완료로 표시")
             }
         }
-        .accessibilityElement(children: .combine)
+        // 병원/지도/수정/토글이 각각 독립 동작이므로 children을 합치지 않고 개별 접근 유지
+        .accessibilityElement(children: .contain)
     }
 }

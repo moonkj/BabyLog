@@ -156,6 +156,7 @@ private struct DiaryTimelineCard: View {
     var entry: DiaryEntry
     var child: Child
     @State private var showComments = false
+    @State private var showEdit = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var heartPop = false
     @State private var cardIndex = 0
@@ -216,6 +217,9 @@ private struct DiaryTimelineCard: View {
             }
         }
         .contextMenu {
+            Button { Haptics.light(); showEdit = true } label: {
+                Label("수정", systemImage: "pencil")
+            }
             Button(role: .destructive) { store.deleteDiaryEntry(id: entry.id) } label: {
                 Label("기록 삭제", systemImage: "trash")
             }
@@ -231,6 +235,11 @@ private struct DiaryTimelineCard: View {
                 .environmentObject(store)
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $showEdit) {
+            DiaryEditSheet(entry: entry)
+                .environmentObject(store)
+                .presentationDetents([.medium, .large])
+        }
     }
 
     // 헤더: 아바타 + 이름 + 시각 + 메뉴
@@ -243,6 +252,9 @@ private struct DiaryTimelineCard: View {
             }
             Spacer()
             Menu {
+                Button { Haptics.light(); showEdit = true } label: {
+                    Label("수정", systemImage: "pencil")
+                }
                 Button(role: .destructive) { store.deleteDiaryEntry(id: entry.id) } label: {
                     Label("기록 삭제", systemImage: "trash")
                 }
@@ -399,11 +411,20 @@ private struct DiaryCommentSheet: View {
                             .padding(.top, Spacing.s8)
                     } else {
                         VStack(alignment: .leading, spacing: Spacing.s3) {
-                            ForEach(Array(comments.enumerated()), id: \.offset) { _, c in
+                            ForEach(Array(comments.enumerated()), id: \.offset) { idx, c in
                                 HStack(alignment: .top, spacing: 8) {
                                     Text("나").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink)
                                     Text(c).font(.system(size: 14)).foregroundStyle(AppColors.ink)
                                     Spacer()
+                                }
+                                .contentShape(Rectangle())
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        store.deleteComment(entryId: entryId, at: idx)
+                                        Haptics.light()
+                                    } label: {
+                                        Label("삭제", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
@@ -432,5 +453,75 @@ private struct DiaryCommentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } } }
         }
+    }
+}
+
+// MARK: - 기록 수정 시트
+
+// 캡션·이정표만 수정 (사진/영상은 유지).
+private struct DiaryEditSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    let entry: DiaryEntry
+    @State private var caption: String
+    @State private var milestone: String
+
+    init(entry: DiaryEntry) {
+        self.entry = entry
+        _caption = State(initialValue: entry.content ?? "")
+        _milestone = State(initialValue: entry.milestone ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s5) {
+                    field(title: "캡션", placeholder: "오늘의 이야기를 적어보세요…", text: $caption, lines: 4)
+                    field(title: "이정표 (선택)", placeholder: "예: 첫 걸음마", text: $milestone, lines: 1)
+
+                    LiquidButton(action: save) {
+                        Text("저장")
+                    }
+                    .padding(.top, Spacing.s2)
+
+                    Text("사진과 동영상은 그대로 유지돼요.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink3)
+                        .frame(maxWidth: .infinity)
+                }
+                .padding(Spacing.s4)
+            }
+            .background(AppColors.canvas.ignoresSafeArea())
+            .navigationTitle("기록 수정")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } } }
+        }
+    }
+
+    @ViewBuilder
+    private func field(title: String, placeholder: String, text: Binding<String>, lines: Int) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(AppColors.ink2)
+            TextField(placeholder, text: text, axis: .vertical)
+                .font(AppFont.body)
+                .lineLimit(lines, reservesSpace: lines > 1)
+                .foregroundStyle(AppColors.ink)
+                .padding(Spacing.s3)
+                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        }
+    }
+
+    private func save() {
+        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedMilestone = milestone.trimmingCharacters(in: .whitespacesAndNewlines)
+        store.updateDiaryEntry(
+            id: entry.id,
+            content: trimmedCaption.isEmpty ? nil : trimmedCaption,
+            milestone: trimmedMilestone.isEmpty ? nil : trimmedMilestone
+        )
+        Haptics.success()
+        dismiss()
     }
 }

@@ -136,27 +136,39 @@ struct HomeTab: View {
         return f.string(from: date)
     }
 
-    // MARK: Priority Engine — 목업 입력 (PriorityEngine 연결)
-    /// scheduledDate가 오늘로부터 4일 뒤인 미완료 VaccineRecord 1건
-    private static let mockVaccines: [VaccineRecord] = {
-        let fourDaysLater = Calendar.current.date(byAdding: .day, value: 4, to: Date()) ?? Date()
-        return [
-            VaccineRecord(
-                id: UUID(),
-                childId: UUID(),
-                vaccineId: "DTaP 4차",
-                scheduledDate: fourDaysLater,
-                completedDate: nil,
-                hospital: "행복소아과"
-            )
-        ]
-    }()
+    // MARK: Priority Engine — 실데이터(아이 생년월일 기반 표준 접종 일정)
+    private struct StdVaccine { let month: Int; let name: String }
+    /// 질병관리청 표준 예방접종 일정(참조) — 월령 기준.
+    private static let standardVaccines: [StdVaccine] = [
+        .init(month: 2,  name: "DTaP 1차"),  .init(month: 4,  name: "DTaP 2차"),
+        .init(month: 6,  name: "DTaP 3차"),  .init(month: 12, name: "MMR 1차"),
+        .init(month: 12, name: "수두"),      .init(month: 12, name: "일본뇌염 1차"),
+        .init(month: 15, name: "DTaP 4차"),  .init(month: 18, name: "일본뇌염 2차"),
+        .init(month: 24, name: "일본뇌염 3차"), .init(month: 48, name: "DTaP 5차"),
+    ]
+
+    /// 선택 아이의 미완료 표준 접종(실제 생년월일로 예정일 계산)
+    private var upcomingVaccines: [VaccineRecord] {
+        guard let c = selectedChild else { return [] }
+        let cal = Calendar.current
+        return Self.standardVaccines.compactMap { v in
+            guard !store.isVaccineDone(childId: c.id, vaccineId: v.name),
+                  let date = cal.date(byAdding: .month, value: v.month, to: c.birthDate) else { return nil }
+            return VaccineRecord(id: UUID(), childId: c.id, vaccineId: v.name,
+                                 scheduledDate: date, completedDate: nil,
+                                 hospital: store.vaccineHospital(childId: c.id, vaccineId: v.name))
+        }
+    }
 
     private var priorityItem: PriorityItem? {
-        PriorityEngine.topPriority(
-            vaccines: Self.mockVaccines,
+        let hasToday: Bool = {
+            guard let cid = selectedChild?.id else { return false }
+            return store.diaryEntries(for: cid).contains { Calendar.current.isDateInToday($0.date) }
+        }()
+        return PriorityEngine.topPriority(
+            vaccines: upcomingVaccines,
             subsidies: [],
-            hasRecentRecord: false,
+            hasRecentRecord: hasToday,
             now: Date()
         )
     }

@@ -460,7 +460,27 @@ struct PregnancyMomRecordSection: View {
 // MARK: - ③-C 산전 검사
 
 struct PregnancyCheckupSection: View {
+    @EnvironmentObject private var store: AppStore
     let week: (weeks: Int, days: Int)
+
+    private var pregnancyId: UUID? { store.activePregnancy?.id }
+
+    /// 사용자가 직접 토글한 완료 여부 (주차 기반 힌트와 별개로 사용자 입력 우선)
+    private func userDone(_ checkup: PregnancyData.CheckupItem) -> Bool {
+        guard let pid = pregnancyId else { return false }
+        return store.isCheckupDone(pregnancyId: pid, checkupId: checkup.name)
+    }
+
+    /// 화면에 표시할 최종 완료 상태 (주차 힌트 + 사용자 토글 합성)
+    private func effectiveDone(_ checkup: PregnancyData.CheckupItem) -> Bool {
+        checkup.isDone || userDone(checkup)
+    }
+
+    private func toggle(_ checkup: PregnancyData.CheckupItem) {
+        guard let pid = pregnancyId else { return }
+        Haptics.soft()
+        store.toggleCheckupDone(pregnancyId: pid, checkupId: checkup.name)
+    }
 
     var body: some View {
         LazyVStack(spacing: Spacing.s3, pinnedViews: []) {
@@ -548,47 +568,63 @@ struct PregnancyCheckupSection: View {
     }
 
     private func checkupRow(checkup: PregnancyData.CheckupItem) -> some View {
-        BLCard(padding: Spacing.s4, flat: true) {
-            HStack(spacing: Spacing.s3) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
-                        .fill(checkup.isDone ? Color(hex: 0xFBEAF0) : AppColors.surface3)
-                        .frame(width: 42, height: 42)
-                    Image(systemName: checkup.isDone ? "checkmark.circle.fill" : "calendar")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(checkup.isDone ? AppColors.pregnancyPink : AppColors.ink3)
-                }
-                .accessibilityHidden(true)
+        let done = effectiveDone(checkup)
+        let canToggle = pregnancyId != nil
+        return Button {
+            toggle(checkup)
+        } label: {
+            BLCard(padding: Spacing.s4, flat: true) {
+                HStack(spacing: Spacing.s3) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
+                            .fill(done ? Color(hex: 0xFBEAF0) : AppColors.surface3)
+                            .frame(width: 42, height: 42)
+                        Image(systemName: done ? "checkmark.circle.fill" : "calendar")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(done ? AppColors.pregnancyPink : AppColors.ink3)
+                    }
+                    .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(checkup.name)
-                        .font(.system(size: 14.5, weight: .bold))
-                        .foregroundStyle(checkup.isDone ? AppColors.ink2 : AppColors.ink)
-                    Text(checkup.weekRange)
-                        .font(AppFont.caption)
-                        .foregroundStyle(AppColors.ink3)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(checkup.name)
+                            .font(.system(size: 14.5, weight: .bold))
+                            .foregroundStyle(done ? AppColors.ink2 : AppColors.ink)
+                        Text(checkup.weekRange)
+                            .font(AppFont.caption)
+                            .foregroundStyle(AppColors.ink3)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                if checkup.isDone {
-                    BLBadge(tone: .pink, text: "완료")
-                } else {
-                    Text(checkup.dueLabel)
-                        .font(AppFont.num(13, weight: .bold))
-                        .foregroundStyle(checkup.isUrgent ? AppColors.pregnancyPink : AppColors.ink3)
-                        .padding(.horizontal, Spacing.s2)
-                        .frame(height: 25)
-                        .background(
-                            (checkup.isUrgent ? Color(hex: 0xFBEAF0) : AppColors.surface2),
-                            in: Capsule()
-                        )
+                    if done {
+                        BLBadge(tone: .pink, text: "완료")
+                    } else {
+                        Text(checkup.dueLabel)
+                            .font(AppFont.num(13, weight: .bold))
+                            .foregroundStyle(checkup.isUrgent ? AppColors.pregnancyPink : AppColors.ink3)
+                            .padding(.horizontal, Spacing.s2)
+                            .frame(height: 25)
+                            .background(
+                                (checkup.isUrgent ? Color(hex: 0xFBEAF0) : AppColors.surface2),
+                                in: Capsule()
+                            )
+                    }
+
+                    // 완료 토글 체크 버튼
+                    Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(done ? AppColors.pregnancyPink : AppColors.ink3.opacity(0.5))
+                        .accessibilityHidden(true)
                 }
             }
         }
+        .buttonStyle(LiquidPressStyle(scale: 0.98))
+        .disabled(!canToggle)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "\(checkup.name). \(checkup.weekRange). "
-            + (checkup.isDone ? "완료됨" : checkup.dueLabel)
+            + (done ? "완료됨" : checkup.dueLabel)
         )
+        .accessibilityHint(canToggle ? (done ? "탭하면 완료 해제" : "탭하면 완료로 표시") : "")
+        .accessibilityAddTraits(done ? .isSelected : [])
     }
 }
