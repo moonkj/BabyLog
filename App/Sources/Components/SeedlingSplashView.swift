@@ -17,7 +17,7 @@ struct SeedlingSplashView: View {
 
             // 물결 1회
             Circle()
-                .stroke(AppColors.primary.opacity(0.18), lineWidth: 2)
+                .stroke(Color(hex: 0x2E7A5C).opacity(0.18), lineWidth: 2)
                 .frame(width: 120, height: 120)
                 .scaleEffect(ripple ? 2.2 : 0.3)
                 .opacity(ripple ? 0 : 0.9)
@@ -25,7 +25,7 @@ struct SeedlingSplashView: View {
             VStack(spacing: 14) {
                 Image(systemName: "leaf.fill")
                     .font(.system(size: 52, weight: .semibold))
-                    .foregroundStyle(AppColors.primary)
+                    .foregroundStyle(Color(hex: 0x2E7A5C))
                     .scaleEffect(sprout ? 1 : 0.2)
                     .rotationEffect(.degrees(sprout ? 0 : -25), anchor: .bottom)
                     .opacity(sprout ? 1 : 0)
