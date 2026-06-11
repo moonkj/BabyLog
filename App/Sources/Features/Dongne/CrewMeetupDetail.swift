@@ -13,11 +13,13 @@ struct CrewMeetupDetail: View {
 
     @EnvironmentObject private var store: AppStore
     @State private var showGroupChatGuide = false
+    @State private var showDeleteConfirm = false
     @Environment(\.dismiss) private var dismiss
 
     private var isJoined: Bool { store.isJoinedCrew(meetup.id) }
     private var joinedCount: Int { store.crewJoinedCount(meetup) }
     private var spotsLeft: Int { max(0, meetup.capacity - joinedCount) }
+    private var isFull: Bool { joinedCount >= meetup.capacity && !isJoined }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -34,9 +36,37 @@ struct CrewMeetupDetail: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(false)
+        .toolbar {
+            if meetup.mine {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button(role: .destructive) {
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("모임 삭제", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppColors.ink2)
+                    }
+                    .accessibilityLabel("모임 관리")
+                }
+            }
+        }
         .sheet(isPresented: $showGroupChatGuide) {
             CrewGroupChatGuideSheet(meetup: meetup)
                 .presentationDetents([.medium])
+        }
+        .confirmationDialog("이 모임을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("삭제", role: .destructive) {
+                Haptics.warning()
+                store.deleteCrew(id: meetup.id)
+                dismiss()
+            }
+            Button("취소", role: .cancel) { }
+        } message: {
+            Text("삭제하면 되돌릴 수 없어요.")
         }
         .accessibilityElement(children: .contain)
     }
@@ -303,9 +333,9 @@ struct CrewMeetupDetail: View {
 
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isJoined ? "신청 완료" : "남은 자리 \(spotsLeft)자리")
+                    Text(isFull ? "정원 마감" : (isJoined ? "신청 완료" : "남은 자리 \(spotsLeft)자리"))
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(isJoined ? AppColors.primary : AppColors.ink3)
+                        .foregroundStyle(isFull ? AppColors.ink3 : (isJoined ? AppColors.primary : AppColors.ink3))
                     Text(meetup.when)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(AppColors.ink)
@@ -315,24 +345,26 @@ struct CrewMeetupDetail: View {
                 Spacer(minLength: 12)
 
                 LiquidButton(
-                    fill: isJoined ? AppColors.ink3 : AppColors.primary,
+                    fill: isFull ? AppColors.surface3 : (isJoined ? AppColors.ink3 : AppColors.primary),
                     action: {
                         Haptics.selection()
                         store.toggleJoinCrew(meetup.id)
                     }
                 ) {
                     HStack(spacing: 8) {
-                        Image(systemName: isJoined ? "checkmark.circle.fill" : "person.badge.plus.fill")
+                        Image(systemName: isFull ? "person.crop.circle.badge.xmark" : (isJoined ? "checkmark.circle.fill" : "person.badge.plus.fill"))
                             .font(.system(size: 16, weight: .bold))
                             .accessibilityHidden(true)
-                        Text(isJoined ? "신청됨" : "참가 신청")
+                        Text(isFull ? "마감" : (isJoined ? "신청됨" : "참가 신청"))
                             .font(.system(size: 16, weight: .bold))
                     }
+                    .foregroundStyle(isFull ? AppColors.ink3 : AppColors.onPrimary)
                 }
                 .frame(maxWidth: 180)
+                .disabled(isFull)
                 .padding(.trailing, Spacing.s5)
-                .accessibilityLabel(isJoined ? "참가 신청됨. 취소하려면 탭하세요." : "참가 신청하기")
-                .accessibilityHint(isJoined ? "" : "모임에 참가합니다. 남은 자리 \(spotsLeft)자리.")
+                .accessibilityLabel(isFull ? "정원 마감" : (isJoined ? "참가 신청됨. 취소하려면 탭하세요." : "참가 신청하기"))
+                .accessibilityHint(isFull ? "정원이 가득 찼습니다" : (isJoined ? "" : "모임에 참가합니다. 남은 자리 \(spotsLeft)자리."))
             }
             .padding(.vertical, 14)
             .background(AppColors.surface)

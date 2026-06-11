@@ -285,6 +285,7 @@ private struct CrewMeetupCard: View {
     private var joinedCount: Int { store.crewJoinedCount(meetup) }
     private var isJoined: Bool { store.isJoinedCrew(meetup.id) }
     private var spotsLeft: Int { max(0, meetup.capacity - joinedCount) }
+    private var isFull: Bool { joinedCount >= meetup.capacity && !isJoined }
 
     var body: some View {
         BLCard(padding: 15) {
@@ -329,22 +330,23 @@ private struct CrewMeetupCard: View {
 
                 Spacer(minLength: 0)
 
-                // 참가 버튼 (토글)
+                // 참가 버튼 (토글 / 마감)
                 Button {
                     Haptics.selection()
                     store.toggleJoinCrew(meetup.id)
                 } label: {
-                    Text(isJoined ? "참가중" : "참가")
+                    Text(isFull ? "마감" : (isJoined ? "참가중" : "참가"))
                         .font(.system(size: 13.5, weight: .bold))
-                        .foregroundStyle(isJoined ? AppColors.ink2 : Color.white)
+                        .foregroundStyle(isFull ? AppColors.ink3 : (isJoined ? AppColors.ink2 : Color.white))
                         .padding(.horizontal, 16)
                         .frame(height: 38)
-                        .background(isJoined ? AppColors.surface2 : AppColors.ink,
+                        .background(isFull ? AppColors.surface3 : (isJoined ? AppColors.surface2 : AppColors.ink),
                                     in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.94))
-                .accessibilityLabel(isJoined ? "참가 취소" : "참가")
-                .accessibilityHint("\(meetup.place) 모임. 남은 자리 \(spotsLeft)자리")
+                .disabled(isFull)
+                .accessibilityLabel(isFull ? "마감" : (isJoined ? "참가 취소" : "참가"))
+                .accessibilityHint(isFull ? "\(meetup.place) 모임. 정원이 가득 찼습니다" : "\(meetup.place) 모임. 남은 자리 \(spotsLeft)자리")
             }
         }
         .accessibilityElement(children: .contain)

@@ -62,10 +62,8 @@ struct VaccineSection: View {
     }
 
     private func isDone(_ record: VaccineRecord) -> Bool {
-        if let cid = childId, store.isVaccineDone(childId: cid, vaccineId: record.vaccineId) {
-            return true
-        }
-        return record.completedDate != nil
+        guard let cid = childId else { return false }
+        return store.isVaccineDone(childId: cid, vaccineId: record.vaccineId)
     }
 
     // 가장 임박한 미래 예정 접종
@@ -90,6 +88,12 @@ struct VaccineSection: View {
                     message: "아이 정보를 등록하면\n질병관리청 표준 접종 일정을 안내해드려요."
                 )
             }
+        }
+        // 접종 일정 로드: 항상 렌더되는 루트에 부착해 첫 등장·아이 전환 시 반드시 실행
+        // (vaccines가 비어 있는 초기 상태에서도 트리거되도록 조건부 밖으로 이동)
+        .task(id: store.selectedChild?.id) {
+            guard let child = store.selectedChild else { return }
+            await loadVaccines(birthDate: child.birthDate)
         }
         // 접종 병원 입력/수정 다이얼로그 (선택 입력 — 건너뛰기 허용)
         .alert(
@@ -144,8 +148,8 @@ struct VaccineSection: View {
         } else if vaccines.isEmpty {
             BLEmptyState(
                 icon: "syringe",
-                title: "접종 일정을 불러오는 중이에요",
-                message: "잠시 후 다시 시도해보세요."
+                title: "접종 일정을 불러오지 못했어요",
+                message: "네트워크 상태를 확인하고\n잠시 후 다시 시도해주세요."
             )
         } else {
             VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -189,9 +193,6 @@ struct VaccineSection: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, Spacing.s2)
                     .accessibilityLabel("접종 일정 안내: 질병관리청 표준 스케줄 참고용이며, 실제 접종은 소아과 의사와 확인하세요.")
-            }
-            .task(id: child.id) {
-                await loadVaccines(birthDate: child.birthDate)
             }
         }
     }

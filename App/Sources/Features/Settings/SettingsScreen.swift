@@ -74,11 +74,12 @@ struct SettingsScreen: View {
         }
         .fileImporter(isPresented: $showBackupImporter,
                       allowedContentTypes: [UTType(filenameExtension: BackupService.fileExtension) ?? .data, .data]) { result in
+            // 어떤 경로(성공·실패·예외)에서도 버튼이 "준비 중…"으로 영구 비활성화되지 않도록 항상 리셋
+            defer { backupBusy = false }
             switch result {
             case .success(let url):
                 backupBusy = true
                 let ok = BackupService.restore(from: url, into: store)
-                backupBusy = false
                 backupAlert = ok ? "백업에서 복원했어요. 사진과 기록이 돌아왔습니다 🤍" : "이 파일을 복원하지 못했어요. 올바른 백업 파일인지 확인해 주세요."
             case .failure:
                 backupAlert = "파일을 열지 못했어요."

@@ -48,6 +48,12 @@ struct PregnancyRecordScreen: View {
     @State private var selectedSegment: PregnancyRecordSegment = .fetus
     @State private var showBirthTransition: Bool = false
     @State private var showPauseConfirm: Bool = false
+    @State private var showReg: Bool = false
+
+    // ── 등록된 임신이 하나도 없는 상태 ────────────────────────────────
+    private var hasNoPregnancy: Bool {
+        store.pregnancies.isEmpty && store.activePregnancy == nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -56,8 +62,14 @@ struct PregnancyRecordScreen: View {
 
                 ScrollView {
                     VStack(spacing: 0) {
+                        // 등록된 임신이 없으면 빈 상태 (목업 대신)
+                        if hasNoPregnancy {
+                            emptyStateCard
+                                .padding(.horizontal, Spacing.s5)
+                                .padding(.top, Spacing.s4)
+                        }
                         // 상실/일시중단 상태면 안내 카드, 아니면 일반 화면
-                        if let preg = store.activePregnancy ?? store.pregnancies.first,
+                        else if let preg = store.activePregnancy ?? store.pregnancies.first,
                            preg.status == .loss || preg.status == .paused {
                             pausedOrLossCard(pregnancy: preg)
                                 .padding(.horizontal, Spacing.s5)
@@ -112,6 +124,10 @@ struct PregnancyRecordScreen: View {
             }
             .environmentObject(store)
         }
+        .sheet(isPresented: $showReg) {
+            AddPregnancySheet()
+                .environmentObject(store)
+        }
     }
 
     // ── 멈춤 대상 임신 (active 우선, 없으면 첫 번째) ─────────────────
@@ -134,6 +150,64 @@ struct PregnancyRecordScreen: View {
         .buttonStyle(.plain)
         .accessibilityLabel("기록 멈춤 또는 종료")
         .accessibilityHint("탭하면 기록을 일시 중단하거나 마칠 수 있어요")
+    }
+
+    // MARK: - 빈 상태 (등록된 임신 없음)
+
+    private var emptyStateCard: some View {
+        BLCard(flat: true) {
+            VStack(spacing: Spacing.s4) {
+                // 아이콘
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: 0xFBEAF0))
+                        .frame(width: 80, height: 80)
+                    Circle()
+                        .stroke(AppColors.pregnancyPink.opacity(0.12), lineWidth: 1)
+                        .frame(width: 80, height: 80)
+                    Image(systemName: "heart.circle.fill")
+                        .font(.system(size: 38, weight: .light))
+                        .foregroundStyle(AppColors.pregnancyPink.opacity(0.85))
+                }
+                .accessibilityHidden(true)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, Spacing.s3)
+
+                VStack(spacing: Spacing.s2) {
+                    Text("임신을 등록해보세요")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppColors.ink)
+                        .multilineTextAlignment(.center)
+
+                    Text("태명과 출산 예정일을 입력하면\n주차별 가이드와 태동·체중 기록이 시작돼요.")
+                        .font(AppFont.callout)
+                        .foregroundStyle(AppColors.ink2)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                }
+
+                // 임신 등록하기 버튼
+                Button {
+                    showReg = true
+                } label: {
+                    Text("임신 등록하기")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(AppColors.pregnancyPink)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(
+                            Color(hex: 0xFBEAF0),
+                            in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                        )
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.97))
+                .accessibilityLabel("임신 등록하기")
+                .accessibilityHint("탭하면 태명과 출산 예정일을 입력하는 시트가 열려요")
+                .padding(.bottom, Spacing.s2)
+            }
+            .padding(.vertical, Spacing.s2)
+        }
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - 상실/일시중단 안내 카드
