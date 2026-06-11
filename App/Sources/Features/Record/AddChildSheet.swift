@@ -5,6 +5,7 @@
 // editing 이 있으면 해당 아이 수정/삭제(updateChild/deleteChild).
 
 import SwiftUI
+import UIKit
 
 struct AddChildSheet: View {
     @EnvironmentObject private var store: AppStore
@@ -16,6 +17,8 @@ struct AddChildSheet: View {
     @State private var name: String
     @State private var birthDate: Date
     @State private var gender: Gender?
+    @State private var profilePhoto: UIImage?
+    @State private var photoChanged = false
     @State private var shakeTrigger = 0
     @State private var showDeleteConfirm = false
 
@@ -24,6 +27,7 @@ struct AddChildSheet: View {
         _name = State(initialValue: editing?.name ?? "")
         _birthDate = State(initialValue: editing?.birthDate ?? Date())
         _gender = State(initialValue: editing?.gender)
+        _profilePhoto = State(initialValue: PhotoStore.image(editing?.profileImageRef))
     }
 
     private var isEditing: Bool { editing != nil }
@@ -34,6 +38,34 @@ struct AddChildSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
+
+                    // 프로필 사진 (원형, 로컬 저장)
+                    PhotoPickerButton(image: Binding(
+                        get: { profilePhoto },
+                        set: { profilePhoto = $0; photoChanged = true }
+                    )) {
+                        ZStack {
+                            if let img = profilePhoto {
+                                Image(uiImage: img).resizable().scaledToFill()
+                            } else {
+                                Circle().fill(AppColors.primaryTint)
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 22, weight: .medium))
+                                    .foregroundStyle(AppColors.primary)
+                            }
+                        }
+                        .frame(width: 96, height: 96)
+                        .clipShape(Circle())
+                        .overlay { Circle().strokeBorder(AppColors.line, lineWidth: 1) }
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(AppColors.primary)
+                                .background(Circle().fill(.white))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel("아이 프로필 사진 선택")
 
                     // 이름/태명
                     VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -78,9 +110,16 @@ struct AddChildSheet: View {
                                  cornerRadius: Radius.md) {
                         guard canSave else { shakeTrigger += 1; return }
                         if let editing {
-                            store.updateChild(id: editing.id, name: trimmedName, birthDate: birthDate, gender: gender)
+                            // 사진 바뀐 경우에만 갱신(이중 옵셔널)
+                            let refUpdate: String?? = photoChanged
+                                ? Optional(profilePhoto.flatMap { PhotoStore.save($0) })
+                                : nil
+                            store.updateChild(id: editing.id, name: trimmedName, birthDate: birthDate,
+                                              gender: gender, profileImageRef: refUpdate)
                         } else {
-                            store.completeBabyOnboarding(name: trimmedName, birthDate: birthDate, gender: gender)
+                            let ref = profilePhoto.flatMap { PhotoStore.save($0) }
+                            store.completeBabyOnboarding(name: trimmedName, birthDate: birthDate,
+                                                         gender: gender, profileImageRef: ref)
                         }
                         Haptics.success()
                         dismiss()

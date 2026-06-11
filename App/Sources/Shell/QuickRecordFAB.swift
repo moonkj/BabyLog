@@ -6,6 +6,45 @@ struct QuickRecordFAB: View {
     var mode: AppMode
     var onQuickRecord: () -> Void = {}
     @State private var open = false
+    @State private var sheen = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // 리퀴드 글래스 FAB 배경 — 밝은 인디고 그라데이션 + 글로스 + 움직이는 sheen
+    private var fabBackground: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: 0x5B5EA8), Color(hex: 0x2C2E52)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+            // 움직이는 리퀴드 sheen
+            Circle()
+                .fill(
+                    AngularGradient(
+                        gradient: Gradient(colors: [.clear, .white.opacity(0.28), .clear, .clear, .clear]),
+                        center: .center,
+                        angle: .degrees(sheen ? 360 : 0)
+                    )
+                )
+                .blendMode(.plusLighter)
+            // 상단 글래스 글로스
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [.white.opacity(0.4), .clear],
+                        center: .topLeading, startRadius: 1, endRadius: 44
+                    )
+                )
+            // 림 라이트
+            Circle().strokeBorder(.white.opacity(0.22), lineWidth: 1)
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 3.2).repeatForever(autoreverses: false)) { sheen = true }
+        }
+    }
 
     private var actions: [(icon: String, label: String)] {
         mode == .pregnancy
@@ -48,12 +87,12 @@ struct QuickRecordFAB: View {
                 Image(systemName: "plus")
                     .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 58, height: 58)
-                    .background(AppColors.primary, in: Circle())
+                    .frame(width: 60, height: 60)
+                    .background(fabBackground)
                     .rotationEffect(.degrees(open ? 45 : 0))
             }
             .buttonStyle(LiquidPressStyle())
-            .blShadow(.fab)
+            .shadow(color: Color(hex: 0x3A3D6E).opacity(0.5), radius: 13, x: 0, y: 7)
             .accessibilityLabel("빠른 기록")
         }
     }

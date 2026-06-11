@@ -57,10 +57,11 @@ struct HomeTab: View {
         guard let id = selectedChild?.id else { return 0 }
         return store.diaryEntries(for: id).count + store.growthRecords(for: id).count
     }
-    /// 선택 아이의 가장 최근 사진 (감정 진입점 — 홈 히어로)
+    /// 선택 아이 대표 사진 — 프로필 사진 우선, 없으면 최근 기록 사진 (감정 진입점)
     private var heroPhoto: UIImage? {
-        guard let id = selectedChild?.id else { return nil }
-        let withPhoto = store.diaryEntries(for: id).first { $0.photoRef != nil }
+        guard let child = selectedChild else { return nil }
+        if let profile = PhotoStore.image(child.profileImageRef) { return profile }
+        let withPhoto = store.diaryEntries(for: child.id).first { $0.photoRef != nil }
         return PhotoStore.image(withPhoto?.photoRef)
     }
     /// 금액 축약 표기 (만원/원)

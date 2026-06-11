@@ -136,22 +136,27 @@ final class AppStore: ObservableObject {
     var hasContent: Bool { !children.isEmpty || !pregnancies.isEmpty }
 
     /// 출산 온보딩 — 아이 생성·추가·선택. 빈 이름은 무시.
-    func completeBabyOnboarding(name: String, birthDate: Date, gender: Gender?) {
+    func completeBabyOnboarding(name: String, birthDate: Date, gender: Gender?,
+                                profileImageRef: String? = nil) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let child = Child(id: UUID(), name: trimmed, birthDate: birthDate, gender: gender,
-                          profileImageRef: nil, caregiverRole: nil, pregnancyId: nil)
+                          profileImageRef: profileImageRef, caregiverRole: nil, pregnancyId: nil)
         children.append(child)
         selectedChildId = child.id
     }
 
-    /// 아이 정보를 수정한다. 빈 이름은 무시(기존 유지).
-    func updateChild(id: UUID, name: String, birthDate: Date, gender: Gender?) {
+    /// 아이 정보를 수정한다. 빈 이름은 무시(기존 유지). profileImageRef는 .some일 때만 갱신.
+    func updateChild(id: UUID, name: String, birthDate: Date, gender: Gender?,
+                     profileImageRef: String?? = nil) {
         guard let idx = children.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { children[idx].name = trimmed }
         children[idx].birthDate = birthDate
         children[idx].gender = gender
+        if let newRef = profileImageRef {   // 이중 옵셔널: 전달된 경우에만 변경(nil로도 초기화 가능)
+            children[idx].profileImageRef = newRef
+        }
     }
 
     /// 아이를 삭제한다. 연결된 기록(성장·다이어리 사진 포함)도 함께 정리한다.

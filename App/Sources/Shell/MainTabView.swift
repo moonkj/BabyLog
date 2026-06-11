@@ -14,6 +14,7 @@ struct MainTabView: View {
     @State private var mode: AppMode = .baby
     @State private var showQuickRecord = false
     @State private var showAddChild = false
+    @State private var showSplash = true
 
     private var fabOnLeft: Bool { fabSide == "left" }
 
@@ -26,6 +27,13 @@ struct MainTabView: View {
             }
         }
         .overlay { nightDimOverlay }
+        .overlay {
+            if showSplash {
+                SeedlingSplashView(onFinish: { showSplash = false })
+                    .transition(.opacity)
+                    .zIndex(10)
+            }
+        }
     }
 
     /// 야간 초저휘도 — 설정 ON 시 22~06시에 은은한 디밍(새벽 수유 배려). 5분마다 시간 재평가.
