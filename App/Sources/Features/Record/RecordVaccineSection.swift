@@ -174,10 +174,13 @@ struct VaccineSection: View {
                             withAnimation(.easeOut(duration: 0.18)) {
                                 store.toggleVaccine(childId: child.id, vaccineId: v.vaccineId)
                             }
-                            // 새로 '완료'가 됐고 병원 기록이 없으면 입력 유도
+                            // 새로 '완료'가 됐고 병원 기록이 없으면 입력 유도.
+                            // 토글·체크 드로우 모션이 먼저 보이도록 다이얼로그는 살짝 지연 표시.
                             if !wasDone,
                                store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId) == nil {
-                                presentHospitalPrompt(vaccineId: v.vaccineId, name: name)
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    presentHospitalPrompt(vaccineId: v.vaccineId, name: name)
+                                }
                             }
                         },
                         onTapHospital: { openInMaps($0) },

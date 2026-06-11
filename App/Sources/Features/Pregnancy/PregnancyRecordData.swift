@@ -16,7 +16,7 @@ struct MovementDot: View {
     var body: some View {
         Button(action: onTap) {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(filled ? Color(hex: 0xD96BA0) : AppColors.surface3)
+                .fill(filled ? Color(hex: 0xD96BA0) : AppColors.ink3.opacity(0.18))
                 .frame(height: 10)
                 .animation(.spring(response: 0.25, dampingFraction: 0.7), value: filled)
         }

@@ -29,44 +29,61 @@ struct MarketChatSheet: View {
                 .padding(.top, Spacing.s3)
 
             // 채팅 말풍선
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if messages.isEmpty {
-                        Text("첫 메시지를 보내 거래를 시작해보세요.")
-                            .font(AppFont.caption).foregroundStyle(AppColors.ink3)
-                            .frame(maxWidth: .infinity).padding(.vertical, Spacing.s4)
-                    }
-                    ForEach(messages) { msg in
-                        MkChatBubble(text: msg.text, isMe: msg.mine)
-                    }
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if messages.isEmpty {
+                            Text("첫 메시지를 보내 거래를 시작해보세요.")
+                                .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                                .frame(maxWidth: .infinity).padding(.vertical, Spacing.s4)
+                        }
+                        ForEach(messages) { msg in
+                            MkChatBubble(text: msg.text, isMe: msg.mine)
+                        }
 
-                    // 판매자 입력 중 (§8.5 대화 말풍선 점)
-                    if sellerTyping {
+                        // 판매자 입력 중 (§8.5 대화 말풍선 점)
+                        if sellerTyping {
+                            HStack {
+                                TypingDotsView(tint: AppColors.ink3)
+                                    .padding(.horizontal, 14).padding(.vertical, 12)
+                                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                Spacer()
+                            }
+                        }
+
+                        // 안심 거래존 뱃지
                         HStack {
-                            TypingDotsView(tint: AppColors.ink3)
-                                .padding(.horizontal, 14).padding(.vertical, 12)
-                                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            Spacer()
+                            BLBadge(
+                                tone: .blue,
+                                text: "주민센터 앞 안심 거래존 추천",
+                                systemIcon: "shield.checkered",
+                                dot: false
+                            )
                             Spacer()
                         }
-                    }
+                        .padding(.top, 4)
+                        .accessibilityLabel("주민센터 앞 안심 거래존 추천")
 
-                    // 안심 거래존 뱃지
-                    HStack {
-                        Spacer()
-                        BLBadge(
-                            tone: .blue,
-                            text: "주민센터 앞 안심 거래존 추천",
-                            systemIcon: "shield.checkered",
-                            dot: false
-                        )
-                        Spacer()
+                        // 최신 메시지로 자동 스크롤하기 위한 하단 앵커
+                        Color.clear
+                            .frame(height: 1)
+                            .id("BOTTOM")
+                            .accessibilityHidden(true)
                     }
-                    .padding(.top, 4)
-                    .accessibilityLabel("주민센터 앞 안심 거래존 추천")
+                    .padding(.horizontal, Spacing.s5)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, Spacing.s5)
-                .padding(.top, 12)
-                .padding(.bottom, 16)
+                .onChange(of: messages.count) { _ in
+                    withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) }
+                }
+                .onChange(of: sellerTyping) { _ in
+                    withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) }
+                }
+                .onAppear {
+                    proxy.scrollTo("BOTTOM", anchor: .bottom)
+                }
             }
 
             // 입력 바

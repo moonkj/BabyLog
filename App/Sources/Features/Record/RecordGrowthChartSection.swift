@@ -13,6 +13,10 @@ struct GrowthChartSection: View {
     @Binding var metric: GrowthMetric
     @Binding var expandAssurance: Bool
 
+    // 성장 링 호흡 모션 (REDUCE-MOTION aware)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var ringBreathe = false
+
     // store에서 실데이터 (date 오름차순)
     private var records: [GrowthRecord] {
         store.growthRecords
@@ -165,7 +169,7 @@ struct GrowthChartSection: View {
     private var assuranceCard: some View {
         BLCard(padding: 16, flat: true) {
             HStack(alignment: .top, spacing: 12) {
-                // 성장 링 (§8.4 기능 진입) — 차오름 + 호흡
+                // 성장 링 (§8.4 기능 진입) — 차오름 + 잔잔한 호흡(상시)
                 ZStack {
                     GrowthRingView(size: 44, lineWidth: 3, color: AppColors.primary)
                     Image(systemName: "heart.fill")
@@ -173,6 +177,13 @@ struct GrowthChartSection: View {
                         .foregroundStyle(AppColors.primary)
                 }
                 .frame(width: 44, height: 44)
+                .scaleEffect(ringBreathe ? 1.06 : 1.0)
+                .onAppear {
+                    guard !reduceMotion else { return }
+                    withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
+                        ringBreathe = true
+                    }
+                }
                 .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {

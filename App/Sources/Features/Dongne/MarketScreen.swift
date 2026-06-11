@@ -332,6 +332,11 @@ private struct MkNeedSoonCard: View {
                         .font(.system(size: 22, weight: .medium))
                         .foregroundStyle(.white.opacity(0.6))
                 }
+                .overlay {
+                    // 캔버스와 카드가 섞이지 않도록 옅은 테두리로 구분
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.line, lineWidth: 0.5)
+                }
 
                 Text(item.title)
                     .font(.system(size: 13.5, weight: .bold))

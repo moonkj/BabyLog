@@ -319,6 +319,8 @@ struct PregnancyMomRecordSection: View {
                         PointMark(x: .value("날짜", log.date), y: .value("kg", log.value))
                             .foregroundStyle(AppColors.pregnancyPink)
                     }
+                    // 고정 폭 Y축 — 소폭 변화가 과장돼 보이지 않도록 위아래 여유를 둠
+                    .chartYScale(domain: weightYDomain)
                     .frame(height: 120)
                     .accessibilityLabel("체중 추이 차트. 기록 \(weights.count)건, 현재 \(weightSummary(latest: latest ?? 0, delta: delta)).")
 
@@ -358,6 +360,19 @@ struct PregnancyMomRecordSection: View {
             }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    /// 체중 차트 Y축 도메인.
+    /// 기록값을 모두 포함하되 최소 표시 폭(8kg)을 보장해, 0.2kg 같은 소폭 변화가
+    /// 차트에서 과장돼 보이지 않도록 한다.
+    private var weightYDomain: ClosedRange<Double> {
+        let values = weights.map(\.value)
+        guard let lo = values.min(), let hi = values.max() else { return 40...80 }
+        let minSpan = 8.0
+        let span = max(hi - lo, minSpan)
+        let mid = (lo + hi) / 2
+        let half = span / 2 + 1.5            // 위아래 여백
+        return (mid - half)...(mid + half)
     }
 
     private func weightSummary(latest: Double, delta: Double?) -> String {
@@ -428,16 +443,31 @@ struct PregnancyMomRecordSection: View {
 
     @ViewBuilder
     private func bellyCell(_ log: PregnancyLog) -> some View {
+        let loadedImage = PhotoStore.image(log.photoRef)
         ZStack(alignment: .bottomLeading) {
-            if let img = PhotoStore.image(log.photoRef) {
+            if let img = loadedImage {
                 Image(uiImage: img)
                     .resizable().scaledToFill()
                     .frame(width: 96, height: 128)
                     .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             } else {
+                // 사진 파일을 불러오지 못한 경우 — 빈 박스 대신 부드러운 경고 표시
                 RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                     .fill(AppColors.surface2)
                     .frame(width: 96, height: 128)
+                    .overlay {
+                        VStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 22, weight: .regular))
+                                .foregroundStyle(AppColors.ink3)
+                            Text("사진을\n불러올 수 없어요")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(AppColors.ink3)
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(1)
+                        }
+                        .accessibilityHidden(true)
+                    }
             }
             Text("\(Int(log.value))주차")
                 .font(.system(size: 11, weight: .bold))
@@ -453,7 +483,11 @@ struct PregnancyMomRecordSection: View {
                 Label("사진 삭제", systemImage: "trash")
             }
         }
-        .accessibilityLabel("\(Int(log.value))주차 배 사진")
+        .accessibilityLabel(
+            loadedImage == nil
+            ? "\(Int(log.value))주차 배 사진, 사진을 불러올 수 없어요"
+            : "\(Int(log.value))주차 배 사진"
+        )
     }
 }
 

@@ -39,7 +39,7 @@ enum ExpenseCategory: String, CaseIterable, Codable {
         case .clothing:  return "tshirt.fill"
         case .medical:   return "cross.case.fill"
         case .education: return "book.fill"
-        case .play:      return "figure.play"
+        case .play:      return "teddybear.fill"
         case .transport: return "car.fill"
         case .etc:       return "ellipsis.circle.fill"
         }

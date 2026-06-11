@@ -107,15 +107,26 @@ struct CrewPostDetailSheet: View {
         VStack(spacing: 0) {
             header
 
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: Spacing.s4) {
-                    postBody
-                    Divider().overlay(AppColors.line)
-                    commentsSection
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: Spacing.s4) {
+                        postBody
+                        Divider().overlay(AppColors.line)
+                        commentsSection
+
+                        // 새 댓글로 자동 스크롤하기 위한 하단 앵커
+                        Color.clear
+                            .frame(height: 1)
+                            .id("BOTTOM")
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.horizontal, Spacing.s5)
+                    .padding(.top, Spacing.s4)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, Spacing.s5)
-                .padding(.top, Spacing.s4)
-                .padding(.bottom, 16)
+                .onChange(of: comments.count) { _ in
+                    withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) }
+                }
             }
 
             inputBar

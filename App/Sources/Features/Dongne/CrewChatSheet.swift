@@ -32,44 +32,61 @@ struct CrewChatSheet: View {
                 .padding(.top, Spacing.s3)
 
             // 채팅 말풍선
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if messages.isEmpty {
-                        Text("첫 메시지를 보내 모임을 시작해보세요.")
-                            .font(AppFont.caption).foregroundStyle(AppColors.ink3)
-                            .frame(maxWidth: .infinity).padding(.vertical, Spacing.s4)
-                    }
-                    ForEach(messages) { msg in
-                        CrewChatBubble(text: msg.text, isMe: msg.mine)
-                    }
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if messages.isEmpty {
+                            Text("첫 메시지를 보내 모임을 시작해보세요.")
+                                .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                                .frame(maxWidth: .infinity).padding(.vertical, Spacing.s4)
+                        }
+                        ForEach(messages) { msg in
+                            CrewChatBubble(text: msg.text, isMe: msg.mine)
+                        }
 
-                    // 다른 참가자 입력 중 (데모)
-                    if memberTyping {
+                        // 다른 참가자 입력 중 (데모)
+                        if memberTyping {
+                            HStack {
+                                TypingDotsView(tint: AppColors.ink3)
+                                    .padding(.horizontal, 14).padding(.vertical, 12)
+                                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                Spacer()
+                            }
+                        }
+
+                        // 안전 안내 뱃지
                         HStack {
-                            TypingDotsView(tint: AppColors.ink3)
-                                .padding(.horizontal, 14).padding(.vertical, 12)
-                                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            Spacer()
+                            BLBadge(
+                                tone: .blue,
+                                text: "공개 장소에서 안전하게 만나요",
+                                systemIcon: "shield.checkered",
+                                dot: false
+                            )
                             Spacer()
                         }
-                    }
+                        .padding(.top, 4)
+                        .accessibilityLabel("공개 장소에서 안전하게 만나요")
 
-                    // 안전 안내 뱃지
-                    HStack {
-                        Spacer()
-                        BLBadge(
-                            tone: .blue,
-                            text: "공개 장소에서 안전하게 만나요",
-                            systemIcon: "shield.checkered",
-                            dot: false
-                        )
-                        Spacer()
+                        // 최신 메시지로 자동 스크롤하기 위한 하단 앵커
+                        Color.clear
+                            .frame(height: 1)
+                            .id("BOTTOM")
+                            .accessibilityHidden(true)
                     }
-                    .padding(.top, 4)
-                    .accessibilityLabel("공개 장소에서 안전하게 만나요")
+                    .padding(.horizontal, Spacing.s5)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, Spacing.s5)
-                .padding(.top, 12)
-                .padding(.bottom, 16)
+                .onChange(of: messages.count) { _ in
+                    withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) }
+                }
+                .onChange(of: memberTyping) { _ in
+                    withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) }
+                }
+                .onAppear {
+                    proxy.scrollTo("BOTTOM", anchor: .bottom)
+                }
             }
 
             // 입력 바

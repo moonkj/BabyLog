@@ -124,6 +124,8 @@ struct ShareCardView: View {
     // 공유 시트
     @State private var shareImage: UIImage? = nil
     @State private var showShareSheet = false
+    // 렌더 실패 알림
+    @State private var showRenderError = false
 
     // 배경 사진 선택 (vm.backgroundPhoto와 동기)
     // PhotoPickerButton의 @Binding을 vm.backgroundPhoto에 직접 연결하기 위한 래퍼
@@ -167,6 +169,11 @@ struct ShareCardView: View {
                 ShareActivityView(image: img)
             }
         }
+        .alert("공유 카드", isPresented: $showRenderError) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("카드를 만들지 못했어요. 잠시 후 다시 시도해 주세요.")
+        }
     }
 
     // MARK: - Sections
@@ -178,7 +185,7 @@ struct ShareCardView: View {
             ZStack {
                 ShareCardCanvas(vm: vm)
                     .frame(width: previewWidth, height: h)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
                     .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 10)
             }
 
@@ -322,9 +329,14 @@ struct ShareCardView: View {
     // MARK: - Actions
 
     private func handleShare() {
-        let img = vm.renderCard()
-        shareImage = img
-        showShareSheet = img != nil
+        if let img = vm.renderCard() {
+            shareImage = img
+            showShareSheet = true
+        } else {
+            // 렌더 실패: 조용히 넘어가지 않고 사용자에게 안내
+            Haptics.warning()
+            showRenderError = true
+        }
     }
 }
 

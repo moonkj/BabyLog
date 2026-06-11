@@ -519,6 +519,10 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, Spacing.s5)
         }
+        // 임신/출산 전환 시, 다른 단계의 "날짜 입력됨" 안내 카드가 남지 않도록 리셋
+        .onChange(of: phase) { _, _ in
+            dateEntered = false
+        }
     }
 
     private func phaseToggleButton(kind: BabyPhase, label: String) -> some View {

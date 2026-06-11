@@ -121,6 +121,9 @@ struct BudgetScreen: View {
                 // 섹션 간 호흡 — 주요 블록은 s6로 리듬 통일
                 VStack(alignment: .leading, spacing: Spacing.s6) {
 
+                    // 0. 월 전환 스위처
+                    monthSwitcher
+
                     // 1. 정부지원금 전면 배치
                     subsidySection
 
@@ -161,12 +164,86 @@ struct BudgetScreen: View {
         }
     }
 
+    // MARK: 0. 월 전환 스위처
+
+    /// selectedMonth가 이번 달(또는 그 이후)이면 미래로 더 이동 불가.
+    private var canGoNextMonth: Bool {
+        let cal = Calendar.current
+        let now = cal.dateComponents([.year, .month], from: Date())
+        let sel = cal.dateComponents([.year, .month], from: selectedMonth)
+        guard let ny = now.year, let nm = now.month,
+              let sy = sel.year, let sm = sel.month else { return false }
+        return (sy, sm) < (ny, nm)
+    }
+
+    /// selectedMonth가 이번 달인지 여부 (레이블 표시용)
+    private var isCurrentMonth: Bool {
+        Calendar.current.isDate(selectedMonth, equalTo: Date(), toGranularity: .month)
+    }
+
+    private var monthTitle: String {
+        if isCurrentMonth { return "이번 달" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy년 M월"
+        return formatter.string(from: selectedMonth)
+    }
+
+    private func shiftMonth(_ delta: Int) {
+        guard let next = Calendar.current.date(byAdding: .month, value: delta, to: selectedMonth) else { return }
+        // 미래 달로는 이동하지 않음
+        if delta > 0 && !canGoNextMonth { return }
+        Haptics.light()
+        selectedMonth = next
+    }
+
+    private var monthSwitcher: some View {
+        HStack(spacing: Spacing.s2) {
+            Button {
+                shiftMonth(-1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppColors.ink2)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.9))
+            .accessibilityLabel("이전 달 보기")
+
+            Text(monthTitle)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppColors.ink)
+                .frame(maxWidth: .infinity)
+                .contentTransition(.numericText())
+                .accessibilityLabel("선택한 달: \(monthTitle)")
+                .accessibilityAddTraits(.isHeader)
+
+            Button {
+                shiftMonth(1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(canGoNextMonth ? AppColors.ink2 : AppColors.ink3.opacity(0.35))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.9))
+            .disabled(!canGoNextMonth)
+            .accessibilityLabel("다음 달 보기")
+            .accessibilityHint(canGoNextMonth ? "" : "이번 달 이후로는 이동할 수 없어요")
+        }
+        .padding(.horizontal, Spacing.s2)
+        .frame(height: 44)
+        .background(AppColors.surface2, in: Capsule())
+    }
+
     // MARK: 지출 없음 빈 상태
 
     private var budgetEmptyCard: some View {
         BLEmptyState(
             icon: "wonsign.circle",
-            title: "이번 달 지출 기록이 없어요",
+            title: "\(monthTitle) 지출 기록이 없어요",
             message: "오른쪽 아래 + 버튼으로 큰 지출을 추가해보세요.\n마켓 거래·구독은 자동으로 기록돼요."
         )
     }
@@ -261,7 +338,7 @@ struct BudgetScreen: View {
                 Divider().background(AppColors.line)
 
                 HStack(spacing: 0) {
-                    miniStat(value: amountFull(monthlyTotal), label: "이번 달 총 지출")
+                    miniStat(value: amountFull(monthlyTotal), label: "\(monthTitle) 총 지출")
                     Divider().frame(height: 30).background(AppColors.line)
                     if let pct = monthOverMonthPct {
                         miniStat(value: "\(pct > 0 ? "+" : "")\(pct)%",
@@ -271,10 +348,10 @@ struct BudgetScreen: View {
                         miniStat(value: "—", label: "전월 대비")
                     }
                     Divider().frame(height: 30).background(AppColors.line)
-                    miniStat(value: "\(currentMonthExpenses.count)건", label: "이번 달 기록")
+                    miniStat(value: "\(currentMonthExpenses.count)건", label: "\(monthTitle) 기록")
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("이번 달 총 지출 \(amountFull(monthlyTotal))"
+                .accessibilityLabel("\(monthTitle) 총 지출 \(amountFull(monthlyTotal))"
                     + (monthOverMonthPct.map { ", 전월 대비 \($0)%" } ?? "")
                     + ", \(currentMonthExpenses.count)건 기록")
             }
@@ -300,17 +377,19 @@ struct BudgetScreen: View {
 
             // 중앙 텍스트
             VStack(spacing: 3) {
-                Text("이번 달")
+                Text(monthTitle)
                     .font(AppFont.micro)
                     .tracking(0.5)
                     .foregroundStyle(AppColors.ink3)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Text(amountShort(monthlyTotal))
                     .font(AppFont.num(17, weight: .heavy))
                     .foregroundStyle(AppColors.ink)
             }
             .accessibilityHidden(true)
         }
-        .accessibilityLabel("카테고리별 지출 비중 도넛 차트. 이번 달 총 \(amountFull(monthlyTotal))")
+        .accessibilityLabel("카테고리별 지출 비중 도넛 차트. \(monthTitle) 총 \(amountFull(monthlyTotal))")
     }
 
     private func miniStat(value: String, label: String, valueTone: Color? = nil) -> some View {
@@ -333,7 +412,7 @@ struct BudgetScreen: View {
 
     private var categoryListSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            BLSectionHead(eyebrow: "이번 달", title: "카테고리별 지출")
+            BLSectionHead(eyebrow: monthTitle, title: "카테고리별 지출")
                 .accessibilityAddTraits(.isHeader)
 
             BLCard(padding: 0) {

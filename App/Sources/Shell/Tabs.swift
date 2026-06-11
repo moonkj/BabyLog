@@ -413,8 +413,9 @@ struct HomeTab: View {
             .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             .overlay {
                 LinearGradient(
-                    colors: [.clear, .black.opacity(0.55)],
-                    startPoint: UnitPoint(x: 0.5, y: 0.4),
+                    // 밝은 사진 위에서도 이름·D+day가 항상 읽히도록 하단을 다단계로 강하게.
+                    colors: [.clear, .clear, .black.opacity(0.35), .black.opacity(0.65)],
+                    startPoint: .top,
                     endPoint: .bottom
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
@@ -444,12 +445,32 @@ struct HomeTab: View {
             .accessibilityLabel(accessLabel)
     }
 
+    /// 우선순위 종류별 대표 아이콘 (시각적 무게용 리딩 아이콘).
+    private func priorityIcon(_ kind: PriorityKind) -> String {
+        switch kind {
+        case .emergency:    return "cross.case.fill"
+        case .vaccine:      return "syringe.fill"
+        case .subsidy:      return "won.sign.circle.fill"
+        case .recordNudge:  return "camera.fill"
+        case .memory:       return "clock.fill"
+        }
+    }
+
     // MARK: - 우선순위 카드 (PriorityEngine 연결 — A·B·C 공용)
     @ViewBuilder
     private var priorityCard: some View {
         if let item = priorityItem {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top) {
+                HStack(alignment: .top, spacing: 14) {
+                    // 시각적 무게를 위한 원형 골드 틴트 리딩 아이콘
+                    ZStack {
+                        Circle().fill(AppColors.gold.opacity(0.16))
+                        Image(systemName: priorityIcon(item.kind))
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(AppColors.gold)
+                    }
+                    .frame(width: 46, height: 46)
+                    .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 6) {
                         Label("지금 가장 중요해요", systemImage: "sparkles")
                             .font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.gold)
@@ -542,8 +563,8 @@ struct HomeTab: View {
             }
             Spacer()
             Button { onNavigate(.record) } label: {
-                Text("기록").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-                    .padding(.horizontal, 16).frame(height: 38)
+                Text("기록").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 18).frame(height: 44)
                     .background(AppColors.primary, in: Capsule())
             }
             .buttonStyle(LiquidPressStyle())
