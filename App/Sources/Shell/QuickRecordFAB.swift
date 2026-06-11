@@ -15,13 +15,14 @@ struct QuickRecordFAB: View {
     // 뱃지 카드 수준 투명도: 흰 글로스/틴트를 최소화해 ultraThinMaterial 블러가 드러나게 한다.
     private var fabBackground: some View {
         ZStack {
-            Circle().fill(.ultraThinMaterial)              // 프로스티드 글래스(핵심 — 뒤가 비침)
-            Circle().fill(AppColors.primary.opacity(0.07)) // 글래스 색감만, 투명도 유지
-            // 움직이는 sheen (아주 은은)
+            Circle().fill(.ultraThinMaterial)               // 프로스티드 글래스(뒤가 블러로 비침)
+            Circle().fill(AppColors.surface.opacity(0.6))   // 밝은 디스크 — 어두운 사진 위에서도 버튼이 보이게(뱃지카드 톤, 단 더 비침)
+            Circle().fill(AppColors.primary.opacity(0.05))  // 아주 옅은 브랜드 틴트
+            // 움직이는 sheen (은은)
             Circle()
                 .fill(
                     AngularGradient(
-                        gradient: Gradient(colors: [.clear, .white.opacity(0.16), .clear, .clear, .clear]),
+                        gradient: Gradient(colors: [.clear, .white.opacity(0.18), .clear, .clear, .clear]),
                         center: .center,
                         angle: .degrees(sheen ? 360 : 0)
                     )
@@ -31,12 +32,12 @@ struct QuickRecordFAB: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [.white.opacity(0.22), .clear],
-                        center: .topLeading, startRadius: 1, endRadius: 32
+                        colors: [.white.opacity(0.3), .clear],
+                        center: .topLeading, startRadius: 1, endRadius: 34
                     )
                 )
-            // 얇은 림
-            Circle().strokeBorder(.white.opacity(0.35), lineWidth: 0.8)
+            // 림 라이트
+            Circle().strokeBorder(.white.opacity(0.5), lineWidth: 1)
         }
         .onAppear {
             guard !reduceMotion else { return }
