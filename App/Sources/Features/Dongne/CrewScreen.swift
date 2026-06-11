@@ -781,7 +781,7 @@ private struct CrewColdStartContent: View {
                         .font(.system(size: 13.5, weight: .bold))
                         .foregroundStyle(AppColors.gold)
 
-                    Text("지금 합류하면 영구 뱃지 + Pro 체험 + 마켓 수수료 면제를 드려요.")
+                    Text("지금 합류하면 우리 동네 1호 멤버 영구 뱃지를 드려요.")
                         .font(.system(size: 12.5, weight: .regular))
                         .foregroundStyle(Color(hex: 0xA8813A))
                         .lineSpacing(3)
@@ -791,7 +791,7 @@ private struct CrewColdStartContent: View {
         }
         .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("초기 멤버 혜택. 영구 뱃지, Pro 체험, 마켓 수수료 면제")
+        .accessibilityLabel("초기 멤버 혜택. 우리 동네 1호 멤버 영구 뱃지")
     }
 }
 

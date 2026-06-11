@@ -12,7 +12,6 @@ struct ProfileScreen: View {
 
     // MARK: Mock State (실제 구현 시 ViewModel / Environment 주입)
     @State private var selectedBadgeCategory: BadgeCatalogItem.BadgeCategory? = nil
-    @State private var showProDetail = false
     @State private var exportURL: URL? = nil
     @State private var showShareSheet = false
     @State private var showSettings = false
@@ -128,7 +127,6 @@ struct ProfileScreen: View {
                 VStack(spacing: Spacing.s4) {
                     profileCard
                     tierProgressCard
-                    proUpsellCard
                     badgeCollectionSection
                     privacySection
                 }
@@ -150,11 +148,6 @@ struct ProfileScreen: View {
                 )
                 .zIndex(10)
             }
-        }
-        .alert("Pro — 곧 만나요", isPresented: $showProDetail) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text("서버 사진 백업·AI 캡션·무제한 카드 등 프리미엄 혜택을 준비 중이에요. 다음 업데이트에서 안내드릴게요.")
         }
         .alert("안내", isPresented: Binding(
             get: { infoAlert != nil },
@@ -354,131 +347,6 @@ struct ProfileScreen: View {
         .accessibilityLabel("티어 진행 현황")
     }
 
-    // MARK: - Pro Upsell Card
-
-    private var proUpsellCard: some View {
-        Button {
-            showProDetail = true
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                // 배경 — 라이트 프리미엄(크림+골드)
-                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: 0xFBF3DF), Color(hex: 0xF5E8C8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                            .stroke(AppColors.gold.opacity(0.35), lineWidth: 1)
-                    }
-
-                // 장식 아이콘
-                Image(systemName: "sparkles")
-                    .font(.system(size: 90, weight: .thin))
-                    .foregroundStyle(AppColors.gold.opacity(0.28))
-                    .offset(x: 10, y: -10)
-                    .accessibilityHidden(true)
-
-                // 콘텐츠
-                VStack(alignment: .leading, spacing: Spacing.s3) {
-                    BLBadge(tone: .amber, text: "BabyLog Pro", systemIcon: "crown.fill", dot: false)
-
-                    Text("사진 무제한 · AI 일지 · 또래 비교")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(AppColors.ink)
-
-                    // 기능 리스트
-                    VStack(alignment: .leading, spacing: Spacing.s2) {
-                        proFeatureRow(icon: "photo.stack.fill",  label: "사진 무제한 저장",    sub: "무료는 월 200장")
-                        proFeatureRow(icon: "sparkle",           label: "AI 일지 캡션 초안",   sub: "사진 보고 자동으로 한 줄")
-                        proFeatureRow(icon: "chart.bar.fill",    label: "또래 비교 분석",       sub: "안심 톤, 등수 없이")
-                        proFeatureRow(icon: "bag.fill",          label: "매물 등록 무제한",     sub: "무료는 월 5건")
-                    }
-
-                    // 요금 비교
-                    HStack(spacing: Spacing.s2) {
-                        pricePill(label: "월간", price: "3,900원", highlighted: false)
-                        pricePill(label: "연간", price: "29,000원", highlighted: true)
-                    }
-
-                    // 7일 무료 LiquidButton
-                    LiquidButton(fill: AppColors.gold, cornerRadius: Radius.md) {
-                        showProDetail = true
-                    } label: {
-                        HStack(spacing: Spacing.s2) {
-                            Image(systemName: "crown.fill")
-                                .accessibilityHidden(true)
-                            Text("7일 무료로 시작하기")
-                        }
-                        .foregroundStyle(Color(hex: 0x1C1814))
-                        .font(.system(size: 16, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                    }
-
-                    Text("언제든 해지 가능 · 무료 기능은 계속 무료")
-                        .font(.system(size: 11.5, weight: .regular))
-                        .foregroundStyle(Color.white.opacity(0.4))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .padding(Spacing.s5)
-            }
-        }
-        .buttonStyle(LiquidPressStyle(scale: 0.98))
-        .accessibilityLabel("BabyLog Pro 업그레이드. 월 3,900원 또는 연 29,000원. 7일 무료 체험 가능.")
-        .accessibilityAddTraits(.isButton)
-    }
-
-    private func proFeatureRow(icon: String, label: String, sub: String) -> some View {
-        HStack(spacing: Spacing.s3) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(AppColors.gold)
-                .frame(width: 22)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.ink)
-                Text(sub)
-                    .font(.system(size: 11.5, weight: .regular))
-                    .foregroundStyle(AppColors.ink3)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label). \(sub)")
-    }
-
-    private func pricePill(label: String, price: String, highlighted: Bool) -> some View {
-        VStack(spacing: 3) {
-            Text(label)
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(AppColors.ink3)
-            Text(price)
-                .font(AppFont.num(18, weight: .bold))
-                .foregroundStyle(AppColors.ink)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Spacing.s3)
-        .background(
-            highlighted
-                ? AppColors.gold.opacity(0.22)
-                : Color.white.opacity(0.55),
-            in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                .stroke(
-                    highlighted ? AppColors.gold : Color.white.opacity(0.12),
-                    lineWidth: highlighted ? 1.5 : 1
-                )
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label) \(price)")
-    }
-
     // MARK: - Badge Collection Section
 
     private var badgeCollectionSection: some View {
@@ -547,7 +415,7 @@ struct ProfileScreen: View {
                         subtitle: "아동 데이터 비매각 — 약속",
                         showDivider: true,
                         onTap: {
-                            infoAlert = "BabyLog는 아동 데이터를 절대 외부에 판매하지 않아요. 수익은 구독과 거래 수수료로만 운영하며, 무료 사용자의 데이터도 영구 보존합니다."
+                            infoAlert = "BabyLog는 아동 데이터를 절대 외부에 판매하지 않아요. 무료 사용자의 데이터도 영구 보존하며, 사진은 기기에 안전하게 보관됩니다."
                         }
                     )
                     privacyRow(

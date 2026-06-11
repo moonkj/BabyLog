@@ -60,9 +60,6 @@ final class ShareCardViewModel: ObservableObject {
     // 배경 사진 (로컬 전용 — 서버 미전송, CLAUDE.md 절대원칙)
     @Published var backgroundPhoto: UIImage? = nil
 
-    // Pro 상태 (팀장 주입 예정 — 현재는 false 고정)
-    let isPro: Bool = false
-
     init(child: Child, record: GrowthRecord? = nil, milestoneText: String? = nil) {
         self.child = child
         self.record = record
@@ -286,22 +283,15 @@ struct ShareCardView: View {
                 .background(AppColors.line)
                 .padding(.horizontal, Spacing.s4)
 
-            // 워터마크: 무료는 항상 ON (잠금 표시), Pro는 토글 가능
+            // 워터마크: 자유 토글(전면 무료). 기본 ON은 자연 바이럴용.
             DarkToggleRow(
                 label: "워터마크",
-                subtitle: vm.watermark
-                    ? "BabyLog 로고 표시 (무료)"
-                    : "Pro · 로고 제거됨",
+                subtitle: vm.watermark ? "BabyLog 로고 표시" : "로고 없음",
                 systemIcon: "sparkles",
                 isOn: Binding(
                     get: { vm.watermark },
-                    set: { newVal in
-                        if vm.isPro { vm.watermark = newVal }
-                        // 무료: 토글 불가 (잠금 유지)
-                    }
-                ),
-                isPro: !vm.isPro,   // 무료 사용자에게 PRO 뱃지 표시
-                locked: !vm.isPro   // 잠금 아이콘
+                    set: { vm.watermark = $0 }
+                )
             )
         }
         .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
