@@ -59,7 +59,10 @@ struct BadgeAwardCard: View {
             }
             .padding(Spacing.s5)
             .frame(maxWidth: 320)
-            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            // 살짝 투명한 프로스티드 글래스 (TickLab 스타일)
+            .background(AppColors.surface.opacity(0.72),
+                        in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .blShadow(.card)
             .padding(Spacing.s5)
         }

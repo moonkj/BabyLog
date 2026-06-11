@@ -725,10 +725,11 @@ private struct BadgeDetailOverlay: View {
                 .onTapGesture { onClose() }
 
             VStack(spacing: Spacing.s5) {
-                // 회전+확대 등장하는 큰 뱃지 카드
+                // 회전+확대 등장하는 큰 뱃지 카드 (살짝 투명한 프로스티드 글래스 — TickLab 스타일)
                 ZStack {
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .fill(badge.isEarned ? badge.tone.ink : AppColors.ink3)
+                        .fill((badge.isEarned ? badge.tone.ink : AppColors.ink3).opacity(0.78))
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                     Circle()
                         .fill(.white.opacity(0.22))
                         .frame(width: 180, height: 180)
