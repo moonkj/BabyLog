@@ -15,8 +15,12 @@ struct MarketChatSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var messageText = ""
     @State private var sellerTyping = false
+    @State private var showReport = false
 
     private var messages: [ChatMessage] { store.marketMessages(itemId: item.id) }
+    private var transcriptText: String {
+        ChatTranscript.text(itemTitle: item.title, counterpart: item.sellerName, messages: messages)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -91,6 +95,10 @@ struct MarketChatSheet: View {
         }
         .background(AppColors.canvas)
         .accessibilityElement(children: .contain)
+        .sheet(isPresented: $showReport) {
+            TradeReportSheet(item: item).environmentObject(store)
+                .presentationDetents([.medium, .large])
+        }
     }
 
     private var chatHeader: some View {
@@ -112,6 +120,21 @@ struct MarketChatSheet: View {
                         .foregroundStyle(AppColors.ink3)
                 }
                 Spacer()
+                Menu {
+                    ShareLink(item: transcriptText) {
+                        Label("대화 내보내기", systemImage: "square.and.arrow.up")
+                    }
+                    Button(role: .destructive) { showReport = true } label: {
+                        Label("거래 신고하기", systemImage: "exclamationmark.bubble.fill")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppColors.ink2)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("대화 메뉴 — 내보내기·신고")
+
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 24, weight: .regular))
@@ -219,5 +242,111 @@ private struct MkChatBubble: View {
             if !isMe { Spacer(minLength: 48) }
         }
         .accessibilityLabel(isMe ? "나: \(text)" : "\(text)")
+    }
+}
+
+// MARK: - 거래 신고 시트
+
+private struct TradeReportSheet: View {
+    let item: MarketItem
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+
+    private let reasons = ["사기·미수령", "욕설·협박", "안전 위협", "가품·허위 정보", "기타"]
+    @State private var reason = "사기·미수령"
+    @State private var note = ""
+    @State private var submitted = false
+    @State private var reportText = ""
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    if submitted { submittedView } else { formView }
+                }
+                .padding(Spacing.s5)
+            }
+            .background(AppColors.canvas.ignoresSafeArea())
+            .navigationTitle("거래 신고")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { dismiss() } } }
+        }
+    }
+
+    private var formView: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            Text("어떤 문제가 있었나요?")
+                .font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+
+            VStack(spacing: 8) {
+                ForEach(reasons, id: \.self) { r in
+                    Button { Haptics.selection(); reason = r } label: {
+                        HStack {
+                            Text(r).font(AppFont.body).foregroundStyle(AppColors.ink)
+                            Spacer()
+                            Image(systemName: reason == r ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(reason == r ? AppColors.danger : AppColors.ink3)
+                        }
+                        .padding(.horizontal, 14).frame(minHeight: 48)
+                        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                                .stroke(reason == r ? AppColors.danger.opacity(0.4) : AppColors.line, lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(LiquidPressStyle(scale: 0.99))
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("상세 내용 (선택)").font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                TextField("무슨 일이 있었는지 적어주세요", text: $note, axis: .vertical)
+                    .lineLimit(3...6)
+                    .padding(12)
+                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: Radius.md, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
+            }
+
+            Text("신고하면 신고 시점의 대화가 증거로 보존돼요. 안전·분쟁 대응을 위해 보관되며, 적법한 절차(수사기관 요청 등)에 따라 제출될 수 있어요. 지금은 기기에 안전하게 보관되고, 서버 연동 시 보관처가 확대됩니다.")
+                .font(AppFont.caption).foregroundStyle(AppColors.ink3).lineSpacing(2)
+
+            LiquidButton(fill: AppColors.danger, cornerRadius: Radius.md) {
+                let r = store.reportTrade(item: item, reason: reason, note: note)
+                reportText = ChatTranscript.text(itemTitle: item.title, counterpart: item.sellerName,
+                                                 messages: r.transcript, reason: r.reason, note: r.note)
+                Haptics.success()
+                withAnimation { submitted = true }
+            } label: {
+                Label("신고 접수", systemImage: "checkmark.shield.fill").foregroundStyle(.white)
+            }
+        }
+    }
+
+    private var submittedView: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(BadgeTone.mint.ink)
+                Text("신고가 접수됐어요")
+                    .font(.system(size: 17, weight: .heavy)).foregroundStyle(AppColors.ink)
+            }
+            Text("신고 시점의 대화가 증거로 보존됐어요. 아래에서 대화·신고 내용을 내보내 경찰이나 지원기관에 제출할 수 있어요.")
+                .font(AppFont.body).foregroundStyle(AppColors.ink2).lineSpacing(2)
+
+            ShareLink(item: reportText) {
+                Label("대화·신고 내용 내보내기", systemImage: "square.and.arrow.up")
+                    .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            }
+
+            Button { dismiss() } label: {
+                Text("닫기").font(.system(size: 15, weight: .semibold)).foregroundStyle(AppColors.ink2)
+                    .frame(maxWidth: .infinity).frame(height: 48)
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.98))
+        }
     }
 }

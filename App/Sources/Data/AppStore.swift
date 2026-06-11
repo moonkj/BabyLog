@@ -38,6 +38,7 @@ final class AppStore: ObservableObject {
     @Published private(set) var crewPosts: [CrewPost] = []
     @Published private(set) var crewPostComments: [String: [String]] = [:]
     @Published private(set) var crewChats: [String: [ChatMessage]] = [:]
+    @Published private(set) var tradeReports: [TradeReport] = []
     private var crewSeeded: Bool = false
     private var crewPostSeeded: Bool = false
     /// 저장 파일 디코딩 실패 여부 — true면 자동저장으로 원본을 덮어쓰지 않는다(데이터 보존).
@@ -170,6 +171,7 @@ final class AppStore: ObservableObject {
                     self.crewPostComments   = saved.crewPostComments
                     self.crewChats          = saved.crewChats
                     self.crewPostSeeded     = saved.crewPostSeeded
+                    self.tradeReports       = saved.tradeReports
                 }
             } catch {
                 // 손상 파일 보존(복구용) + 자동저장 차단
@@ -341,6 +343,30 @@ final class AppStore: ObservableObject {
         marketChats[itemId, default: []].append(ChatMessage(text: t, mine: mine))
     }
 
+    // MARK: - 거래 신고 + 증거 보존 (로컬, 추후 서버 업로드)
+
+    /// 거래를 신고하고 신고 시점의 대화를 스냅샷으로 보존한다.
+    /// 매물/채팅이 이후 삭제돼도 신고 증거(transcript)는 유지된다.
+    /// 백엔드 연결 시: 이 시점에 서버로 report+transcript 업로드(보관·적법 제출용) 후 uploaded=true.
+    @discardableResult
+    func reportTrade(item: MarketItem, reason: String, note: String = "") -> TradeReport {
+        let report = TradeReport(
+            itemId: item.id,
+            itemTitle: item.title,
+            counterpartName: item.sellerName,
+            reason: reason,
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+            transcript: marketChats[item.id] ?? []
+        )
+        tradeReports.insert(report, at: 0)
+        return report
+    }
+
+    /// 해당 매물에 대한 가장 최근 신고(있으면).
+    func latestTradeReport(itemId: String) -> TradeReport? {
+        tradeReports.first { $0.itemId == itemId }
+    }
+
     // MARK: - Auto Persist
 
     /// 상태 변경을 감지해 0.5s debounce 후 자동으로 영속화한다.
@@ -393,7 +419,8 @@ final class AppStore: ObservableObject {
             crewPosts: crewPosts,
             crewPostComments: crewPostComments,
             crewChats: crewChats,
-            crewPostSeeded: crewPostSeeded
+            crewPostSeeded: crewPostSeeded,
+            tradeReports: tradeReports
         )
     }
 
@@ -423,6 +450,7 @@ final class AppStore: ObservableObject {
         crewPostComments   = state.crewPostComments
         crewChats          = state.crewChats
         crewPostSeeded     = state.crewPostSeeded
+        tradeReports       = state.tradeReports
         seedMarketIfNeeded()
         seedCrewIfNeeded()
         seedCrewPostsIfNeeded()

@@ -9,6 +9,25 @@ struct ChatMessage: Identifiable, Codable, Equatable, Hashable {
     var date: Date = Date()
 }
 
+// MARK: - TradeReport (거래 신고 + 증거 보존)
+
+/// 거래 사고 신고 기록. 신고 시점의 대화를 스냅샷으로 보존하므로,
+/// 매물/채팅이 이후 삭제돼도 증거가 유지된다(경찰 제출·분쟁 대응용).
+/// 현재는 로컬 보관 — 백엔드 연결 시 서버 업로드로 확장(적법 절차 시 관리자 제출).
+struct TradeReport: Identifiable, Codable, Equatable {
+    var id: String = UUID().uuidString
+    var itemId: String
+    var itemTitle: String
+    var counterpartName: String
+    var reason: String
+    var note: String
+    /// 신고 시점 대화 스냅샷(증거). 이후 원본 채팅이 삭제돼도 보존.
+    var transcript: [ChatMessage]
+    var createdAt: Date = Date()
+    /// 서버 업로드 완료 여부(백엔드 연결 후 사용). 로컬에선 false 유지.
+    var uploaded: Bool = false
+}
+
 // MARK: - PersistableState
 
 /// 앱 전체 인메모리 상태의 Codable 스냅샷.
@@ -47,6 +66,8 @@ struct PersistableState: Codable, Equatable {
     var crewPostComments: [String: [String]]
     var crewChats: [String: [ChatMessage]]
     var crewPostSeeded: Bool
+    /// 거래 신고 + 증거 보존 (로컬, 추후 서버 업로드)
+    var tradeReports: [TradeReport]
 
     init(
         pregnancies: [Pregnancy] = [],
@@ -72,7 +93,8 @@ struct PersistableState: Codable, Equatable {
         crewPosts: [CrewPost] = [],
         crewPostComments: [String: [String]] = [:],
         crewChats: [String: [ChatMessage]] = [:],
-        crewPostSeeded: Bool = false
+        crewPostSeeded: Bool = false,
+        tradeReports: [TradeReport] = []
     ) {
         self.pregnancies = pregnancies
         self.children = children
@@ -98,6 +120,7 @@ struct PersistableState: Codable, Equatable {
         self.crewPostComments = crewPostComments
         self.crewChats = crewChats
         self.crewPostSeeded = crewPostSeeded
+        self.tradeReports = tradeReports
     }
 
     // MARK: - Codable (하위 호환 디코딩)
@@ -111,6 +134,7 @@ struct PersistableState: Codable, Equatable {
         case joinedCrewGroupIds, likedCrewPostIds
         case vaccineHospitals, checkupDoneKeys
         case crewPosts, crewPostComments, crewChats, crewPostSeeded
+        case tradeReports
     }
 
     init(from decoder: Decoder) throws {
@@ -139,6 +163,7 @@ struct PersistableState: Codable, Equatable {
         crewPostComments   = try container.decodeIfPresent([String: [String]].self, forKey: .crewPostComments) ?? [:]
         crewChats          = try container.decodeIfPresent([String: [ChatMessage]].self, forKey: .crewChats) ?? [:]
         crewPostSeeded     = try container.decodeIfPresent(Bool.self, forKey: .crewPostSeeded) ?? false
+        tradeReports       = try container.decodeIfPresent([TradeReport].self, forKey: .tradeReports) ?? []
     }
 }
 
