@@ -359,8 +359,8 @@ struct HomeTab: View {
                 PhotoPlaceholder(seed: 1, cornerRadius: Radius.lg)
             }
         }
-            .frame(height: 188)
             .frame(maxWidth: .infinity)
+            .frame(height: UIScreen.main.bounds.width - Spacing.s5 * 2)   // 1:1 정사각형(좌우 여백 제외)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             .overlay {
