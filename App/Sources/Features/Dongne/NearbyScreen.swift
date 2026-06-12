@@ -276,13 +276,14 @@ struct NearbyScreen: View {
         // 현재 위치가 잡히면 그 좌표로 다시 검색 + 지도 이동
         .onChange(of: locationProvider.coordinate?.latitude) { _, lat in
             guard lat != nil else { return }
-            resultCache.removeAll()   // 위치가 바뀌면 캐시 무효화 → 새 위치로 재조회
             withAnimation {
                 cameraPosition = .region(MKCoordinateRegion(
                     center: searchCoord,
                     span: MKCoordinateSpan(latitudeDelta: 0.025, longitudeDelta: 0.025)))
             }
-            Task { await loadHospitals(force: true) }
+            // force:false — GPS가 미세하게 재방출돼도 같은 위치(±400m)면 캐시 적중→재호출 없음.
+            // 실제로 400m 넘게 이동한 경우에만 loadHospitals 내부에서 재조회.
+            Task { await loadHospitals() }
         }
     }
 

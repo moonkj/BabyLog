@@ -45,14 +45,11 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
             return try await fallback.hospitals(near: coordinate, openNow: openNow)
         }
         do {
-            var results: [HospitalInfo]
-            // 좌표가 있으면: 가까운 1곳으로 행정구역 파악 → 시군구(좁고 빠름) 우선, 없으면 시도 전체.
-            if let coord = coordinate, let region = try await regionCode(key: key, coord: coord) {
-                results = try await regionHospitals(key: key, region: region, near: coord)
-            } else {
-                // 좌표/지역 미확보 → 반경 폴백
-                results = try await radiusHospitals(key: key, coord: coordinate)
-            }
+            // 반경 검색 — HIRA radius는 API가 거리순 정렬 + distance 제공.
+            // 단일 호출이라 빠르고, '집앞'이 항상 최상단에 온다.
+            // (행정구역/probe 방식은 numOfRows=1 probe가 '가장 가까운 1곳'을 보장하지 못해
+            //  엉뚱한 구를 골라 집앞이 누락되는 문제가 있어 반경 방식으로 통일.)
+            var results = try await radiusHospitals(key: key, coord: coordinate)
             if openNow { results = results.filter { $0.isOpenNow } }
             results.sort { $0.distanceM < $1.distanceM }   // 좌표 기반 거리순(가까운 곳 먼저)
             return results
@@ -66,55 +63,7 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         if let d = dgsbjtCd { items.append(.init(name: "dgsbjtCd", value: d)) }
     }
 
-    /// 사용자 좌표에서 가장 가까운 1곳의 행정구역 코드.
-    /// 시군구(sgguCd)를 우선 — 시/군/구 단위로 좁아 조회가 빠르고 "내 동네"에 부합.
-    /// 시군구가 없으면 시도(sidoCd) 폴백.
-    private func regionCode(key: String, coord: Coordinate) async throws -> (name: String, value: String)? {
-        var c = URLComponents(string: endpoint)!
-        var items: [URLQueryItem] = [
-            .init(name: "serviceKey", value: key),
-            .init(name: "pageNo", value: "1"),
-            .init(name: "numOfRows", value: "1"),
-            .init(name: "xPos", value: String(coord.lng)),
-            .init(name: "yPos", value: String(coord.lat)),
-            .init(name: "radius", value: "20000"),   // 가까운 1곳만 필요(시골 대비 20km)
-            .init(name: "_type", value: "json"),
-        ]
-        appendDgsbjt(&items)
-        c.queryItems = items
-        guard let url = c.url else { return nil }
-        let resp = try await client.get(url, as: HIRAHospitalResponse.self)
-        guard let item = resp.response?.body?.items?.item?.first else { return nil }
-        if let sggu = item.sgguCd, !sggu.isEmpty { return ("sgguCd", sggu) }
-        if let sido = item.sidoCd, !sido.isEmpty { return ("sidoCd", sido) }
-        return nil
-    }
-
-    /// 행정구역(시군구 또는 시도) 전체 — 페이지네이션으로 누락 없이 수집, Haversine 거리 산출.
-    private func regionHospitals(key: String, region: (name: String, value: String), near coord: Coordinate) async throws -> [HospitalInfo] {
-        var all: [HospitalInfo] = []
-        let pageSize = 500
-        for page in 1...10 {   // 최대 5천건 — 규모상 충분
-            var c = URLComponents(string: endpoint)!
-            var items: [URLQueryItem] = [
-                .init(name: "serviceKey", value: key),
-                .init(name: "pageNo", value: String(page)),
-                .init(name: "numOfRows", value: String(pageSize)),
-                .init(name: region.name, value: region.value),
-                .init(name: "_type", value: "json"),
-            ]
-            appendDgsbjt(&items)
-            c.queryItems = items
-            guard let url = c.url else { break }
-            let resp = try await client.get(url, as: HIRAHospitalResponse.self)
-            let count = resp.response?.body?.items?.item?.count ?? 0
-            all += try HospitalResponseParser.parse(resp, near: coord)
-            if count < pageSize { break }   // 마지막 페이지
-        }
-        return all
-    }
-
-    /// 좌표 기반 반경 폴백(지역코드 미확보 시).
+    /// 좌표 기반 반경 검색 — 거리순 정렬되어 가까운 곳(집앞)부터 numOfRows만큼.
     private func radiusHospitals(key: String, coord: Coordinate?) async throws -> [HospitalInfo] {
         let lat = coord?.lat ?? 37.5665, lng = coord?.lng ?? 126.9780
         var c = URLComponents(string: endpoint)!
@@ -122,7 +71,7 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
             .init(name: "serviceKey", value: key), .init(name: "pageNo", value: "1"),
             .init(name: "numOfRows", value: "100"),
             .init(name: "xPos", value: String(lng)), .init(name: "yPos", value: String(lat)),
-            .init(name: "radius", value: "5000"),
+            .init(name: "radius", value: "20000"),   // 시/군 전체를 아우르도록 넉넉히(거리순이라 집앞이 먼저)
             .init(name: "_type", value: "json"),
         ]
         appendDgsbjt(&items)
