@@ -1,11 +1,11 @@
 // HospitalDetailService.swift
 // BabyLog — Networking
 //
-// HIRA 병원 상세정보(getDtlInfo2.7)로 "현재 영업 중" 여부를 판정한다.
-// 기본 목록(getHospBasisList)엔 영업시간이 없으므로, 응급 모드에서 영업 여부가 필요할 때
-// 기관별로 상세를 조회한다. 응급 화면 특성상 빠르게 포기(짧은 타임아웃)하고, 실패 시 nil(불명).
+// HIRA 의료기관별상세정보(MadmDtlInfoService2.8/getDtlInfo2.8)로 "현재 영업 중" 여부를 판정한다.
+// 기본 목록(getHospBasisList)엔 영업시간이 없으므로, 영업 여부가 필요할 때 기관별로 상세를
+// 조회한다. 응급/주변 화면 특성상 빠르게 포기(짧은 타임아웃)하고, 실패 시 nil(불명).
 //
-// ⚠️ 병원정보서비스 키로 동작(hospInfoServicev2). 의료 상담을 대체하지 않음.
+// ⚠️ 의료기관별상세정보 서비스는 data.go.kr에서 별도 활용신청 필요. 의료 상담을 대체하지 않음.
 
 import Foundation
 
@@ -17,10 +17,11 @@ enum HospitalDetailService {
         guard let key = APIConfig.key(APIConfig.hiraKeyName), !ykiho.isEmpty else { return nil }
         // LiveProviders와 동일한 패턴 — URLComponents + queryItems로 일관 인코딩.
         // (키를 문자열에 직접 보간하면 +/%/= 포함 키가 한쪽 경로에서만 깨진다.)
-        // ⚠️ 영업시간(진료시간)은 '의료기관별상세정보' 서비스(MadmDtlInfoService2.7)에 있다.
-        // 기본 목록(hospInfoServicev2)엔 없음 — 기존 경로는 404였다. 이 서비스는 data.go.kr에서
-        // 키에 별도 구독(활용신청)해야 동작(미구독 시 403 → nil → '영업시간 미확인').
-        guard var components = URLComponents(string: "https://apis.data.go.kr/B551182/MadmDtlInfoService2.7/getDtlInfo2.7") else { return nil }
+        // ⚠️ 영업시간(진료시간)은 '의료기관별상세정보' 서비스(MadmDtlInfoService2.8)에 있다.
+        // 기본 목록(hospInfoServicev2)엔 없음. 이 서비스는 data.go.kr에서 키에 별도
+        // 구독(활용신청)해야 동작(미구독 시 403 → nil → '영업시간 미확인').
+        // 버전 주의: 2.7은 폐기되어 403, 현재 유효 버전은 2.8(getDtlInfo2.8).
+        guard var components = URLComponents(string: "https://apis.data.go.kr/B551182/MadmDtlInfoService2.8/getDtlInfo2.8") else { return nil }
         components.queryItems = [
             URLQueryItem(name: "serviceKey", value: key),
             URLQueryItem(name: "ykiho", value: ykiho),
