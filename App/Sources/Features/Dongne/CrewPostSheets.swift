@@ -103,11 +103,47 @@ struct CrewPostDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var commentText = ""
     @State private var showDeleteConfirm = false
+    /// 서버 공유 댓글(미구성/미로드 시 nil → 로컬 폴백)
+    @State private var serverComments: [String]? = nil
+    @AppStorage("bl_nickname") private var nickname: String = "양육자님"
 
     private var isLiked: Bool { store.isCrewPostLiked(post.id) }
     private var likeCount: Int { post.likeCount + (isLiked ? 1 : 0) }
-    private var comments: [String] { store.crewPostCommentList(postId: post.id) }
-    private var replyCount: Int { store.crewPostReplyCount(post) }
+    private var comments: [String] { serverComments ?? store.crewPostCommentList(postId: post.id) }
+    private var replyCount: Int { serverComments?.count ?? store.crewPostReplyCount(post) }
+
+    /// 댓글 폴링(상세 열려 있는 동안 3초 주기, 닫히면 task 취소).
+    private func pollReplies() async {
+        guard SupabaseConfig.isConfigured else { return }
+        while !Task.isCancelled {
+            if let r = await CrewBackend.fetchReplies(postId: post.id) { serverComments = r }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+        }
+    }
+
+    private func sendComment() {
+        let text = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        commentText = ""
+        Haptics.light()
+        if SupabaseConfig.isConfigured {
+            Task {
+                await CrewBackend.addReply(postId: post.id, body: text, authorName: nickname)
+                if let r = await CrewBackend.fetchReplies(postId: post.id) { serverComments = r }
+            }
+        } else {
+            store.addCrewPostComment(postId: post.id, text: text)
+        }
+    }
+
+    private func toggleLike() {
+        Haptics.selection()
+        let willLike = !isLiked
+        store.toggleCrewPostLike(post.id)
+        if SupabaseConfig.isConfigured {
+            Task { await CrewBackend.setPostLike(postId: post.id, like: willLike) }
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -139,6 +175,7 @@ struct CrewPostDetailSheet: View {
         }
         .background(AppColors.canvas)
         .accessibilityElement(children: .contain)
+        .task(id: post.id) { await pollReplies() }
         .confirmationDialog("이 글을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("삭제", role: .destructive) {
                 store.deleteCrewPost(id: post.id)
@@ -225,8 +262,7 @@ struct CrewPostDetailSheet: View {
             // 좋아요 + 댓글 수
             HStack(spacing: 14) {
                 Button {
-                    Haptics.selection()
-                    store.toggleCrewPostLike(post.id)
+                    toggleLike()
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
@@ -311,11 +347,7 @@ struct CrewPostDetailSheet: View {
                 .accessibilityLabel("댓글 입력")
 
             Button {
-                let text = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
-                store.addCrewPostComment(postId: post.id, text: text)
-                commentText = ""
-                Haptics.light()
+                sendComment()
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 38, weight: .regular))

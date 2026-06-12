@@ -392,6 +392,65 @@ enum CrewBackend {
         return true
     }
 
+    // MARK: - 게시판 좋아요·댓글(동네 공유)
+
+    private struct CrewReplyDTO: Decodable { let id: String; let body: String? }
+
+    /// 게시글 댓글 시간순 조회(본문 문자열). 미구성/실패 시 nil.
+    static func fetchReplies(postId: String) async -> [String]? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let p = postId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        guard let url = URL(string: "\(base)/rest/v1/crew_post_reply?post_id=eq.\(p)&select=id,body&order=created_at.asc&limit=300") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dtos = try? JSONDecoder().decode([CrewReplyDTO].self, from: data) else { return nil }
+        return dtos.compactMap { $0.body }
+    }
+
+    /// 게시글 댓글 작성. 성공 true.
+    @discardableResult
+    static func addReply(postId: String, body: String, authorName: String) async -> Bool {
+        let t = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard SupabaseConfig.isConfigured, !t.isEmpty,
+              var req = request("/rest/v1/crew_post_reply", method: "POST") else { return false }
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "post_id": postId, "author": SupabaseConfig.deviceID,
+            "author_name": authorName, "body": t,
+        ])
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
+    /// 게시글 좋아요 토글(crew_post_like upsert/삭제). 성공 true.
+    @discardableResult
+    static func setPostLike(postId: String, like: Bool) async -> Bool {
+        guard SupabaseConfig.isConfigured else { return false }
+        if like {
+            guard var req = request("/rest/v1/crew_post_like?on_conflict=post_id,device_id", method: "POST") else { return false }
+            req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: [
+                "post_id": postId, "device_id": SupabaseConfig.deviceID,
+            ])
+            guard let (_, resp) = try? await URLSession.shared.data(for: req),
+                  let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+            return true
+        } else {
+            let dev = SupabaseConfig.deviceID
+            guard let d = dev.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+                  let p = postId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+                  var req = request("/rest/v1/crew_post_like?post_id=eq.\(p)&device_id=eq.\(d)", method: "DELETE") else { return false }
+            req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+            guard let (_, resp) = try? await URLSession.shared.data(for: req),
+                  let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+            return true
+        }
+    }
+
     /// 모임 참가 취소(crew_meetup_join 삭제). 성공 true.
     @discardableResult
     static func leaveMeetup(meetupId: String) async -> Bool {

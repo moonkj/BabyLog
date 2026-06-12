@@ -206,7 +206,12 @@ private struct CrewActiveContent: View {
 
     private func loadCrew() async {
         guard SupabaseConfig.isConfigured else { return }
-        if let p = await CrewBackend.fetchPosts(hood: hood) { sharedPosts = p }
+        if let p = await CrewBackend.fetchPosts(hood: hood) {
+            sharedPosts = p.map { po in
+                guard store.isCrewPostLiked(po.id) else { return po }
+                var x = po; x.likeCount = max(0, po.likeCount - 1); return x
+            }
+        }
         // 서버 카운트는 본인을 포함 → "나 제외" 규약 유지를 위해 내가 참여/가입한 항목은 1 차감.
         if let m = await CrewBackend.fetchMeetups(hood: hood) {
             sharedMeetups = m.map { mt in
@@ -255,6 +260,7 @@ private struct CrewActiveContent: View {
         }
         .task(id: hood) { await loadCrew() }
         .onChange(of: showWrite) { _, open in if !open { Task { await loadCrew() } } }
+        .onChange(of: selectedPost) { _, sel in if sel == nil { Task { await loadCrew() } } }
         .onChange(of: refreshTick) { _, _ in Task { await loadCrew() } }
     }
 
