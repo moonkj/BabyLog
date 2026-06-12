@@ -930,7 +930,7 @@ private struct PlaceResultCard: View {
 
                 Spacer(minLength: 0)
 
-                VStack(spacing: Spacing.s2) {
+                HStack(spacing: Spacing.s2) {
                     if !place.phone.isEmpty {
                         Button {
                             let raw = place.phone.filter { $0.isNumber }
@@ -1047,14 +1047,11 @@ private struct HospitalCard: View {
         .accessibilityLabel(accessibilityDescription)
     }
 
-    // 전화 / 길찾기 / 공유 — 세로 스택 (각 44pt 터치 타깃)
+    // 전화 / 길찾기 — 한 줄(각 44pt 터치 타깃). 공유 버튼 제거.
     private var actionButtons: some View {
-        VStack(spacing: Spacing.s2) {
+        HStack(spacing: Spacing.s2) {
             phoneButton
-            HStack(spacing: Spacing.s2) {
-                directionsButton
-                shareButton
-            }
+            directionsButton
         }
     }
 
@@ -1196,14 +1193,11 @@ private struct PlaceCard: View {
         .accessibilityLabel(accessibilityDescription)
     }
 
-    // 전화 / 길찾기 / 공유 — 세로 스택 (각 44pt 터치 타깃)
+    // 전화 / 길찾기 — 한 줄(각 44pt 터치 타깃). 공유 버튼 제거.
     private var actionButtons: some View {
-        VStack(spacing: Spacing.s2) {
+        HStack(spacing: Spacing.s2) {
             phoneButton
-            HStack(spacing: Spacing.s2) {
-                directionsButton
-                shareButton
-            }
+            directionsButton
         }
     }
 
