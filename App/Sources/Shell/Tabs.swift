@@ -1140,6 +1140,10 @@ struct DongneTab: View {
             .background(AppColors.canvas)
             .toolbar(.hidden, for: .navigationBar)
             .onAppear { location.start() }   // 위치 라벨이 세그먼트와 무관하게 채워지도록
+            // 동네가 잡히면 크루 자동 카운트(기기당 1회) + 목표 도달 시 자동 알림
+            .onChange(of: location.localityName) { _, name in
+                if let hood = name { Task { await CrewBackend.syncNeighborhood(hood: hood) } }
+            }
             .fullScreenCover(isPresented: $showEmergency) {
                 EmergencyScreen(onClose: { showEmergency = false })
             }

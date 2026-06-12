@@ -56,6 +56,43 @@ enum CrewBackend {
         return true
     }
 
+    /// 동네 진입 시 호출: (1) 내 기기 자동 카운트(기기당 1회 — 재입장해도 누적 안 됨)
+    /// (2) 목표 인원 도달 시 동네당 1회 자동 로컬 알림.
+    /// - Returns: 현재 동네 신청 수(미구성/실패 시 nil)
+    @discardableResult
+    static func syncNeighborhood(hood: String) async -> Int? {
+        guard SupabaseConfig.isConfigured, !hood.isEmpty, hood != "우리 동네" else { return nil }
+
+        // 1) 자동 등록 — 로컬 dedup + 서버 unique(hood,device_id)로 이중 중복 방지
+        let regKey = "crew_registered_hoods"
+        var registered = Set(UserDefaults.standard.stringArray(forKey: regKey) ?? [])
+        if !registered.contains(hood), await joinWaitlist(hood: hood) {
+            registered.insert(hood)
+            UserDefaults.standard.set(Array(registered), forKey: regKey)
+        }
+
+        // 2) 현재 수 + 오픈 시 자동 알림(동네당 1회)
+        guard let count = await waitlistCount(hood: hood) else { return nil }
+        if count >= openThreshold {
+            let notifiedKey = "crew_opened_notified_hoods"
+            var notified = Set(UserDefaults.standard.stringArray(forKey: notifiedKey) ?? [])
+            if !notified.contains(hood) {
+                notified.insert(hood)
+                UserDefaults.standard.set(Array(notified), forKey: notifiedKey)
+                let center = UNPendingScheduler()
+                if await center.requestAuthorization() {
+                    center.schedule([LocalNotificationRequest(
+                        id: "crew_open_\(hood)",
+                        title: "🌱 \(hood) 크루가 열렸어요",
+                        body: "이웃이 충분히 모였어요. 동네 크루를 확인해 보세요.",
+                        fireDate: Date().addingTimeInterval(3)
+                    )])
+                }
+            }
+        }
+        return count
+    }
+
     /// 동네별 신청 수(RPC). 실패/미구성 시 nil.
     static func waitlistCount(hood: String) async -> Int? {
         guard SupabaseConfig.isConfigured, var req = request("/rest/v1/rpc/crew_waitlist_count", method: "POST") else { return nil }

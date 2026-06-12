@@ -621,7 +621,6 @@ private struct CrewPostRow: View {
 
 private struct CrewColdStartContent: View {
     var onJoinWaitlist: () -> Void
-    @AppStorage("crew_open_notify") private var crewNotifyRequested = false
     @ObservedObject private var location = NearbyLocationProvider.shared
 
     /// 서버 연동 시 실제 신청 수(미구성/실패 시 nil → 목업).
@@ -767,35 +766,20 @@ private struct CrewColdStartContent: View {
             .accessibilityLabel("친구 초대하고 빨리 열기")
             .accessibilityHint("공유 시트로 친구를 초대합니다")
 
-            // 오픈 알림 신청 — 서버 연동 시 동네 대기자 등록, 미구성 시 로컬 토글
-            Button {
-                Haptics.success()
-                if SupabaseConfig.isConfigured, hood != "우리 동네" {
-                    Task {
-                        let ok = await CrewBackend.joinWaitlist(hood: hood)
-                        if ok {
-                            crewNotifyRequested = true
-                            realCount = await CrewBackend.waitlistCount(hood: hood)
-                        }
-                    }
-                } else {
-                    crewNotifyRequested.toggle()   // 목업
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: crewNotifyRequested ? "bell.fill" : "bell.badge.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(crewNotifyRequested ? "오픈 알림 신청됨" : "오픈 알림 신청")
-                        .font(.system(size: 15, weight: .bold))
-                }
-                .foregroundStyle(crewNotifyRequested ? AppColors.primary : AppColors.ink)
-                .frame(maxWidth: .infinity, minHeight: 50)
-                .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                .blShadow(.chip)
+            // 자동 안내 — 신청 버튼 없이, 우리 동네 사람이 모이면 자동으로 열리고 알림
+            HStack(spacing: 6) {
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.primary)
+                Text("이 동네에 이웃이 충분히 모이면 자동으로 열리고 알려드려요")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(AppColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .buttonStyle(LiquidPressStyle(scale: 0.975))
-            .accessibilityLabel(crewNotifyRequested ? "오픈 알림 신청됨" : "오픈 알림 신청")
-            .accessibilityHint("크루가 오픈되면 알림을 받습니다")
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 2)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("이웃이 충분히 모이면 자동으로 열리고 알림을 받습니다")
         }
     }
 
