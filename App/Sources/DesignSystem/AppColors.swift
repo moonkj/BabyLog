@@ -47,11 +47,11 @@ enum AppColors {
     static let line  = dyn(0xE5E5E5, 0x2C3040)
     static let line2 = dyn(0xD4D4D4, 0x3A3F52)
 
-    // Brand primary — 딥 인디고 (TickLab 시그니처)
-    static let primary      = dyn(0x1A1B2E, 0xD8B973)
-    static let primaryPress = dyn(0x2A2C4F, 0xC9A961)
-    static let primarySoft  = dyn(0xEAEAEF, 0x26283E)
-    static let primaryTint  = dyn(0xF3F3F7, 0x1F2230)
+    // Brand primary — 세이지 그린 (흰색·골드·세이지 팔레트)
+    static let primary      = dyn(0x4E8268, 0x7FB89E)
+    static let primaryPress = dyn(0x3F6B55, 0x6BA88B)
+    static let primarySoft  = dyn(0xDCEFE6, 0x24332C)
+    static let primaryTint  = dyn(0xE1F5EE, 0x1C2A23)
 
     // Accent — 앤티크 골드 (TickLab 럭셔리 시그니처 / Pro·골든 티어)
     static let gold     = dyn(0xC9A961, 0xD8B973)
