@@ -243,6 +243,7 @@ struct NearbyScreen: View {
     // 병원별 실제 영업 여부(상세 영업시간 조회 결과). ykiho→영업중. 조회 완료한 ykiho는 openChecked에.
     @State private var openStatus: [String: Bool] = [:]
     @State private var openChecked: Set<String> = []
+    @State private var openLoading = false   // 영업조회 진행 중 — 끝나면 미조회분은 '미확인'으로(확인중 고착 방지)
 
     // 키즈카페·놀이터(카카오 로컬) 로드 상태 — 카카오 키 연동 후 실데이터
     @State private var places: [Place] = []
@@ -441,7 +442,7 @@ struct NearbyScreen: View {
             return
         }
         hospitalState = .loading
-        openStatus = [:]; openChecked = []   // 새 검색 — 이전 영업상태 초기화(스테일 방지)
+        openStatus = [:]; openChecked = []; openLoading = false   // 새 검색 — 영업상태 초기화(스테일 방지)
         let openNow = activeFilters.contains("현재 영업중")
         do {
             let provider = category == .pharmacy ? ProviderFactory.pharmacy() : ProviderFactory.hospital()
@@ -477,6 +478,7 @@ struct NearbyScreen: View {
     /// 결과가 도착하는 대로 카드 뱃지가 미확인→영업중/영업종료로 갱신된다. 불명은 미확인 유지.
     private func fetchOpenStatus(_ hospitals: [HospitalInfo], category: PlaceCategory) async {
         let targets = Array(hospitals.prefix(24))
+        openLoading = true
         await withTaskGroup(of: (String, Bool?).self) { group in
             for h in targets {
                 group.addTask { (h.id, await HospitalDetailService.isOpenNow(ykiho: h.id)) }
@@ -487,13 +489,15 @@ struct NearbyScreen: View {
                 if let open { openStatus[id] = open }
             }
         }
+        if selectedCategory == category { openLoading = false }   // 완료 — 미조회분은 '미확인'으로 확정
     }
 
-    /// 카드에 넘길 영업 상태 — 실제 조회 결과 우선, 미조회는 확인중, 조회실패는 미확인.
+    /// 카드에 넘길 영업 상태 — 실제 조회 결과 우선. 조회 중엔 확인중, 끝났는데 결과 없으면 미확인.
     private func openState(for h: HospitalInfo) -> HospitalOpenState {
         if let s = openStatus[h.id] { return s ? .open : .closed }
-        if openChecked.contains(h.id) { return .unknown }
-        return selectedCategory == .hospital ? .checking : .unknown
+        if openChecked.contains(h.id) { return .unknown }       // 조회했으나 영업시간 불명
+        if openLoading && selectedCategory == .hospital { return .checking }  // 아직 조회 중
+        return .unknown                                          // 조회 끝/대상 외(25위+·약국)
     }
 
     /// 두 좌표 간 직선거리(미터) — 캐시 무효화 판단용.
