@@ -881,6 +881,7 @@ struct NearbyScreen: View {
 private struct PlaceResultCard: View {
     let place: Place
     let category: PlaceCategory
+    @State private var animTrigger = 0
 
     private var distanceText: String {
         place.distanceM >= 1000 ? String(format: "%.1fkm", Double(place.distanceM) / 1000) : "\(place.distanceM)m"
@@ -924,7 +925,7 @@ private struct PlaceResultCard: View {
                             ZStack {
                                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                                     .fill(MotionIconPalette.green).frame(width: 44, height: 44)
-                                PhoneMotionIcon(color: .white, size: 22)
+                                PhoneMotionIcon(color: .white, size: 22, trigger: animTrigger)
                             }.blShadow(.chip)
                         }
                         .buttonStyle(LiquidPressStyle(scale: 0.94))
@@ -937,7 +938,7 @@ private struct PlaceResultCard: View {
                         ZStack {
                             RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                                 .fill(MotionIconPalette.greenSoft).frame(width: 44, height: 44)
-                            MapPinMotionIcon(color: MotionIconPalette.green, size: 22)
+                            MapPinMotionIcon(color: MotionIconPalette.green, size: 22, trigger: animTrigger)
                         }.blShadow(.chip)
                     }
                     .buttonStyle(LiquidPressStyle(scale: 0.94))
@@ -945,6 +946,8 @@ private struct PlaceResultCard: View {
                 }
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture { animTrigger += 1 }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(place.name), \(distanceText), \(category.rawValue)")
     }
@@ -954,6 +957,8 @@ private struct HospitalCard: View {
     let hospital: HospitalInfo
     /// 약국/소아과 구분 — 아이콘·톤 분기용 (데이터엔 카테고리 필드가 없어 화면 선택값 전달)
     var category: PlaceCategory = .hospital
+    /// 카드 탭 시 +1 → 전화·지도·공유 아이콘 1회 애니메이션 재생.
+    @State private var animTrigger = 0
 
     /// 1km 이상이면 km, 미만이면 m로 표기.
     static func distanceText(_ m: Int) -> String {
@@ -1019,6 +1024,9 @@ private struct HospitalCard: View {
                 actionButtons
             }
         }
+        // 카드(버튼 외 영역) 탭 → 전화·지도·공유 아이콘 1회 애니메이션
+        .contentShape(Rectangle())
+        .onTapGesture { animTrigger += 1 }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityDescription)
     }
@@ -1046,7 +1054,7 @@ private struct HospitalCard: View {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(MotionIconPalette.green)
                     .frame(width: 44, height: 44)
-                PhoneMotionIcon(color: .white, size: 22)
+                PhoneMotionIcon(color: .white, size: 22, trigger: animTrigger)
             }
             .blShadow(.chip)
         }
@@ -1067,7 +1075,7 @@ private struct HospitalCard: View {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(MotionIconPalette.greenSoft)
                     .frame(width: 44, height: 44)
-                MapPinMotionIcon(color: MotionIconPalette.green, size: 22)
+                MapPinMotionIcon(color: MotionIconPalette.green, size: 22, trigger: animTrigger)
             }
             .blShadow(.chip)
         }
@@ -1083,7 +1091,7 @@ private struct HospitalCard: View {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(MotionIconPalette.greenSoft)
                     .frame(width: 44, height: 44)
-                ShareMotionIcon(color: MotionIconPalette.green, size: 22)
+                ShareMotionIcon(color: MotionIconPalette.green, size: 22, trigger: animTrigger)
             }
             .blShadow(.chip)
         }

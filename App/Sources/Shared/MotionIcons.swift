@@ -115,46 +115,37 @@ struct LocationPinIcon: View {
     }
 }
 
-// MARK: - 전화 (수화기 흔들림 + 신호 물결)
+// MARK: - 전화 (정적 + 탭 시 1회 흔들림)
+// ⚠️ 평소엔 정지(스크롤 렉 0). `trigger` 값이 바뀔 때만 phaseAnimator로 1회 재생.
 
 struct PhoneMotionIcon: View {
     var color: Color = MotionIconPalette.green
     var size: CGFloat = 20
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 값이 바뀌면 1회 흔들림 재생(병원 카드 탭).
+    var trigger: Int = 0
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { ctx in
-            let p = reduceMotion ? 0 : loopPhase(ctx.date, period: 2.2)
-            // 벨처럼 흔들림: 대부분 0, 58~94% 구간에서 빠르게 흔들림
-            let angle = kf(p, [(0, 0), (0.58, 0), (0.64, -11), (0.72, 9), (0.80, -6), (0.88, 3), (0.94, 0), (1, 0)])
-
-            ZStack {
-                wave(p: p, delay: 0)
-                wave(p: p, delay: 0.073)
-                Image(systemName: "phone.fill")
-                    .font(.system(size: size * 0.74, weight: .semibold))
-                    .foregroundStyle(color)
-                    .rotationEffect(.degrees(reduceMotion ? 0 : angle))
-            }
-            .frame(width: size, height: size)
+        ZStack {
+            ArcWave()
+                .stroke(color, style: StrokeStyle(lineWidth: size * 0.085, lineCap: .round))
+                .frame(width: size * 0.5, height: size * 0.5)
+                .opacity(0.9)
+                .offset(x: size * 0.17, y: -size * 0.17)
+            ArcWave()
+                .stroke(color, style: StrokeStyle(lineWidth: size * 0.085, lineCap: .round))
+                .frame(width: size * 0.72, height: size * 0.72)
+                .opacity(0.55)
+                .offset(x: size * 0.17, y: -size * 0.17)
+            Image(systemName: "phone.fill")
+                .font(.system(size: size * 0.66, weight: .semibold))
+                .foregroundStyle(color)
+                .offset(x: -size * 0.04, y: size * 0.04)
+                .phaseAnimator([0.0, -12, 9, -6, 3, 0], trigger: trigger) { view, angle in
+                    view.rotationEffect(.degrees(angle))
+                } animation: { _ in .easeInOut(duration: 0.1) }
         }
+        .frame(width: size, height: size)
         .accessibilityHidden(true)
-    }
-
-    /// 우상단에서 퍼지는 신호 물결.
-    @ViewBuilder
-    private func wave(p: Double, delay: Double) -> some View {
-        let wp = (p - delay).truncatingRemainder(dividingBy: 1)
-        let q = wp < 0 ? wp + 1 : wp
-        // 55%까지 숨김 → 66% 등장 → 100% 사라짐
-        let opacity = reduceMotion ? 0 : kf(q, [(0, 0), (0.55, 0), (0.66, 0.9), (1, 0)])
-        let scale = reduceMotion ? 1 : kf(q, [(0, 0.5), (0.55, 0.5), (1, 1.25)])
-        ArcWave()
-            .stroke(color, style: StrokeStyle(lineWidth: size * 0.085, lineCap: .round))
-            .frame(width: size * 0.7, height: size * 0.7)
-            .scaleEffect(scale, anchor: .topTrailing)
-            .opacity(opacity)
-            .offset(x: size * 0.16, y: -size * 0.16)
     }
 }
 
@@ -162,57 +153,49 @@ struct PhoneMotionIcon: View {
 private struct ArcWave: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        let c = CGPoint(x: rect.minX, y: rect.maxY) // 좌하단을 중심으로 우상단 호
-        p.addArc(center: c, radius: rect.width * 0.7,
+        let c = CGPoint(x: rect.minX, y: rect.maxY) // 좌하단 중심 → 우상단 호
+        p.addArc(center: c, radius: rect.width,
                  startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
         return p
     }
 }
 
-// MARK: - 지도 (핀 드롭 + 중심점 펄스)
+// MARK: - 지도 (정적 + 탭 시 1회 핀 드롭)
 
 struct MapPinMotionIcon: View {
     var color: Color = MotionIconPalette.green
     var size: CGFloat = 20
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var trigger: Int = 0
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { ctx in
-            let p = reduceMotion ? 0 : loopPhase(ctx.date, period: 2.2)
-            // 핀 드롭: -5 → 0 → 살짝 튕김
-            let dy = kf(p, [(0, -5), (0.16, 0), (0.24, -2), (0.32, 0), (0.70, 0), (1, 0)])
-            // 중심점: 1 → .55 → 1
-            let dot = kf(p, [(0, 1), (0.30, 1), (0.50, 0.55), (0.70, 1), (1, 1)])
-
+        ZStack {
+            Ellipse()
+                .fill(color).opacity(0.18)
+                .frame(width: size * 0.34, height: size * 0.10)
+                .offset(y: size * 0.42)
             ZStack {
-                Ellipse()
-                    .fill(color).opacity(0.18)
-                    .frame(width: size * 0.34, height: size * 0.10)
-                    .offset(y: size * 0.42)
-
-                ZStack {
-                    PinHead(color: color, dot: .clear)
-                        .frame(width: size * 0.74, height: size * 0.74)
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: size * 0.20, height: size * 0.20)
-                        .offset(y: -size * 0.085)
-                        .scaleEffect(reduceMotion ? 1 : dot)
-                }
-                .offset(y: reduceMotion ? 0 : dy)
+                PinHead(color: color, dot: .clear)
+                    .frame(width: size * 0.74, height: size * 0.74)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: size * 0.20, height: size * 0.20)
+                    .offset(y: -size * 0.085)
             }
-            .frame(width: size, height: size)
+            .phaseAnimator([0.0, -size * 0.22, 0], trigger: trigger) { view, dy in
+                view.offset(y: dy)
+            } animation: { dy in dy == 0 ? .spring(response: 0.28, dampingFraction: 0.55) : .easeOut(duration: 0.16) }
         }
+        .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 }
 
-// MARK: - 공유 (연결선 흐름 + 노드 펄스)
+// MARK: - 공유 (정적 + 탭 시 1회 노드 펄스)
 
 struct ShareMotionIcon: View {
     var color: Color = MotionIconPalette.green
     var size: CGFloat = 20
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var trigger: Int = 0
 
     // viewBox 24 기준 좌표 → 단위 변환
     private func pt(_ x: Double, _ y: Double, _ s: CGFloat) -> CGPoint {
@@ -220,42 +203,30 @@ struct ShareMotionIcon: View {
     }
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { ctx in
-            let p = reduceMotion ? 0 : loopPhase(ctx.date, period: 2.4)
-            let s = size
-            // 선 그리기: dashoffset 14→0 (45~70% 그려짐)
-            let draw1 = reduceMotion ? 1 : 1 - kf(p, [(0, 1), (0.20, 1), (0.45, 0), (0.70, 0), (1, 1)])
-            let draw2p = (p - 0.05).truncatingRemainder(dividingBy: 1)
-            let q2 = draw2p < 0 ? draw2p + 1 : draw2p
-            let draw2 = reduceMotion ? 1 : 1 - kf(q2, [(0, 1), (0.20, 1), (0.45, 0), (0.70, 0), (1, 1)])
-
-            ZStack {
-                line(from: pt(6, 12, s), to: pt(17, 6, s), trim: draw1)
-                line(from: pt(6, 12, s), to: pt(17, 18, s), trim: draw2)
-                node(at: pt(6, 12, s), p: p, delay: 0)
-                node(at: pt(17, 6, s), p: p, delay: 0.21)
-                node(at: pt(17, 18, s), p: p, delay: 0.29)
-            }
-            .frame(width: size, height: size)
+        let s = size
+        ZStack {
+            line(from: pt(6, 12, s), to: pt(17, 6, s))
+            line(from: pt(6, 12, s), to: pt(17, 18, s))
+            node(at: pt(6, 12, s))
+            node(at: pt(17, 6, s))
+            node(at: pt(17, 18, s))
         }
+        .frame(width: size, height: size)
+        .phaseAnimator([1.0, 1.22, 1.0], trigger: trigger) { view, scale in
+            view.scaleEffect(scale)
+        } animation: { _ in .easeInOut(duration: 0.22) }
         .accessibilityHidden(true)
     }
 
-    private func line(from a: CGPoint, to b: CGPoint, trim: Double) -> some View {
+    private func line(from a: CGPoint, to b: CGPoint) -> some View {
         Path { p in p.move(to: a); p.addLine(to: b) }
-            .trim(from: 0, to: max(0, min(1, trim)))
             .stroke(color, style: StrokeStyle(lineWidth: size * 0.085, lineCap: .round))
     }
 
-    @ViewBuilder
-    private func node(at c: CGPoint, p: Double, delay: Double) -> some View {
-        let np = (p - delay).truncatingRemainder(dividingBy: 1)
-        let q = np < 0 ? np + 1 : np
-        let scale = reduceMotion ? 1 : kf(q, [(0, 1), (0.30, 1), (0.45, 1.22), (0.60, 1), (1, 1)])
+    private func node(at c: CGPoint) -> some View {
         Circle()
             .fill(color)
             .frame(width: size * 0.25, height: size * 0.25)
-            .scaleEffect(scale)
             .position(c)
     }
 }
