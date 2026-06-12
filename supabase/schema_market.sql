@@ -64,28 +64,50 @@ create policy market_photos_ins  on storage.objects for insert to anon, authenti
 create policy market_photos_del  on storage.objects for delete to anon, authenticated
   using ( bucket_id = 'market-photos' );
 
--- ───────── 1:1 거래 채팅(매물 문의 대화) ─────────
--- 매물별 구매자↔판매자 대화. 개인정보 비저장: 익명 기기ID + 닉네임 + 본문.
--- RLS는 크루와 동일한 전환기 패턴(읽기 개방 / 쓰기·삭제 본인). auth 도입 후 device_id=auth.uid 강제.
+-- ───────── 1:1 거래 채팅(매물별 구매자↔판매자 1:1 스레드) ─────────
+-- ⚠️ 공개방 아님: 스레드 키 = (item_id, buyer). 그 대화의 '해당 구매자'와 '그 매물 판매자'만 열람.
+-- 개인정보 비저장: 익명 기기ID/auth.uid + 닉네임 + 본문.
+-- 증거 보존: 메시지는 사용자가 삭제 불가(delete 정책 없음). 운영자는 service_role로 RLS 우회해
+--   전체 열람·내보내기 가능(수사기관 제출). 신고 시점 스냅샷은 market_report(운영자 전용)에 별도 보존.
+-- 기존 테이블이 있으면 buyer 컬럼만 추가(create-or-alter 양쪽 지원).
 create table if not exists public.market_chat_message (
     id          uuid primary key default gen_random_uuid(),
     item_id     uuid not null references public.market_item(id) on delete cascade,
-    device_id   text not null,                 -- 익명 기기 UUID(작성자)
+    buyer       text,                          -- 1:1 스레드의 구매자 측 식별(기기ID 또는 auth.uid)
+    device_id   text not null,                 -- 작성자(구매자 또는 판매자)
     author_name text,                          -- 표시용 닉네임(개인정보 아님)
     body        text not null,
     created_at  timestamptz not null default now()
 );
-create index if not exists market_chat_message_idx on public.market_chat_message (item_id, created_at);
+alter table public.market_chat_message add column if not exists buyer text;
+create index if not exists market_chat_message_thread_idx on public.market_chat_message (item_id, buyer, created_at);
 
 alter table public.market_chat_message enable row level security;
 drop policy if exists market_chat_message_read on public.market_chat_message;
 drop policy if exists market_chat_message_ins  on public.market_chat_message;
 drop policy if exists market_chat_message_del  on public.market_chat_message;
-create policy market_chat_message_read on public.market_chat_message for select to anon, authenticated using (true);
-create policy market_chat_message_ins  on public.market_chat_message for insert to anon, authenticated
-  with check ( device_id = coalesce(auth.uid()::text, device_id) );
-create policy market_chat_message_del  on public.market_chat_message for delete to anon, authenticated
-  using ( device_id = coalesce(auth.uid()::text, device_id) );
+-- 읽기: 해당 구매자 본인 OR 그 매물의 판매자만. (운영자 service_role은 RLS 우회 → 전체 열람)
+create policy market_chat_message_read on public.market_chat_message for select to anon, authenticated using (
+  buyer = coalesce(auth.uid()::text, (current_setting('request.headers', true)::json ->> 'x-device-id'))
+  or exists (
+    select 1 from public.market_item mi
+    where mi.id = item_id
+      and mi.seller = coalesce(auth.uid()::text, (current_setting('request.headers', true)::json ->> 'x-device-id'))
+  )
+);
+-- 쓰기: 작성자 본인 표식 + (구매자 본인 OR 그 매물 판매자)일 때만
+create policy market_chat_message_ins on public.market_chat_message for insert to anon, authenticated with check (
+  device_id = coalesce(auth.uid()::text, (current_setting('request.headers', true)::json ->> 'x-device-id'))
+  and (
+    buyer = coalesce(auth.uid()::text, (current_setting('request.headers', true)::json ->> 'x-device-id'))
+    or exists (
+      select 1 from public.market_item mi
+      where mi.id = item_id
+        and mi.seller = coalesce(auth.uid()::text, (current_setting('request.headers', true)::json ->> 'x-device-id'))
+    )
+  )
+);
+-- delete 정책 없음(의도적): 사용자는 메시지 삭제 불가 → 증거 보존. 운영자(service_role)만 정리 가능.
 
 -- ───────── 거래 신고(증거 보존, 운영자 전용 열람) ─────────
 -- 신고 시점 대화 스냅샷을 서버에 보존(매물·채팅이 삭제돼도 증거 유지, 적법 절차 제출 대비).

@@ -10,6 +10,10 @@ import Foundation
 
 struct MarketChatSheet: View {
     let item: MarketItem
+    /// nil = 내가 구매자(내 식별자를 스레드 buyer로). 값이 있으면 판매자가 특정 구매자 스레드를 보는 것.
+    var buyer: String? = nil
+    /// 판매자 화면에서 헤더에 보여줄 구매자 닉네임(스레드 목록에서 전달). 구매자 화면에선 무시.
+    var buyerName: String? = nil
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
@@ -23,19 +27,27 @@ struct MarketChatSheet: View {
     @State private var lastFailedText: String? = nil
     /// 서버 공유 메시지(미구성/미로드 시 nil → 로컬 폴백)
     @State private var serverMessages: [ChatMessage]? = nil
+    /// 이 스레드의 구매자 식별자. buyer가 nil이면 .task에서 내 식별자(myID)로 해석한다.
+    @State private var resolvedBuyer: String? = nil
 
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
     private var messages: [ChatMessage] { serverMessages ?? store.marketMessages(itemId: item.id) }
+    /// 헤더에 표시할 상대 — 판매자 화면이면 구매자명, 구매자 화면이면 판매자명.
+    private var counterpartName: String {
+        if buyer != nil { return buyerName ?? "구매자" }
+        return item.sellerName
+    }
     private var transcriptText: String {
-        ChatTranscript.text(itemTitle: item.title, counterpart: item.sellerName, messages: messages)
+        ChatTranscript.text(itemTitle: item.title, counterpart: counterpartName, messages: messages)
     }
 
     /// 채팅 열려 있는 동안 3초 주기 폴링(시트 닫히면 task 취소, 백그라운드면 건너뜀).
+    /// resolvedBuyer가 정해진 뒤에만 동작한다(스레드 식별 전엔 잘못된 조회 방지).
     private func pollLoop() async {
-        guard SupabaseConfig.isConfigured else { return }
+        guard SupabaseConfig.isConfigured, let rb = resolvedBuyer else { return }
         while !Task.isCancelled {
             if scenePhase == .active,
-               let msgs = await MarketBackend.fetchMessages(itemId: item.id) { serverMessages = msgs }
+               let msgs = await MarketBackend.fetchMessages(itemId: item.id, buyer: rb) { serverMessages = msgs }
             try? await Task.sleep(nanoseconds: 3_000_000_000)
         }
     }
@@ -46,10 +58,18 @@ struct MarketChatSheet: View {
         messageText = ""
         Haptics.light()
         if SupabaseConfig.isConfigured {
+            guard let rb = resolvedBuyer else {
+                // 스레드 식별 전 — 전송 보류. 입력 내용을 되돌리고 안내한다.
+                messageText = text
+                lastFailedText = text
+                sendFailed = true
+                Haptics.warning()
+                return
+            }
             Task {
-                let ok = await MarketBackend.sendMessage(itemId: item.id, body: text, authorName: nickname)
+                let ok = await MarketBackend.sendMessage(itemId: item.id, buyer: rb, body: text, authorName: nickname)
                 if ok {
-                    if let msgs = await MarketBackend.fetchMessages(itemId: item.id) { serverMessages = msgs }
+                    if let msgs = await MarketBackend.fetchMessages(itemId: item.id, buyer: rb) { serverMessages = msgs }
                 } else {
                     // 전송 실패 — 입력한 내용을 되돌려 다시 시도할 수 있게 한다.
                     // messageText 복원이 .onChange를 트리거하므로, 복원값을 lastFailedText로 기억해
@@ -151,7 +171,17 @@ struct MarketChatSheet: View {
             TradeReportSheet(item: item, transcript: messages).environmentObject(store)
                 .presentationDetents([.medium, .large])
         }
-        .task(id: item.id) { await pollLoop() }
+        .task(id: item.id) {
+            // 스레드 식별자 확정 — 판매자 화면은 전달된 buyer, 구매자 화면은 내 식별자.
+            if resolvedBuyer == nil {
+                if let b = buyer {
+                    resolvedBuyer = b
+                } else if SupabaseConfig.isConfigured {
+                    resolvedBuyer = await MarketBackend.myID()
+                }
+            }
+            await pollLoop()
+        }
     }
 
     private var chatHeader: some View {
@@ -165,10 +195,11 @@ struct MarketChatSheet: View {
 
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.sellerName)
+                    Text(counterpartName)
                         .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(AppColors.ink)
-                    Text(item.sellerTier.rawValue)
+                    // 판매자 화면: '구매자 문의' / 구매자 화면: 판매자 티어
+                    Text(buyer != nil ? "구매자 문의" : item.sellerTier.rawValue)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppColors.ink3)
                 }

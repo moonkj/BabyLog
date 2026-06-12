@@ -11,7 +11,7 @@
 6. **APNs 410 정리** — 만료 토큰(BadDeviceToken) 응답 시 crew_push_token 행 삭제(테이블 무한 증가 방지).
 
 ## B. 제품 결정/대규모 작업 필요
-7. **마켓 1:1 채팅이 실제로는 공개 방** — `market_chat_message`가 `item_id`로만 키잉되고 `select using(true)` → 한 매물의 여러 구매자가 서로 메시지를 봄, 익명이 아무 채팅이나 열람 가능. **개인정보 이슈.** 올바른 모델: `(item_id, buyer)` 스레드 키 + 참가자(판매자/해당 구매자)만 select. 판매자용 구매자별 스레드 목록 UI 필요 → 로그인/신원 의존, 스키마+클라 재설계. **출시 전 필수.**
+7. ✅ **(해결, 2026-06-13)** 마켓 1:1 채팅 공개방 문제 — `(item_id, buyer)` 스레드 + 참가자 전용 RLS(해당 구매자/그 매물 판매자만)로 재설계 완료. 판매자 문의 스레드 목록(MarketThreadListSheet) UI 추가. 메시지 사용자 삭제 불가(증거 보존), 운영자 service_role 전체 열람(→ `docs/OPERATOR_LEGAL.md`). **⚠️ `schema_market.sql` 재실행 필요**(buyer 컬럼+새 RLS) — 미배포 시 라이브 마켓 채팅 깨짐.
 8. **BackupService 메모리** — 전체 사진/영상을 메인스레드에서 RAM으로 로드 후 plist 인코딩 → 사진 많은 사용자(수 GB)에서 워치독 킬. 스트리밍 zip(파일 복사 후 압축)으로 전환 필요.
 9. **App Group 미활성** — 위젯↔앱 데이터 공유 entitlement 주석 처리(`project.yml`) + 그룹ID가 레거시 `group.com.babylog.app`. 유료 계정에서 켜고 그룹ID 확정 필요(켜기 전엔 위젯이 정직한 빈 상태 — 이미 처리됨).
 10. **Dynamic Type 전면 미지원** — `AppFont`가 모두 고정 size. 접근성 원칙상 text style/relativeTo 마이그레이션 필요(점진).

@@ -261,29 +261,36 @@ enum MarketBackend {
         return resized.jpegData(compressionQuality: quality)
     }
 
-    // MARK: - 1:1 거래 채팅(매물별 공유)
+    // MARK: - 1:1 거래 채팅 (스레드 = item_id + buyer, 참가자 전용)
 
     private struct ChatMessageDTO: Decodable {
         let id: String
+        let buyer: String?
         let device_id: String?
+        let author_name: String?
         let body: String?
         let created_at: String?
     }
 
-    /// 매물 채팅 메시지 시간순 조회. 미구성/실패 시 nil(→ 로컬 폴백).
-    static func fetchMessages(itemId: String) async -> [ChatMessage]? {
+    /// 내 식별자(스레드 buyer 기본값) — 로그인 시 auth.uid, 아니면 기기ID.
+    static func myID() async -> String { await SupabaseConfig.ownerID() }
+
+    /// 1:1 스레드 메시지 시간순 조회(item_id + buyer). 참가자(구매자/판매자)만 RLS 허용.
+    static func fetchMessages(itemId: String, buyer: String) async -> [ChatMessage]? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
-              let i = itemId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
-        let select = "id,device_id,body,created_at"
-        guard let url = URL(string: "\(base)/rest/v1/market_chat_message?item_id=eq.\(i)&select=\(select)&order=created_at.asc&limit=300") else { return nil }
+              let i = itemId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let b = buyer.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let select = "id,buyer,device_id,author_name,body,created_at"
+        guard let url = URL(string: "\(base)/rest/v1/market_chat_message?item_id=eq.\(i)&buyer=eq.\(b)&select=\(select)&order=created_at.asc&limit=300") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 익명 참가자 RLS 매칭
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse else { return nil }
         guard (200...299).contains(http.statusCode) else {
             #if DEBUG
-            print("[MarketBackend] fetchMessages HTTP \(http.statusCode)")  // RLS 회귀 가시화
+            print("[MarketBackend] fetchMessages HTTP \(http.statusCode)")
             #endif
             return nil
         }
@@ -301,23 +308,53 @@ enum MarketBackend {
         }
     }
 
-    /// 매물 채팅 전송. 성공 true.
+    /// 1:1 스레드 전송. buyer = 그 스레드의 구매자 식별. 성공 true.
     @discardableResult
-    static func sendMessage(itemId: String, body: String, authorName: String) async -> Bool {
+    static func sendMessage(itemId: String, buyer: String, body: String, authorName: String) async -> Bool {
         let t = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               !t.isEmpty, let url = URL(string: "\(base)/rest/v1/market_chat_message") else { return false }
         var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 익명 참가자 RLS 매칭
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "item_id": itemId, "device_id": await SupabaseConfig.ownerID(),
+            "item_id": itemId, "buyer": buyer, "device_id": await SupabaseConfig.ownerID(),
             "author_name": String(authorName.prefix(40)), "body": String(t.prefix(2000)),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
         return true
+    }
+
+    /// 판매자용 — 내 매물에 들어온 문의 스레드 목록(구매자별 최신 메시지). RLS로 판매자만 전체 조회 가능.
+    struct ChatThread: Identifiable { let id: String; let buyer: String; let buyerName: String; let lastText: String; let lastDate: Date }
+    static func fetchThreads(itemId: String) async -> [ChatThread]? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let i = itemId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let select = "id,buyer,device_id,author_name,body,created_at"
+        guard let url = URL(string: "\(base)/rest/v1/market_chat_message?item_id=eq.\(i)&select=\(select)&order=created_at.asc&limit=500") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dtos = try? JSONDecoder().decode([ChatMessageDTO].self, from: data) else { return nil }
+        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoPlain = ISO8601DateFormatter()
+        // 구매자별로 묶어 최신 메시지만(시간순이라 마지막이 최신). 구매자 본인이 보낸 닉네임 우선.
+        var byBuyer: [String: ChatThread] = [:]
+        for d in dtos {
+            guard let buyer = d.buyer, !buyer.isEmpty else { continue }
+            let date = d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date()
+            // 구매자가 보낸 메시지의 닉네임을 스레드 이름으로(없으면 기존 유지/이웃)
+            let buyerName = (d.device_id == buyer ? d.author_name : byBuyer[buyer]?.buyerName) ?? byBuyer[buyer]?.buyerName ?? "이웃"
+            byBuyer[buyer] = ChatThread(id: buyer, buyer: buyer, buyerName: buyerName,
+                                        lastText: d.body ?? "", lastDate: date)
+        }
+        return byBuyer.values.sorted { $0.lastDate > $1.lastDate }
     }
 }

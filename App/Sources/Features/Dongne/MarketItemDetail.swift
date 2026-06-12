@@ -12,7 +12,8 @@ struct MarketItemDetail: View {
     let item: MarketItem
 
     @EnvironmentObject private var store: AppStore
-    @State private var showChatSheet = false
+    @State private var showChatSheet = false   // 구매자: 판매자와 1:1 대화
+    @State private var showThreads = false      // 판매자: 들어온 문의 스레드 목록
     @State private var showBuySheet = false
     @State private var statusBusy = false       // 상태 변경 중복 탭 방지(서버 정합)
     @State private var deleteBusy = false        // 삭제 중복 탭 방지
@@ -121,6 +122,13 @@ struct MarketItemDetail: View {
         .navigationBarBackButtonHidden(false)
         .toolbar {
             if liveItem.mine {
+                // 판매자 전용 — 들어온 문의(구매자별 1:1 스레드) 바로가기
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showThreads = true } label: {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                    }
+                    .accessibilityLabel("들어온 문의 보기")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         // 현재 상태에 체크 표시 + 같은 상태/변경 중엔 비활성(currentStatus 경유)
@@ -138,7 +146,14 @@ struct MarketItemDetail: View {
             }
         }
         .sheet(isPresented: $showChatSheet) {
-            MarketChatSheet(item: displayItem)
+            // 구매자 화면 — 내 식별자를 스레드 buyer로 해석(buyer: nil).
+            MarketChatSheet(item: displayItem, buyer: nil)
+                .environmentObject(store)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showThreads) {
+            // 판매자 화면 — 내 매물에 들어온 구매자별 1:1 문의 목록.
+            MarketThreadListSheet(item: displayItem)
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
@@ -225,7 +240,7 @@ struct MarketItemDetail: View {
         distanceText: "210m",
         favoriteCount: 34,
         photoSeed: 5
-    ))
+    ), buyer: nil)
 }
 
 #Preview("판매 플로우") {
