@@ -49,7 +49,14 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
             // 단일 호출이라 빠르고, '집앞'이 항상 최상단에 온다.
             // (행정구역/probe 방식은 numOfRows=1 probe가 '가장 가까운 1곳'을 보장하지 못해
             //  엉뚱한 구를 골라 집앞이 누락되는 문제가 있어 반경 방식으로 통일.)
-            var results = try await radiusHospitals(key: key, coord: coordinate)
+            var results: [HospitalInfo]
+            do {
+                results = try await radiusHospitals(key: key, coord: coordinate)
+            } catch {
+                // data.go.kr 일시 혼잡(504 등) — 0.7초 후 1회 재시도 후에야 Mock 폴백.
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                results = try await radiusHospitals(key: key, coord: coordinate)
+            }
             if openNow { results = results.filter { $0.isOpenNow } }
             results.sort { $0.distanceM < $1.distanceM }   // 좌표 기반 거리순(가까운 곳 먼저)
             return results
