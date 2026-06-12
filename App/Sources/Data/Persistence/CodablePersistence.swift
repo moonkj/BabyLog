@@ -100,6 +100,8 @@ struct PersistableState: Codable, Equatable {
     var crewPostSeeded: Bool
     /// 거래 신고 + 증거 보존 (로컬, 추후 서버 업로드)
     var tradeReports: [TradeReport]
+    /// 현재 선택된 아이 — 다자녀 가정이 매 실행 첫 아이로 리셋되지 않도록 영속.
+    var selectedChildId: UUID?
 
     init(
         pregnancies: [Pregnancy] = [],
@@ -126,7 +128,8 @@ struct PersistableState: Codable, Equatable {
         crewPostComments: [String: [String]] = [:],
         crewChats: [String: [ChatMessage]] = [:],
         crewPostSeeded: Bool = false,
-        tradeReports: [TradeReport] = []
+        tradeReports: [TradeReport] = [],
+        selectedChildId: UUID? = nil
     ) {
         self.pregnancies = pregnancies
         self.children = children
@@ -153,6 +156,7 @@ struct PersistableState: Codable, Equatable {
         self.crewChats = crewChats
         self.crewPostSeeded = crewPostSeeded
         self.tradeReports = tradeReports
+        self.selectedChildId = selectedChildId
     }
 
     // MARK: - Codable (하위 호환 디코딩)
@@ -166,7 +170,7 @@ struct PersistableState: Codable, Equatable {
         case joinedCrewGroupIds, likedCrewPostIds
         case vaccineHospitals, checkupDoneKeys
         case crewPosts, crewPostComments, crewChats, crewPostSeeded
-        case tradeReports
+        case tradeReports, selectedChildId
     }
 
     init(from decoder: Decoder) throws {
@@ -196,6 +200,7 @@ struct PersistableState: Codable, Equatable {
         crewChats          = try container.decodeIfPresent([String: [ChatMessage]].self, forKey: .crewChats) ?? [:]
         crewPostSeeded     = try container.decodeIfPresent(Bool.self, forKey: .crewPostSeeded) ?? false
         tradeReports       = try container.decodeIfPresent([TradeReport].self, forKey: .tradeReports) ?? []
+        selectedChildId    = try container.decodeIfPresent(UUID.self, forKey: .selectedChildId)
     }
 }
 

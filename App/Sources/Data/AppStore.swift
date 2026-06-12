@@ -68,8 +68,11 @@ final class AppStore: ObservableObject {
     var currentEarnedBadgeIds: Set<String> {
         let recordCount = diaryEntries.count + growthRecords.count
         let streak = ProfileStreak.currentStreak(diaryDates: diaryEntries.map(\.date))
+        let tradeCount = marketItems.filter { $0.mine && $0.status == .sold }.count
         var s = BadgeEngine.earnedBadges(recordCount: recordCount, consecutiveDays: streak,
-                                         tradeCount: 0, crewMeetings: 0, postLikes: 0)
+                                         tradeCount: tradeCount,
+                                         crewMeetings: joinedCrewIds.count,
+                                         postLikes: likedCrewPostIds.count)
         let now = Date()
         if !children.isEmpty { s.insert("first_child") }
         if children.count >= 2 { s.insert("multi_child") }
@@ -172,6 +175,8 @@ final class AppStore: ObservableObject {
                     self.crewChats          = saved.crewChats
                     self.crewPostSeeded     = saved.crewPostSeeded
                     self.tradeReports       = saved.tradeReports
+                    // 저장된 선택 아이가 아직 있으면 복원(다자녀 선택 유지)
+                    self.selectedChildId    = saved.selectedChildId.flatMap { id in saved.children.contains(where: { $0.id == id }) ? id : nil }
                 }
             } catch {
                 // 손상 파일 보존(복구용) + 자동저장 차단
@@ -452,7 +457,8 @@ final class AppStore: ObservableObject {
             crewPostComments: crewPostComments,
             crewChats: crewChats,
             crewPostSeeded: crewPostSeeded,
-            tradeReports: tradeReports
+            tradeReports: tradeReports,
+            selectedChildId: selectedChildId
         )
     }
 
@@ -483,6 +489,8 @@ final class AppStore: ObservableObject {
         crewChats          = state.crewChats
         crewPostSeeded     = state.crewPostSeeded
         tradeReports       = state.tradeReports
+        // 저장된 선택 아이가 아직 존재하면 복원, 아니면 첫 아이로 폴백.
+        selectedChildId    = state.selectedChildId.flatMap { id in children.contains(where: { $0.id == id }) ? id : nil }
         seedMarketIfNeeded()
         seedCrewIfNeeded()
         seedCrewPostsIfNeeded()
@@ -574,7 +582,9 @@ final class AppStore: ObservableObject {
     }
 
     /// 임신 온보딩 — active 임신 생성·추가.
+    /// 이미 활성 임신이 있으면 중복 생성하지 않는다(둘째 active의 데이터가 보이지 않게 되는 문제 방지).
     func startPregnancy(lmp: Date?, edd: Date?, nickname: String?) {
+        guard !pregnancies.contains(where: { $0.status == .active }) else { return }
         let preg = Pregnancy(id: UUID(), lmpDate: lmp, eddDate: edd, fetusCount: 1,
                              nickname: nickname?.trimmingCharacters(in: .whitespacesAndNewlines),
                              clinic: nil, status: .active)

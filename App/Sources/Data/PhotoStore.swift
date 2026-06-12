@@ -85,13 +85,22 @@ enum PhotoStore {
     }
 
     /// 백업에서 사진 파일들을 복원(이미 있으면 유지, 없으면 기록).
+    /// 보안: 조작된 백업의 경로 탈출(`../`·하위경로) 방지 — 안전한 파일명만 photos 디렉토리에 기록.
     static func restorePhotos(_ files: [String: Data]) {
-        for (name, data) in files {
+        for (name, data) in files where isSafeFilename(name) {
             let url = directory.appendingPathComponent(name)
             if !FileManager.default.fileExists(atPath: url.path) {
                 try? data.write(to: url, options: .atomic)
             }
         }
+    }
+
+    /// 단순 파일명만 허용(경로 구분자·상위경로 토큰 차단). 백업 복원 시 디렉토리 밖 쓰기 방지.
+    private static func isSafeFilename(_ name: String) -> Bool {
+        guard !name.isEmpty, name.count <= 255 else { return false }
+        if name.contains("/") || name.contains("\\") || name.contains("..") { return false }
+        if name.hasPrefix(".") { return false }
+        return name == (name as NSString).lastPathComponent
     }
 
     private static func downscaled(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
