@@ -923,9 +923,8 @@ private struct PlaceResultCard: View {
                         } label: {
                             ZStack {
                                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                    .fill(AppColors.primary).frame(width: 44, height: 44)
-                                Image(systemName: "phone.fill")
-                                    .font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
+                                    .fill(MotionIconPalette.green).frame(width: 44, height: 44)
+                                PhoneMotionIcon(color: .white, size: 22)
                             }.blShadow(.chip)
                         }
                         .buttonStyle(LiquidPressStyle(scale: 0.94))
@@ -937,9 +936,8 @@ private struct PlaceResultCard: View {
                     } label: {
                         ZStack {
                             RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                .fill(AppColors.surface2).frame(width: 44, height: 44)
-                            Image(systemName: "map.fill")
-                                .font(.system(size: 17, weight: .semibold)).foregroundStyle(AppColors.ink2)
+                                .fill(MotionIconPalette.greenSoft).frame(width: 44, height: 44)
+                            MapPinMotionIcon(color: MotionIconPalette.green, size: 22)
                         }.blShadow(.chip)
                     }
                     .buttonStyle(LiquidPressStyle(scale: 0.94))
@@ -1046,11 +1044,9 @@ private struct HospitalCard: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                    .fill(AppColors.primary)
+                    .fill(MotionIconPalette.green)
                     .frame(width: 44, height: 44)
-                Image(systemName: "phone.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.white)
+                PhoneMotionIcon(color: .white, size: 22)
             }
             .blShadow(.chip)
         }
@@ -1069,11 +1065,9 @@ private struct HospitalCard: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                    .fill(AppColors.surface2)
+                    .fill(MotionIconPalette.greenSoft)
                     .frame(width: 44, height: 44)
-                Image(systemName: "map.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(AppColors.ink2)
+                MapPinMotionIcon(color: MotionIconPalette.green, size: 22)
             }
             .blShadow(.chip)
         }
@@ -1087,11 +1081,9 @@ private struct HospitalCard: View {
         ShareLink(item: "\(hospital.name) \(hospital.address)") {
             ZStack {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                    .fill(AppColors.surface2)
+                    .fill(MotionIconPalette.greenSoft)
                     .frame(width: 44, height: 44)
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(AppColors.ink2)
+                ShareMotionIcon(color: MotionIconPalette.green, size: 22)
             }
             .blShadow(.chip)
         }

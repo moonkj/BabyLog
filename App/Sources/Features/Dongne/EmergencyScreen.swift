@@ -316,8 +316,7 @@ private struct EmergencyPlaceCard: View {
                     }
                 ) {
                     HStack(spacing: 10) {
-                        Image(systemName: "phone.fill")
-                            .font(.system(size: 22, weight: .bold))
+                        PhoneMotionIcon(color: .white, size: 24)
                         Text("전화하기")
                             .font(.system(size: 19, weight: .heavy))
                     }
@@ -336,11 +335,9 @@ private struct EmergencyPlaceCard: View {
                 } label: {
                     ZStack {
                         RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                            .fill(AppColors.surface2)
+                            .fill(MotionIconPalette.greenSoft)
                             .frame(width: 64, height: 64)
-                        Image(systemName: "map.fill")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(AppColors.ink2)
+                        MapPinMotionIcon(color: MotionIconPalette.green, size: 26)
                     }
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.93))

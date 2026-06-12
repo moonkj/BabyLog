@@ -999,8 +999,8 @@ struct DongneTab: View {
                             Text("동네").font(.system(size: 28, weight: .heavy)).tracking(-0.4).foregroundStyle(AppColors.ink)
                             // 현재 행정동(동/읍/면/리) — 역지오코딩 결과
                             if let loc = location.localityName {
-                                HStack(spacing: 2) {
-                                    Text("📍").font(.system(size: 12))
+                                HStack(spacing: 4) {
+                                    LocationPinIcon(color: MotionIconPalette.green, size: 17)
                                     Text(loc)
                                         .font(.system(size: 13.5, weight: .bold))
                                         .foregroundStyle(AppColors.ink2)
