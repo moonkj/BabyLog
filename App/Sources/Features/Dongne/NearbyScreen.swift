@@ -47,8 +47,10 @@ enum PlaceCategory: String, CaseIterable {
 
     var filterOptions: [String] {
         switch self {
-        case .hospital:   return ["현재 영업중", "야간진료", "공휴일진료"]
-        case .pharmacy:   return ["현재 영업중", "24시간", "야간약국"]
+        // 소아과·약국: HIRA 기본정보엔 영업시간이 없어 야간/공휴일 필터를 정직하게 지킬 수 없음 →
+        // 칩 미노출(거리순 전체). 야간/공휴일/응급은 응급의료 API 연동 시 응급 탭에서 제공.
+        case .hospital:   return []
+        case .pharmacy:   return []
         case .kidsCafe:   return ["0-2세", "3-5세", "6세+"]
         case .playground: return ["실내", "실외"]
         }
@@ -411,7 +413,11 @@ struct NearbyScreen: View {
 
     // MARK: Filter Chips
 
+    @ViewBuilder
     private var filterChips: some View {
+        if selectedCategory.filterOptions.isEmpty {
+            EmptyView()
+        } else {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s2) {
                 Image(systemName: "line.3.horizontal.decrease")
@@ -437,14 +443,13 @@ struct NearbyScreen: View {
             .padding(.horizontal, Spacing.s5)
         }
         .padding(.bottom, Spacing.s4)
+        }
     }
 
     // MARK: Map View (iOS 17 Map { })
 
     @ViewBuilder
     private var mapView: some View {
-        // ⚠️ 합성 좌표 주의: HospitalInfo에 좌표 필드 없어 인덱스 기반 오프셋 사용.
-        //    카카오 로컬 API x/y 연동 후 syntheticCoordinate() 제거하고 실제 좌표로 교체 필요.
         let hospitals: [HospitalInfo] = {
             if case .loaded(let list) = hospitalState { return list }
             return []
@@ -454,10 +459,14 @@ struct NearbyScreen: View {
             // 사용자 현재 위치 표시
             UserAnnotation()
 
-            // 병원 마커 — 합성 좌표 배치
-            // TODO: 카카오 x/y 연동 후 실 좌표 대체
+            // 마커 — HIRA 실좌표(좌표 없으면 합성으로 폴백)
             ForEach(Array(hospitals.enumerated()), id: \.element.id) { index, hospital in
-                let coord = syntheticCoordinate(for: index, center: Self.centerCoord)
+                let coord: CLLocationCoordinate2D = {
+                    if let la = hospital.latitude, let lo = hospital.longitude {
+                        return CLLocationCoordinate2D(latitude: la, longitude: lo)
+                    }
+                    return syntheticCoordinate(for: index, center: searchCoord)
+                }()
                 Marker(hospital.name, systemImage: "cross.case.fill", coordinate: coord)
                     .tint(hospital.isOpenNow ? AppColors.primary : AppColors.ink3)
             }
