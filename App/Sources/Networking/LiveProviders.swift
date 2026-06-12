@@ -31,47 +31,84 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         self.fallback = fallback
     }
 
+    private static let basisEndpoint = "https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList"
+
     func hospitals(near coordinate: Coordinate?, openNow: Bool) async throws -> [HospitalInfo] {
         guard let key = APIConfig.key(APIConfig.hiraKeyName) else {
-            // [B4 정책] 키 미설정 → Mock 폴백
             return try await fallback.hospitals(near: coordinate, openNow: openNow)
         }
-
-        // 건강보험심사평가원 요양기관 현황 API
-        // 엔드포인트 예시: https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList
-        guard var components = URLComponents(string: "https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList") else {
-            throw APIError.invalidURL
-        }
-
-        let lat = coordinate?.lat ?? 37.5665
-        let lng = coordinate?.lng ?? 126.9780
-
-        components.queryItems = [
-            URLQueryItem(name: "serviceKey", value: key),
-            URLQueryItem(name: "pageNo", value: "1"),
-            // HIRA가 거리순 정렬을 안 주므로 충분히 받아 클라에서 거리정렬(가까운 곳 누락 방지)
-            URLQueryItem(name: "numOfRows", value: "100"),
-            URLQueryItem(name: "xPos", value: String(lng)),
-            URLQueryItem(name: "yPos", value: String(lat)),
-            URLQueryItem(name: "radius", value: "5000"),  // 반경 5km
-            URLQueryItem(name: "dgsbjtCd", value: "11"),   // 소아청소년과 진료과목코드(49=치과 오류 수정)
-            URLQueryItem(name: "_type", value: "json"),
-        ]
-
-        guard let url = components.url else {
-            return try await fallback.hospitals(near: coordinate, openNow: openNow)
-        }
-
-        // 네트워크·파싱 실패(키 미활성 403 등) 시 샘플로 graceful 폴백 — 화면 안 깨짐
         do {
-            let response = try await client.get(url, as: HIRAHospitalResponse.self)
-            var results = try HospitalResponseParser.parse(response, near: coordinate)
+            var results: [HospitalInfo]
+            // 좌표가 있으면: 가까운 1곳으로 시도코드 파악 → 해당 시도(특별/광역시·도) 전체 소아과 조회
+            if let coord = coordinate, let sidoCd = try await regionSidoCode(key: key, coord: coord) {
+                results = try await regionHospitals(key: key, sidoCd: sidoCd, near: coord)
+            } else {
+                // 좌표/지역 미확보 → 반경 폴백
+                results = try await radiusHospitals(key: key, coord: coordinate)
+            }
             if openNow { results = results.filter { $0.isOpenNow } }
             results.sort { $0.distanceM < $1.distanceM }   // 좌표 기반 거리순(가까운 곳 먼저)
             return results
         } catch {
             return try await fallback.hospitals(near: coordinate, openNow: openNow)
         }
+    }
+
+    /// 사용자 좌표에서 가장 가까운 소아과 1곳의 시도코드.
+    private func regionSidoCode(key: String, coord: Coordinate) async throws -> String? {
+        var c = URLComponents(string: Self.basisEndpoint)!
+        c.queryItems = [
+            .init(name: "serviceKey", value: key),
+            .init(name: "pageNo", value: "1"),
+            .init(name: "numOfRows", value: "1"),
+            .init(name: "xPos", value: String(coord.lng)),
+            .init(name: "yPos", value: String(coord.lat)),
+            .init(name: "radius", value: "20000"),   // 가까운 1곳만 필요(시골 대비 20km)
+            .init(name: "dgsbjtCd", value: "11"),
+            .init(name: "_type", value: "json"),
+        ]
+        guard let url = c.url else { return nil }
+        let resp = try await client.get(url, as: HIRAHospitalResponse.self)
+        return resp.response?.body?.items?.item?.first?.sidoCd
+    }
+
+    /// 시도(행정구역) 전체 소아과 — 페이지네이션으로 누락 없이 수집, Haversine 거리 산출.
+    private func regionHospitals(key: String, sidoCd: String, near coord: Coordinate) async throws -> [HospitalInfo] {
+        var all: [HospitalInfo] = []
+        let pageSize = 500
+        for page in 1...10 {   // 최대 5천건 — 소아과 규모상 충분
+            var c = URLComponents(string: Self.basisEndpoint)!
+            c.queryItems = [
+                .init(name: "serviceKey", value: key),
+                .init(name: "pageNo", value: String(page)),
+                .init(name: "numOfRows", value: String(pageSize)),
+                .init(name: "sidoCd", value: sidoCd),
+                .init(name: "dgsbjtCd", value: "11"),
+                .init(name: "_type", value: "json"),
+            ]
+            guard let url = c.url else { break }
+            let resp = try await client.get(url, as: HIRAHospitalResponse.self)
+            let count = resp.response?.body?.items?.item?.count ?? 0
+            all += try HospitalResponseParser.parse(resp, near: coord)
+            if count < pageSize { break }   // 마지막 페이지
+        }
+        return all
+    }
+
+    /// 좌표 기반 반경 폴백(지역코드 미확보 시).
+    private func radiusHospitals(key: String, coord: Coordinate?) async throws -> [HospitalInfo] {
+        let lat = coord?.lat ?? 37.5665, lng = coord?.lng ?? 126.9780
+        var c = URLComponents(string: Self.basisEndpoint)!
+        c.queryItems = [
+            .init(name: "serviceKey", value: key), .init(name: "pageNo", value: "1"),
+            .init(name: "numOfRows", value: "100"),
+            .init(name: "xPos", value: String(lng)), .init(name: "yPos", value: String(lat)),
+            .init(name: "radius", value: "5000"), .init(name: "dgsbjtCd", value: "11"),
+            .init(name: "_type", value: "json"),
+        ]
+        guard let url = c.url else { return [] }
+        let resp = try await client.get(url, as: HIRAHospitalResponse.self)
+        return try HospitalResponseParser.parse(resp, near: coord)
     }
 }
 
@@ -204,13 +241,14 @@ struct HIRAHospitalItem: Decodable {
     let telno: String?      // 전화번호
     let dgsbjtCdNm: String? // 진료과목명
     let clCdNm: String?     // 종별 코드명 (의원/병원 등)
-    // ⚠️ HIRA는 distance/XPos/YPos를 레코드마다 문자열 또는 숫자로 섞어 보냄 → 둘 다 허용
+    // ⚠️ HIRA는 distance/XPos/YPos/코드를 레코드마다 문자열 또는 숫자로 섞어 보냄 → 둘 다 허용
     let distanceMeters: Double?  // 거리(미터)
     let xpos: Double?            // 경도
     let ypos: Double?            // 위도
+    let sidoCd: String?          // 시도코드(행정구역 단위 조회용)
 
     enum CodingKeys: String, CodingKey {
-        case ykiho, yadmNm, addr, telno, dgsbjtCdNm, clCdNm, distance, XPos, YPos
+        case ykiho, yadmNm, addr, telno, dgsbjtCdNm, clCdNm, distance, XPos, YPos, sidoCd
     }
 
     init(from decoder: Decoder) throws {
@@ -224,12 +262,20 @@ struct HIRAHospitalItem: Decodable {
         distanceMeters = HIRAHospitalItem.flexDouble(c, .distance)
         xpos = HIRAHospitalItem.flexDouble(c, .XPos)
         ypos = HIRAHospitalItem.flexDouble(c, .YPos)
+        sidoCd = HIRAHospitalItem.flexString(c, .sidoCd)
     }
 
     /// 문자열·숫자 어느 쪽이든 Double로 안전 변환.
     private static func flexDouble(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Double? {
         if let d = try? c.decodeIfPresent(Double.self, forKey: key) { return d }
         if let s = try? c.decodeIfPresent(String.self, forKey: key) { return Double(s) }
+        return nil
+    }
+
+    /// 문자열·정수 어느 쪽이든 String으로 안전 변환(코드값).
+    private static func flexString(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> String? {
+        if let s = try? c.decodeIfPresent(String.self, forKey: key) { return s }
+        if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return String(i) }
         return nil
     }
 }
