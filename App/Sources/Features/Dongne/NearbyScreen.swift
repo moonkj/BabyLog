@@ -242,6 +242,9 @@ struct NearbyScreen: View {
     @State private var places: [Place] = []
     @State private var placesLoading = false
 
+    // 선택된 카드 id — 그 카드의 아이콘만 연속 애니메이션(한 번에 1개라 렉 없음).
+    @State private var selectedNearbyID: String? = nil
+
 
     // 지도 카메라 — 망원동 중심 고정
     @State private var cameraPosition: MapCameraPosition = .region(
@@ -746,7 +749,12 @@ struct NearbyScreen: View {
                 }
                 resultCountRow(open: openCount)
                 ForEach(hospitals) { hospital in
-                    HospitalCard(hospital: hospital, category: selectedCategory)
+                    HospitalCard(
+                        hospital: hospital,
+                        category: selectedCategory,
+                        isSelected: selectedNearbyID == hospital.id,
+                        onTap: { selectedNearbyID = (selectedNearbyID == hospital.id) ? nil : hospital.id }
+                    )
                 }
             }
 
@@ -824,7 +832,12 @@ struct NearbyScreen: View {
                 .padding(.horizontal, Spacing.s1)
 
                 ForEach(places) { place in
-                    PlaceResultCard(place: place, category: selectedCategory)
+                    PlaceResultCard(
+                        place: place,
+                        category: selectedCategory,
+                        isSelected: selectedNearbyID == place.id,
+                        onTap: { selectedNearbyID = (selectedNearbyID == place.id) ? nil : place.id }
+                    )
                 }
 
                 Text("장소 정보: Apple 지도. 영업 여부·연령대는 방문 전 확인하세요.")
@@ -881,7 +894,8 @@ struct NearbyScreen: View {
 private struct PlaceResultCard: View {
     let place: Place
     let category: PlaceCategory
-    @State private var animTrigger = 0
+    var isSelected: Bool = false
+    var onTap: () -> Void = {}
 
     private var distanceText: String {
         place.distanceM >= 1000 ? String(format: "%.1fkm", Double(place.distanceM) / 1000) : "\(place.distanceM)m"
@@ -925,7 +939,7 @@ private struct PlaceResultCard: View {
                             ZStack {
                                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                                     .fill(MotionIconPalette.green).frame(width: 44, height: 44)
-                                PhoneMotionIcon(color: .white, size: 22, trigger: animTrigger)
+                                PhoneMotionIcon(color: .white, size: 22, animated: isSelected)
                             }.blShadow(.chip)
                         }
                         .buttonStyle(LiquidPressStyle(scale: 0.94))
@@ -938,7 +952,7 @@ private struct PlaceResultCard: View {
                         ZStack {
                             RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                                 .fill(MotionIconPalette.greenSoft).frame(width: 44, height: 44)
-                            MapPinMotionIcon(color: MotionIconPalette.green, size: 22, trigger: animTrigger)
+                            MapPinMotionIcon(color: MotionIconPalette.green, size: 22, animated: isSelected)
                         }.blShadow(.chip)
                     }
                     .buttonStyle(LiquidPressStyle(scale: 0.94))
@@ -947,7 +961,7 @@ private struct PlaceResultCard: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { animTrigger += 1 }
+        .onTapGesture { onTap() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(place.name), \(distanceText), \(category.rawValue)")
     }
@@ -957,8 +971,10 @@ private struct HospitalCard: View {
     let hospital: HospitalInfo
     /// 약국/소아과 구분 — 아이콘·톤 분기용 (데이터엔 카테고리 필드가 없어 화면 선택값 전달)
     var category: PlaceCategory = .hospital
-    /// 카드 탭 시 +1 → 전화·지도·공유 아이콘 1회 애니메이션 재생.
-    @State private var animTrigger = 0
+    /// 선택됨 — 전화·지도·공유 아이콘 연속 애니메이션.
+    var isSelected: Bool = false
+    /// 카드 탭 콜백(선택 토글).
+    var onTap: () -> Void = {}
 
     /// 1km 이상이면 km, 미만이면 m로 표기.
     static func distanceText(_ m: Int) -> String {
@@ -1024,9 +1040,9 @@ private struct HospitalCard: View {
                 actionButtons
             }
         }
-        // 카드(버튼 외 영역) 탭 → 전화·지도·공유 아이콘 1회 애니메이션
+        // 카드(버튼 외 영역) 탭 → 선택 토글(선택된 카드만 아이콘 연속 애니메이션)
         .contentShape(Rectangle())
-        .onTapGesture { animTrigger += 1 }
+        .onTapGesture { onTap() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityDescription)
     }
@@ -1054,7 +1070,7 @@ private struct HospitalCard: View {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(MotionIconPalette.green)
                     .frame(width: 44, height: 44)
-                PhoneMotionIcon(color: .white, size: 22, trigger: animTrigger)
+                PhoneMotionIcon(color: .white, size: 22, animated: isSelected)
             }
             .blShadow(.chip)
         }
@@ -1075,7 +1091,7 @@ private struct HospitalCard: View {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(MotionIconPalette.greenSoft)
                     .frame(width: 44, height: 44)
-                MapPinMotionIcon(color: MotionIconPalette.green, size: 22, trigger: animTrigger)
+                MapPinMotionIcon(color: MotionIconPalette.green, size: 22, animated: isSelected)
             }
             .blShadow(.chip)
         }
@@ -1091,7 +1107,7 @@ private struct HospitalCard: View {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(MotionIconPalette.greenSoft)
                     .frame(width: 44, height: 44)
-                ShareMotionIcon(color: MotionIconPalette.green, size: 22, trigger: animTrigger)
+                ShareMotionIcon(color: MotionIconPalette.green, size: 22, animated: isSelected)
             }
             .blShadow(.chip)
         }

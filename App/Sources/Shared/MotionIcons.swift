@@ -115,59 +115,98 @@ struct LocationPinIcon: View {
     }
 }
 
-// MARK: - 전화 (정적 + 탭 시 1회 흔들림)
-// ⚠️ 평소엔 정지(스크롤 렉 0). `trigger` 값이 바뀔 때만 phaseAnimator로 1회 재생.
+// MARK: - 전화 (정적=깔끔한 수화기 / animated=흔들림+신호물결)
+// ⚠️ animated=true(선택된 카드)일 때만 연속 재생. 평소엔 정적 → 스크롤 렉 0.
 
 struct PhoneMotionIcon: View {
     var color: Color = MotionIconPalette.green
     var size: CGFloat = 20
-    /// 값이 바뀌면 1회 흔들림 재생(병원 카드 탭).
-    var trigger: Int = 0
+    var animated: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            ArcWave()
-                .stroke(color, style: StrokeStyle(lineWidth: size * 0.085, lineCap: .round))
-                .frame(width: size * 0.5, height: size * 0.5)
-                .opacity(0.9)
-                .offset(x: size * 0.17, y: -size * 0.17)
-            ArcWave()
-                .stroke(color, style: StrokeStyle(lineWidth: size * 0.085, lineCap: .round))
-                .frame(width: size * 0.72, height: size * 0.72)
-                .opacity(0.55)
-                .offset(x: size * 0.17, y: -size * 0.17)
-            Image(systemName: "phone.fill")
-                .font(.system(size: size * 0.66, weight: .semibold))
-                .foregroundStyle(color)
-                .offset(x: -size * 0.04, y: size * 0.04)
-                .phaseAnimator([0.0, -12, 9, -6, 3, 0], trigger: trigger) { view, angle in
-                    view.rotationEffect(.degrees(angle))
-                } animation: { _ in .easeInOut(duration: 0.1) }
+        Group {
+            if animated && !reduceMotion {
+                TimelineView(.animation) { ctx in
+                    let p = loopPhase(ctx.date, period: 2.2)
+                    let angle = kf(p, [(0, 0), (0.58, 0), (0.64, -12), (0.72, 9), (0.80, -6), (0.88, 3), (0.94, 0), (1, 0)])
+                    phoneBody(angle: angle, p: p)
+                }
+            } else {
+                phoneBody(angle: 0, p: -1)
+            }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
+
+    @ViewBuilder
+    private func phoneBody(angle: Double, p: Double) -> some View {
+        ZStack {
+            if p >= 0 {
+                signal(p: p, delay: 0, r: 0.52)
+                signal(p: p, delay: 0.12, r: 0.74)
+            }
+            Image(systemName: "phone.fill")
+                .font(.system(size: size * 0.62, weight: .semibold))
+                .foregroundStyle(color)
+                .rotationEffect(.degrees(angle))
+        }
+    }
+
+    /// 우상단으로 퍼지는 신호 물결.
+    @ViewBuilder
+    private func signal(p: Double, delay: Double, r: Double) -> some View {
+        let q = ((p - delay).truncatingRemainder(dividingBy: 1) + 1).truncatingRemainder(dividingBy: 1)
+        let opacity = kf(q, [(0, 0), (0.5, 0), (0.62, 0.9), (1, 0)])
+        let scale = kf(q, [(0, 0.6), (0.5, 0.6), (1, 1.2)])
+        SignalArc()
+            .stroke(color, style: StrokeStyle(lineWidth: size * 0.08, lineCap: .round))
+            .frame(width: size * r, height: size * r)
+            .scaleEffect(scale)
+            .opacity(opacity)
+            .offset(x: size * 0.06, y: -size * 0.06)
+    }
 }
 
-/// 우상단 4분원 호(신호 물결).
-private struct ArcWave: Shape {
+/// 수화기 우상단에서 퍼지는 신호 호.
+private struct SignalArc: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        let c = CGPoint(x: rect.minX, y: rect.maxY) // 좌하단 중심 → 우상단 호
-        p.addArc(center: c, radius: rect.width,
-                 startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        p.addArc(center: c, radius: rect.width * 0.42,
+                 startAngle: .degrees(-65), endAngle: .degrees(-15), clockwise: false)
         return p
     }
 }
 
-// MARK: - 지도 (정적 + 탭 시 1회 핀 드롭)
+// MARK: - 지도 (정적=핀 / animated=핀 드롭+중심점 펄스)
 
 struct MapPinMotionIcon: View {
     var color: Color = MotionIconPalette.green
     var size: CGFloat = 20
-    var trigger: Int = 0
+    var animated: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        Group {
+            if animated && !reduceMotion {
+                TimelineView(.animation) { ctx in
+                    let p = loopPhase(ctx.date, period: 2.2)
+                    let dy = kf(p, [(0, -size * 0.22), (0.16, 0), (0.24, -size * 0.08), (0.32, 0), (0.70, 0), (1, 0)])
+                    let dot = kf(p, [(0, 1), (0.30, 1), (0.50, 0.55), (0.70, 1), (1, 1)])
+                    pinBody(dy: dy, dot: dot)
+                }
+            } else {
+                pinBody(dy: 0, dot: 1)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func pinBody(dy: CGFloat, dot: CGFloat) -> some View {
         ZStack {
             Ellipse()
                 .fill(color).opacity(0.18)
@@ -180,53 +219,71 @@ struct MapPinMotionIcon: View {
                     .fill(Color.white)
                     .frame(width: size * 0.20, height: size * 0.20)
                     .offset(y: -size * 0.085)
+                    .scaleEffect(dot)
             }
-            .phaseAnimator([0.0, -size * 0.22, 0], trigger: trigger) { view, dy in
-                view.offset(y: dy)
-            } animation: { dy in dy == 0 ? .spring(response: 0.28, dampingFraction: 0.55) : .easeOut(duration: 0.16) }
+            .offset(y: dy)
         }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
     }
 }
 
-// MARK: - 공유 (정적 + 탭 시 1회 노드 펄스)
+// MARK: - 공유 (정적=연결선+노드 / animated=선 흐름+노드 펄스)
 
 struct ShareMotionIcon: View {
     var color: Color = MotionIconPalette.green
     var size: CGFloat = 20
-    var trigger: Int = 0
+    var animated: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // viewBox 24 기준 좌표 → 단위 변환
     private func pt(_ x: Double, _ y: Double, _ s: CGFloat) -> CGPoint {
         CGPoint(x: x / 24 * s, y: y / 24 * s)
     }
 
     var body: some View {
-        let s = size
-        ZStack {
-            line(from: pt(6, 12, s), to: pt(17, 6, s))
-            line(from: pt(6, 12, s), to: pt(17, 18, s))
-            node(at: pt(6, 12, s))
-            node(at: pt(17, 6, s))
-            node(at: pt(17, 18, s))
+        Group {
+            if animated && !reduceMotion {
+                TimelineView(.animation) { ctx in
+                    let p = loopPhase(ctx.date, period: 2.4)
+                    shareBody(p: p)
+                }
+            } else {
+                shareBody(p: -1)
+            }
         }
         .frame(width: size, height: size)
-        .phaseAnimator([1.0, 1.22, 1.0], trigger: trigger) { view, scale in
-            view.scaleEffect(scale)
-        } animation: { _ in .easeInOut(duration: 0.22) }
         .accessibilityHidden(true)
     }
 
-    private func line(from a: CGPoint, to b: CGPoint) -> some View {
+    @ViewBuilder
+    private func shareBody(p: Double) -> some View {
+        let s = size
+        let draw1 = p < 0 ? 1 : 1 - kf(p, [(0, 1), (0.20, 1), (0.45, 0), (0.70, 0), (1, 1)])
+        let q2 = p < 0 ? -1.0 : ((p - 0.05).truncatingRemainder(dividingBy: 1) + 1).truncatingRemainder(dividingBy: 1)
+        let draw2 = q2 < 0 ? 1 : 1 - kf(q2, [(0, 1), (0.20, 1), (0.45, 0), (0.70, 0), (1, 1)])
+        ZStack {
+            line(from: pt(6, 12, s), to: pt(17, 6, s), trim: draw1)
+            line(from: pt(6, 12, s), to: pt(17, 18, s), trim: draw2)
+            node(at: pt(6, 12, s), p: p, delay: 0)
+            node(at: pt(17, 6, s), p: p, delay: 0.21)
+            node(at: pt(17, 18, s), p: p, delay: 0.29)
+        }
+    }
+
+    private func line(from a: CGPoint, to b: CGPoint, trim: Double) -> some View {
         Path { p in p.move(to: a); p.addLine(to: b) }
+            .trim(from: 0, to: max(0, min(1, trim)))
             .stroke(color, style: StrokeStyle(lineWidth: size * 0.085, lineCap: .round))
     }
 
-    private func node(at c: CGPoint) -> some View {
-        Circle()
+    private func node(at c: CGPoint, p: Double, delay: Double) -> some View {
+        let scale: Double = {
+            guard p >= 0 else { return 1 }
+            let q = ((p - delay).truncatingRemainder(dividingBy: 1) + 1).truncatingRemainder(dividingBy: 1)
+            return kf(q, [(0, 1), (0.30, 1), (0.45, 1.22), (0.60, 1), (1, 1)])
+        }()
+        return Circle()
             .fill(color)
             .frame(width: size * 0.25, height: size * 0.25)
+            .scaleEffect(scale)
             .position(c)
     }
 }
