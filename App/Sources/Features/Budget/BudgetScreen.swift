@@ -112,10 +112,12 @@ struct BudgetScreen: View {
         return BudgetSummary.trend(allExpenses, period)
     }
 
-    /// 연도별 탐색 범위 — 가장 오래된 지출 연도 ~ 올해.
+    /// 연도별 탐색 범위 — 과거는 데이터가 없어도 둘러볼 수 있게(빈 상태로 표시) 넉넉히 허용,
+    /// 미래로는 이동 불가. 하한은 가장 오래된 지출 연도와 (올해-10) 중 더 이른 해.
     private var currentYear: Int { Calendar.current.component(.year, from: Date()) }
     private var earliestYear: Int {
-        allExpenses.map { Calendar.current.component(.year, from: $0.date) }.min() ?? currentYear
+        let dataMin = allExpenses.map { Calendar.current.component(.year, from: $0.date) }.min() ?? currentYear
+        return min(dataMin, currentYear - 10)
     }
     private var canGoPrevYear: Bool { selectedYear > earliestYear }
     private var canGoNextYear: Bool { selectedYear < currentYear }
