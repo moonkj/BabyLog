@@ -320,6 +320,8 @@ struct PregnancyRecordScreen: View {
         let dday = dDayToBirth
         let fruit = FruitData.forWeek(week.weeks)
         let ddayLabel = dday >= 0 ? "D-\(dday)" : "D+\(-dday)"
+        // 주차 진행감 — 40주 기준 진행률 (시각 보조용, 0~1 클램프)
+        let progress = max(0, min(1, Double(week.weeks * 7 + week.days) / 280.0))
 
         return BLCard(padding: 0) {
             ZStack(alignment: .topTrailing) {
@@ -336,40 +338,70 @@ struct PregnancyRecordScreen: View {
                     .offset(x: 28, y: -28)
                     .accessibilityHidden(true)
 
-                HStack(spacing: Spacing.s5) {
-                    // 과일 원형
-                    ZStack {
-                        Circle()
-                            .fill(AppColors.surface)
-                            .frame(width: 80, height: 80)
-                            .overlay {
-                                Circle().stroke(Color.white.opacity(0.6), lineWidth: 1)
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    HStack(spacing: Spacing.s5) {
+                        // 과일 원형
+                        ZStack {
+                            Circle()
+                                .fill(AppColors.surface)
+                                .frame(width: 80, height: 80)
+                                .overlay {
+                                    Circle().stroke(Color.white.opacity(0.6), lineWidth: 1)
+                                }
+                                .blShadow(.card)
+                            Text(fruit.emoji)
+                                .font(.system(size: 40))
+                        }
+                        .accessibilityHidden(true)
+
+                        // 텍스트 정보
+                        VStack(alignment: .leading, spacing: Spacing.s2) {
+                            BLBadge(
+                                tone: .pink,
+                                text: "\(PregnancyData.trimesterLabel(week.weeks)) · \(week.weeks)주 \(week.days)일",
+                                dot: true
+                            )
+                            Text(ddayLabel)
+                                .font(AppFont.num(34, weight: .heavy))
+                                .foregroundStyle(AppColors.pregnancyPink)
+                            Text("\(fruit.name)만 해요 · 출산까지")
+                                .font(AppFont.caption)
+                                .foregroundStyle(Color(hex: 0xA8537E))
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(
+                            "\(PregnancyData.trimesterLabel(week.weeks)), \(week.weeks)주 \(week.days)일. "
+                            + "출산까지 \(ddayLabel). 태아 크기는 \(fruit.name) 정도예요."
+                        )
+
+                        Spacer(minLength: 0)
+                    }
+
+                    // 주차 진행 바 (40주 여정 시각화 — 안심 톤, 경쟁 아님)
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.55))
+                                    .frame(height: 7)
+                                Capsule()
+                                    .fill(AppColors.pregnancyPink.opacity(0.85))
+                                    .frame(width: max(8, geo.size.width * progress), height: 7)
                             }
-                            .blShadow(.card)
-                        Text(fruit.emoji)
-                            .font(.system(size: 40))
+                        }
+                        .frame(height: 7)
+
+                        HStack {
+                            Text("\(week.weeks)주")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color(hex: 0xA8537E))
+                            Spacer()
+                            Text("출산 40주")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color(hex: 0xA8537E).opacity(0.7))
+                        }
                     }
                     .accessibilityHidden(true)
-
-                    // 텍스트 정보
-                    VStack(alignment: .leading, spacing: Spacing.s2) {
-                        BLBadge(
-                            tone: .pink,
-                            text: "\(PregnancyData.trimesterLabel(week.weeks)) · \(week.weeks)주 \(week.days)일",
-                            dot: true
-                        )
-                        Text(ddayLabel)
-                            .font(AppFont.num(32, weight: .heavy))
-                            .foregroundStyle(AppColors.pregnancyPink)
-                        Text("\(fruit.name)만 해요 · 출산까지")
-                            .font(AppFont.caption)
-                            .foregroundStyle(Color(hex: 0xA8537E))
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(
-                        "\(PregnancyData.trimesterLabel(week.weeks)), \(week.weeks)주 \(week.days)일. "
-                        + "출산까지 \(ddayLabel). 태아 크기는 \(fruit.name) 정도예요."
-                    )
                 }
                 .padding(Spacing.s5)
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -223,7 +223,7 @@ private struct CrewActiveContent: View {
 
     // MARK: 같이 가요
     private var meetupSection: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
             BLSectionHead(
                 eyebrow: "주변 모임",
                 title: "같이 가요",
@@ -248,7 +248,7 @@ private struct CrewActiveContent: View {
 
     // MARK: 비슷한 또래 크루
     private var crewSection: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
             BLSectionHead(
                 eyebrow: "반경 1km",
                 title: "비슷한 또래 크루",
@@ -267,7 +267,7 @@ private struct CrewActiveContent: View {
 
     // MARK: 동네 게시판
     private var boardSection: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(alignment: .firstTextBaseline) {
                 BLSectionHead(
                     eyebrow: "동네 이야기",
@@ -301,13 +301,14 @@ private struct CrewActiveContent: View {
                             selectedPost = post
                         } label: {
                             CrewPostRow(post: post)
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, Spacing.s4)
                                 .padding(.vertical, 14)
                                 .overlay(alignment: .top) {
                                     if idx > 0 {
                                         Rectangle()
                                             .fill(AppColors.line)
                                             .frame(height: 1)
+                                            .padding(.horizontal, Spacing.s4)
                                     }
                                 }
                         }

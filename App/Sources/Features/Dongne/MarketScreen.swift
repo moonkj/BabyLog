@@ -211,28 +211,26 @@ struct MarketScreen: View {
                     .font(AppFont.title)
                     .foregroundStyle(AppColors.ink)
                 Spacer()
-                Text("월령 기반")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
+                BLBadge(tone: .grey, text: "월령 기반", systemIcon: nil, dot: false)
             }
             .padding(.horizontal, Spacing.s5)
             .padding(.top, Spacing.s3)
-            .padding(.bottom, 12)
+            .padding(.bottom, Spacing.s3)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.s3) {
                     ForEach(mkNeedSoonItems) { item in
                         MkNeedSoonCard(item: item) {
                             Haptics.selection()
-                            withAnimation(.easeOut(duration: 0.2)) { selectedCategory = item.category }
+                            withAnimation(.easeInOut(duration: 0.2)) { selectedCategory = item.category }
                         }
                     }
                 }
                 .padding(.horizontal, Spacing.s5)
-                .padding(.bottom, 4)
+                .padding(.bottom, Spacing.s1)
             }
         }
-        .padding(.bottom, 14)
+        .padding(.bottom, Spacing.s4)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("곧 필요해요 — 월령 기반 추천")
     }

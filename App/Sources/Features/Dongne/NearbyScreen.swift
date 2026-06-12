@@ -325,28 +325,52 @@ struct NearbyScreen: View {
     @ViewBuilder
     private var locationHint: some View {
         if locationProvider.denied {
-            HStack(spacing: Spacing.s2) {
+            HStack(alignment: .top, spacing: Spacing.s3) {
                 Image(systemName: "location.slash.fill")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(AppColors.gold)
-                Text("위치 권한이 꺼져 있어 기본 지역을 보여드려요. 설정에서 위치를 켜면 내 주변으로 바뀌어요.")
-                    .font(AppFont.caption)
-                    .foregroundStyle(AppColors.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                Button("설정") {
+                    .frame(width: 18)
+                    .padding(.top, 1)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("기본 지역을 보여드리고 있어요")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppColors.ink)
+                    Text("위치를 켜면 내 주변 결과로 바뀌어요.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: Spacing.s2)
+                Button {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
+                } label: {
+                    Text("설정 열기")
+                        .font(.system(size: 12.5, weight: .bold))
+                        .foregroundStyle(AppColors.primary)
+                        .padding(.horizontal, Spacing.s3)
+                        .frame(height: 32)
+                        .background(AppColors.surface, in: Capsule())
+                        .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
                 }
-                .font(.system(size: 12.5, weight: .bold))
-                .foregroundStyle(AppColors.primary)
+                .buttonStyle(LiquidPressStyle(scale: 0.96))
+                .frame(minHeight: 44)
+                .accessibilityLabel("위치 설정 열기")
+                .accessibilityHint("설정 앱에서 위치 권한을 켤 수 있어요")
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.vertical, Spacing.s3)
             .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                    .stroke(AppColors.gold.opacity(0.22), lineWidth: 1)
+            }
             .padding(.horizontal, Spacing.s5)
-            .padding(.top, Spacing.s2)
+            .padding(.top, Spacing.s1)
+            .padding(.bottom, Spacing.s3)
+            .accessibilityElement(children: .contain)
         }
     }
 
@@ -519,21 +543,30 @@ struct NearbyScreen: View {
         HStack(spacing: Spacing.s2) {
             HStack(spacing: 5) {
                 Circle()
-                    .fill(BadgeTone.mint.ink.opacity(0.85))
+                    .fill(BadgeTone.mint.ink)
                     .frame(width: 6, height: 6)
-                Text("현재 영업중 \(open)곳")
-                    .font(.system(size: 12.5, weight: .bold))
+                Text("현재 영업중 ")
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(AppColors.ink2)
+                + Text("\(open)곳")
+                    .font(.system(size: 12.5, weight: .heavy))
+                    .foregroundStyle(AppColors.ink)
             }
             Text("·")
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(AppColors.line2)
-            Text("거리순")
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(AppColors.ink3)
+            HStack(spacing: 3) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(AppColors.ink3)
+                Text("거리순")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(AppColors.ink3)
+            }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Spacing.s1)
+        .padding(.top, Spacing.s1)
         .padding(.bottom, Spacing.s1)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("현재 영업중 \(open)곳, 거리순 정렬")
@@ -546,31 +579,42 @@ struct NearbyScreen: View {
         switch hospitalState {
         case .idle, .loading:
             // 레이더 스윕 로딩 (§8.4 기능 진입 — 주변 훑기) + BLSkeleton
-            VStack(spacing: Spacing.s3) {
-                VStack(spacing: Spacing.s2) {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                VStack(spacing: Spacing.s3) {
                     RadarSweepView(size: 72, color: AppColors.primary)
-                    Text("주변을 살펴보는 중...")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(AppColors.ink3)
+                    Text("주변을 살펴보는 중…")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.ink2)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, Spacing.s3)
+                .padding(.top, Spacing.s2)
+                .padding(.bottom, Spacing.s4)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("주변을 살펴보는 중")
                 ForEach(0..<3, id: \.self) { _ in
                     BLCard(padding: Spacing.s4) {
-                        HStack(alignment: .center, spacing: Spacing.s3) {
+                        HStack(alignment: .top, spacing: Spacing.s3) {
                             BLSkeleton(width: 48, height: 48, cornerRadius: Radius.sm)
                             VStack(alignment: .leading, spacing: Spacing.s2) {
-                                BLSkeleton(height: 14, cornerRadius: Radius.xs)
-                                    .frame(maxWidth: .infinity)
-                                BLSkeleton(width: 140, height: 12, cornerRadius: Radius.xs)
-                                BLSkeleton(width: 80, height: 10, cornerRadius: Radius.xs)
+                                BLSkeleton(height: 15, cornerRadius: Radius.xs)
+                                    .frame(maxWidth: 150)
+                                BLSkeleton(height: 12, cornerRadius: Radius.xs)
+                                    .frame(maxWidth: 190)
                             }
-                            .frame(maxWidth: .infinity)
-                            BLSkeleton(width: 44, height: 44, cornerRadius: Radius.sm)
+                            Spacer(minLength: 0)
+                            VStack(spacing: Spacing.s2) {
+                                BLSkeleton(width: 44, height: 44, cornerRadius: Radius.sm)
+                                HStack(spacing: Spacing.s2) {
+                                    BLSkeleton(width: 44, height: 44, cornerRadius: Radius.sm)
+                                    BLSkeleton(width: 44, height: 44, cornerRadius: Radius.sm)
+                                }
+                            }
                         }
                     }
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("주변 결과를 불러오는 중")
 
         case .loaded(let hospitals):
             let openCount = hospitals.filter(\.isOpenNow).count
@@ -580,18 +624,18 @@ struct NearbyScreen: View {
                 }
                 resultCountRow(open: openCount)
                 ForEach(hospitals) { hospital in
-                    HospitalCard(hospital: hospital)
+                    HospitalCard(hospital: hospital, category: selectedCategory)
                 }
             }
 
         case .empty:
             BLEmptyState(
-                icon: "cross.case",
-                title: "주변에 소아과가 없어요",
-                message: "필터를 조정하거나 잠시 후 다시 확인해 보세요.",
-                actionTitle: "필터 초기화",
+                icon: selectedCategory == .pharmacy ? "pills" : "cross.case",
+                title: selectedCategory == .pharmacy ? "주변에 약국이 없어요" : "주변에 소아과가 없어요",
+                message: "잠시 후 다시 확인하거나, 위치를 바꿔 검색해 보세요.",
+                actionTitle: "다시 불러오기",
                 action: {
-                    activeFilters = ["현재 영업중"]
+                    Task { await loadHospitals() }
                 }
             )
 
@@ -647,33 +691,45 @@ struct NearbyScreen: View {
 
 private struct HospitalCard: View {
     let hospital: HospitalInfo
+    /// 약국/소아과 구분 — 아이콘·톤 분기용 (데이터엔 카테고리 필드가 없어 화면 선택값 전달)
+    var category: PlaceCategory = .hospital
 
     /// 1km 이상이면 km, 미만이면 m로 표기.
     static func distanceText(_ m: Int) -> String {
         m >= 1000 ? String(format: "%.1fkm", Double(m) / 1000) : "\(m)m"
     }
 
+    /// 약국은 알약 아이콘, 그 외(소아과)는 진료 케이스 아이콘 — 한눈에 종별 구분.
+    private var iconName: String {
+        category == .pharmacy ? "pills.fill" : "cross.case.fill"
+    }
+    /// 약국은 민트(약국 팔레트), 소아과는 코랄 톤.
+    private var iconTone: BadgeTone {
+        category == .pharmacy ? .mint : .coral
+    }
+
     var body: some View {
         BLCard(padding: Spacing.s4) {
-            HStack(alignment: .center, spacing: Spacing.s3) {
+            HStack(alignment: .top, spacing: Spacing.s3) {
                 // 카테고리 아이콘
                 ZStack {
                     RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                        .fill(BadgeTone.coral.bg)
+                        .fill(iconTone.bg)
                         .frame(width: 48, height: 48)
-                    Image(systemName: "cross.case.fill")
+                    Image(systemName: iconName)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(BadgeTone.coral.ink)
+                        .foregroundStyle(iconTone.ink)
                 }
                 .accessibilityHidden(true)
 
                 // 텍스트 정보
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.s2) {
                     // 이름 — 긴 이름은 2줄까지 표시(짤림 방지)
                     Text(hospital.name)
                         .font(.system(size: 15.5, weight: .bold))
                         .foregroundStyle(AppColors.ink)
                         .lineLimit(2)
+                        .lineSpacing(1)
                         .fixedSize(horizontal: false, vertical: true)
 
                     // 영업상태 뱃지(안 잘리게 고정) + 거리·종별 한 줄
@@ -690,6 +746,7 @@ private struct HospitalCard: View {
                             .font(AppFont.caption)
                             .foregroundStyle(AppColors.ink2)
                             .lineLimit(1)
+                            .truncationMode(.tail)
 
                         Spacer(minLength: 0)
                     }
