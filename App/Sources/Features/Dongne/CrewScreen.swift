@@ -207,8 +207,20 @@ private struct CrewActiveContent: View {
     private func loadCrew() async {
         guard SupabaseConfig.isConfigured else { return }
         if let p = await CrewBackend.fetchPosts(hood: hood) { sharedPosts = p }
-        if let m = await CrewBackend.fetchMeetups(hood: hood) { sharedMeetups = m }
-        if let g = await CrewBackend.fetchGroups(hood: hood) { sharedGroups = g }
+        // 서버 카운트는 본인을 포함 → "나 제외" 규약 유지를 위해 내가 참여/가입한 항목은 1 차감.
+        if let m = await CrewBackend.fetchMeetups(hood: hood) {
+            sharedMeetups = m.map { mt in
+                guard store.isJoinedCrew(mt.id) else { return mt }
+                var x = mt; x.joined = max(0, mt.joined - 1); return x
+            }
+        }
+        if let g = await CrewBackend.fetchGroups(hood: hood) {
+            sharedGroups = g.map { gr in
+                guard store.isJoinedGroup(gr.id) else { return gr }
+                return CrewGroup(id: gr.id, name: gr.name, memberCount: max(0, gr.memberCount - 1),
+                                 distanceText: gr.distanceText, ageRange: gr.ageRange, interestTags: gr.interestTags)
+            }
+        }
     }
 
     var body: some View {
@@ -329,7 +341,13 @@ private struct CrewActiveContent: View {
         guard SupabaseConfig.isConfigured, sharedGroups != nil else { return }
         Task {
             await CrewBackend.setGroupMembership(groupId: groupId, join: join)
-            if let g = await CrewBackend.fetchGroups(hood: hood) { sharedGroups = g }
+            if let g = await CrewBackend.fetchGroups(hood: hood) {
+                sharedGroups = g.map { gr in
+                    guard store.isJoinedGroup(gr.id) else { return gr }
+                    return CrewGroup(id: gr.id, name: gr.name, memberCount: max(0, gr.memberCount - 1),
+                                     distanceText: gr.distanceText, ageRange: gr.ageRange, interestTags: gr.interestTags)
+                }
+            }
         }
     }
 
@@ -564,8 +582,8 @@ private struct CrewGroupCard: View {
     let group: CrewGroup
     var onToggle: (Bool) -> Void = { _ in }
     private var isJoined: Bool { store.isJoinedGroup(group.id) }
-    // 서버 그룹: 멤버 수는 서버 카운트가 단일 출처(가입 시 재조회로 갱신). 중복 +1 금지.
-    private var memberCount: Int { max(group.memberCount, isJoined ? 1 : 0) }
+    // group.memberCount는 "나 제외"(서버 fetch 시 본인을 뺌) → 가입 시 +1.
+    private var memberCount: Int { group.memberCount + (isJoined ? 1 : 0) }
 
     var body: some View {
         BLCard(padding: 14, flat: true) {

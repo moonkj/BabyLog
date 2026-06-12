@@ -377,7 +377,15 @@ struct CrewMeetupDetail: View {
                     fill: isFull ? AppColors.surface3 : (isJoined ? AppColors.ink3 : AppColors.primary),
                     action: {
                         Haptics.selection()
+                        let willJoin = !isJoined
                         store.toggleJoinCrew(meetup.id)
+                        if SupabaseConfig.isConfigured {
+                            Task {
+                                _ = willJoin
+                                    ? await CrewBackend.joinMeetup(meetupId: meetup.id)
+                                    : await CrewBackend.leaveMeetup(meetupId: meetup.id)
+                            }
+                        }
                     }
                 ) {
                     HStack(spacing: 8) {

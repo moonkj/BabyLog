@@ -18,8 +18,35 @@ struct CrewChatSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var messageText = ""
     @State private var memberTyping = false
+    /// 서버 공유 메시지(미구성/미로드 시 nil → 로컬 폴백)
+    @State private var serverMessages: [ChatMessage]? = nil
 
-    private var messages: [ChatMessage] { store.crewChat(meetupId: meetup.id) }
+    private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
+    private var messages: [ChatMessage] { serverMessages ?? store.crewChat(meetupId: meetup.id) }
+
+    /// 채팅 열려 있는 동안 3초 주기 폴링(시트 닫히면 task 취소).
+    private func pollLoop() async {
+        guard SupabaseConfig.isConfigured else { return }
+        while !Task.isCancelled {
+            if let msgs = await CrewBackend.fetchMessages(meetupId: meetup.id) { serverMessages = msgs }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+        }
+    }
+
+    private func send() {
+        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        messageText = ""
+        Haptics.light()
+        if SupabaseConfig.isConfigured {
+            Task {
+                await CrewBackend.sendMessage(meetupId: meetup.id, body: text, authorName: nickname)
+                if let msgs = await CrewBackend.fetchMessages(meetupId: meetup.id) { serverMessages = msgs }
+            }
+        } else {
+            store.sendCrewChat(meetupId: meetup.id, text: text, mine: true)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -94,6 +121,7 @@ struct CrewChatSheet: View {
         }
         .background(AppColors.canvas)
         .accessibilityElement(children: .contain)
+        .task(id: meetup.id) { await pollLoop() }
     }
 
     // MARK: 헤더
@@ -187,18 +215,7 @@ struct CrewChatSheet: View {
                 .accessibilityLabel("메시지 입력")
 
             Button {
-                let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
-                store.sendCrewChat(meetupId: meetup.id, text: text, mine: true)
-                messageText = ""
-                Haptics.light()
-                // 데모: 다른 참가자 입력 중 → 자동 응답 (백엔드 연동 전)
-                withAnimation { memberTyping = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                    withAnimation { memberTyping = false }
-                    store.sendCrewChat(meetupId: meetup.id,
-                                       text: "네, 곧 봬요! 😊", mine: false)
-                }
+                send()
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 38, weight: .regular))

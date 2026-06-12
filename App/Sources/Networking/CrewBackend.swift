@@ -342,6 +342,70 @@ enum CrewBackend {
         }
     }
 
+    // MARK: - 모임 채팅(참가자 공유)
+
+    private struct CrewMessageDTO: Decodable {
+        let id: String
+        let device_id: String?
+        let body: String?
+        let created_at: String?
+    }
+
+    /// 모임 채팅 메시지 시간순 조회. 미구성/실패 시 nil(→ 로컬 폴백).
+    static func fetchMessages(meetupId: String) async -> [ChatMessage]? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let m = meetupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let select = "id,device_id,body,created_at"
+        guard let url = URL(string: "\(base)/rest/v1/crew_meetup_message?meetup_id=eq.\(m)&select=\(select)&order=created_at.asc&limit=300") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dtos = try? JSONDecoder().decode([CrewMessageDTO].self, from: data) else { return nil }
+        let me = SupabaseConfig.deviceID
+        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoPlain = ISO8601DateFormatter()
+        return dtos.map { d in
+            ChatMessage(
+                id: d.id,
+                text: d.body ?? "",
+                mine: d.device_id == me,
+                date: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date()
+            )
+        }
+    }
+
+    /// 모임 채팅 전송. 성공 true.
+    @discardableResult
+    static func sendMessage(meetupId: String, body: String, authorName: String) async -> Bool {
+        let t = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard SupabaseConfig.isConfigured, !t.isEmpty,
+              var req = request("/rest/v1/crew_meetup_message", method: "POST") else { return false }
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "meetup_id": meetupId, "device_id": SupabaseConfig.deviceID,
+            "author_name": authorName, "body": t,
+        ])
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
+    /// 모임 참가 취소(crew_meetup_join 삭제). 성공 true.
+    @discardableResult
+    static func leaveMeetup(meetupId: String) async -> Bool {
+        let dev = SupabaseConfig.deviceID
+        guard SupabaseConfig.isConfigured,
+              let d = dev.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let m = meetupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              var req = request("/rest/v1/crew_meetup_join?meetup_id=eq.\(m)&device_id=eq.\(d)", method: "DELETE") else { return false }
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
     private static func relativeTime(_ iso: String?) -> String {
         guard let iso else { return "방금" }
         let f = ISO8601DateFormatter()

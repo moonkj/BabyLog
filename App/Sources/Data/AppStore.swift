@@ -250,7 +250,8 @@ final class AppStore: ObservableObject {
 
     func isJoinedCrew(_ id: String) -> Bool { joinedCrewIds.contains(id) }
 
-    /// 표시용 참여 인원 = 기본 인원 + (내가 참여 시 +1). 내 모임은 주최자(나)가 곧 참여자.
+    /// 표시용 참여 인원 = 기본 인원(나 제외) + (내가 참여 시 +1).
+    /// 서버 모임은 fetch 시 본인을 빼서 joined가 항상 "나 제외"를 유지한다.
     func crewJoinedCount(_ meetup: CrewMeetup) -> Int {
         meetup.joined + (joinedCrewIds.contains(meetup.id) ? 1 : 0)
     }
