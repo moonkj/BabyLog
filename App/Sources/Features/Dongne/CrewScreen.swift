@@ -622,9 +622,13 @@ private struct CrewPostRow: View {
 private struct CrewColdStartContent: View {
     var onJoinWaitlist: () -> Void
     @AppStorage("crew_open_notify") private var crewNotifyRequested = false
+    @ObservedObject private var location = NearbyLocationProvider.shared
 
     private let progressPercent: Double = 0.78
     private let remainingCount: Int = 22
+
+    /// 현재 GPS 동네(없으면 일반 표현)
+    private var hood: String { location.localityName ?? "우리 동네" }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -664,7 +668,7 @@ private struct CrewColdStartContent: View {
             .padding(.bottom, 20)
             .accessibilityHidden(true)
 
-            Text("망원동, 거의 다 모였어요")
+            Text("\(hood), 거의 다 모였어요")
                 .font(.system(size: 22, weight: .heavy))
                 .foregroundStyle(AppColors.ink)
                 .multilineTextAlignment(.center)
