@@ -623,6 +623,11 @@ struct NearbyScreen: View {
 private struct HospitalCard: View {
     let hospital: HospitalInfo
 
+    /// 1km 이상이면 km, 미만이면 m로 표기.
+    static func distanceText(_ m: Int) -> String {
+        m >= 1000 ? String(format: "%.1fkm", Double(m) / 1000) : "\(m)m"
+    }
+
     var body: some View {
         BLCard(padding: Spacing.s4) {
             HStack(alignment: .center, spacing: Spacing.s3) {
@@ -656,7 +661,7 @@ private struct HospitalCard: View {
                                 .fixedSize()
                         }
 
-                        Text("\(hospital.distanceM)m · \(hospital.department)")
+                        Text("\(Self.distanceText(hospital.distanceM)) · \(hospital.department)")
                             .font(AppFont.caption)
                             .foregroundStyle(AppColors.ink2)
                             .lineLimit(1)
