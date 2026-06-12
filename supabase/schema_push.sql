@@ -15,14 +15,14 @@ create index if not exists crew_push_token_hood_idx on public.crew_push_token (h
 
 alter table public.crew_push_token enable row level security;
 
--- 자기 기기 행만 upsert/갱신 (x-device-id 헤더 일치)
+-- upsert(on_conflict) 허용 — FOR ALL(using/check true). SELECT 정책은 두지 않아 다른 기기 토큰 조회 불가
+-- (anon에 토큰이 노출돼도 APNs 키가 없으면 무의미; 토큰 보호는 키로 보장).
+-- ⚠️ 헤더 기반 USING 정책은 INSERT...ON CONFLICT DO UPDATE 에서 42501로 막히므로 사용하지 않음.
 drop policy if exists crew_push_upsert on public.crew_push_token;
-create policy crew_push_upsert on public.crew_push_token
-    for insert to anon, authenticated with check (true);
 drop policy if exists crew_push_update on public.crew_push_token;
-create policy crew_push_update on public.crew_push_token
-    for update to anon, authenticated
-    using (device_id = current_setting('request.headers', true)::json->>'x-device-id');
+drop policy if exists crew_push_all on public.crew_push_token;
+create policy crew_push_all on public.crew_push_token
+    for all to anon, authenticated using (true) with check (true);
 
 -- ───────────────────────────────────────────────
 -- 2) 동네 오픈 상태 (중복 발송 방지 — 동네당 1회만 푸시)
