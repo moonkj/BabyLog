@@ -50,6 +50,10 @@ enum APIConfig {
     /// - Parameter name: 키 이름 (예: `"KAKAO_REST_API_KEY"`)
     /// - Returns: 키 값 문자열, 없으면 `nil`
     static func key(_ name: String) -> String? {
+        // 0. 단위 테스트에서는 실제 키를 무시 → 항상 Mock 경로(결정적 테스트).
+        //    Secrets.plist가 번들에 있어도 테스트가 실네트워크를 타지 않게 한다.
+        if NSClassFromString("XCTestCase") != nil { return nil }
+
         // 1. 환경변수 우선 (CI/CD 및 테스트 환경 지원)
         let env = ProcessInfo.processInfo.environment[name]
         if let env, !env.isEmpty { return env }

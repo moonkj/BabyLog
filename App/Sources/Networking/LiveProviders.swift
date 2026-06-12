@@ -57,15 +57,19 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
             URLQueryItem(name: "_type", value: "json"),
         ]
 
-        guard let url = components.url else { throw APIError.invalidURL }
-
-        let response = try await client.get(url, as: HIRAHospitalResponse.self)
-        var results = try HospitalResponseParser.parse(response)
-
-        if openNow {
-            results = results.filter { $0.isOpenNow }
+        guard let url = components.url else {
+            return try await fallback.hospitals(near: coordinate, openNow: openNow)
         }
-        return results
+
+        // 네트워크·파싱 실패(키 미활성 403 등) 시 샘플로 graceful 폴백 — 화면 안 깨짐
+        do {
+            let response = try await client.get(url, as: HIRAHospitalResponse.self)
+            var results = try HospitalResponseParser.parse(response)
+            if openNow { results = results.filter { $0.isOpenNow } }
+            return results
+        } catch {
+            return try await fallback.hospitals(near: coordinate, openNow: openNow)
+        }
     }
 }
 
@@ -213,24 +217,22 @@ final class LivePlaceSearcher: PlaceSearching {
             URLQueryItem(name: "sort", value: "distance"),
         ]
 
-        guard let url = components.url else { throw APIError.invalidURL }
+        guard let url = components.url else {
+            return try await fallback.search(query, near: coordinate)
+        }
 
-        var request = URLRequest(url: url)
-        request.setValue("KakaoAK \(key)", forHTTPHeaderField: "Authorization")
-
-        let (data, response) = try await {
-            do { return try await client.session.data(for: request) }
-            catch { throw APIError.transport }
-        }()
-
-        if let http = response as? HTTPURLResponse,
-           let err = APIClient.mapHTTP(http.statusCode) { throw err }
-
+        // 네트워크·파싱 실패 시 샘플로 graceful 폴백
         do {
+            var request = URLRequest(url: url)
+            request.setValue("KakaoAK \(key)", forHTTPHeaderField: "Authorization")
+            let (data, response) = try await client.session.data(for: request)
+            if let http = response as? HTTPURLResponse,
+               let err = APIClient.mapHTTP(http.statusCode) { throw err }
             let decoded = try JSONDecoder().decode(KakaoPlaceResponse.self, from: data)
             return try PlaceResponseParser.parse(decoded)
-        } catch let e as APIError { throw e }
-        catch { throw APIError.decoding }
+        } catch {
+            return try await fallback.search(query, near: coordinate)
+        }
     }
 }
 
@@ -339,10 +341,17 @@ final class LiveSubsidyProvider: SubsidyProviding {
             URLQueryItem(name: "_type", value: "json"),
         ]
 
-        guard let url = components.url else { throw APIError.invalidURL }
+        guard let url = components.url else {
+            return try await fallback.subsidies(childAgeMonths: childAgeMonths)
+        }
 
-        let response = try await client.get(url, as: BokjiroSubsidyResponse.self)
-        return try SubsidyResponseParser.parse(response, childAgeMonths: childAgeMonths)
+        // 네트워크·파싱 실패 시 샘플로 graceful 폴백
+        do {
+            let response = try await client.get(url, as: BokjiroSubsidyResponse.self)
+            return try SubsidyResponseParser.parse(response, childAgeMonths: childAgeMonths)
+        } catch {
+            return try await fallback.subsidies(childAgeMonths: childAgeMonths)
+        }
     }
 }
 
@@ -492,10 +501,17 @@ final class LiveVaccineScheduleProvider: VaccineScheduleProviding {
             URLQueryItem(name: "_type", value: "json"),
         ]
 
-        guard let url = components.url else { throw APIError.invalidURL }
+        guard let url = components.url else {
+            return try await fallback.schedule(birthDate: birthDate)
+        }
 
-        let response = try await client.get(url, as: KDCAVaccineResponse.self)
-        return try VaccineResponseParser.parse(response, birthDate: birthDate)
+        // 네트워크·파싱 실패 시 샘플로 graceful 폴백
+        do {
+            let response = try await client.get(url, as: KDCAVaccineResponse.self)
+            return try VaccineResponseParser.parse(response, birthDate: birthDate)
+        } catch {
+            return try await fallback.schedule(birthDate: birthDate)
+        }
     }
 }
 
