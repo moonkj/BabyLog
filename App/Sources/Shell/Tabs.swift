@@ -1059,8 +1059,15 @@ struct DongneTab: View {
     @State private var seg = 0
     @State private var showEmergency = false
     @ObservedObject private var location = NearbyLocationProvider.shared
-    private let segs = ["주변", "마켓", "크루"]
-    private let segIcons = ["mappin.and.ellipse", "tag.fill", "person.3.fill"]
+
+    /// 세그먼트 구성 — 마켓은 피처 플래그(AppFeatures.market) ON일 때만 노출.
+    private enum DongneSeg { case nearby, market, crew
+        var title: String { self == .nearby ? "주변" : (self == .market ? "마켓" : "크루") }
+        var glyph: NavGlyph { self == .nearby ? .nearby : (self == .market ? .market : .crew) }
+    }
+    private var segItems: [DongneSeg] {
+        AppFeatures.market ? [.nearby, .market, .crew] : [.nearby, .crew]
+    }
 
     var body: some View {
         NavigationStack {
@@ -1098,18 +1105,17 @@ struct DongneTab: View {
                 .padding(.top, Spacing.s4)
 
                 HStack(spacing: 4) {
-                    ForEach(segs.indices, id: \.self) { i in
+                    ForEach(segItems.indices, id: \.self) { i in
                         Button {
                             guard seg != i else { return }
                             Haptics.selection()
                             withAnimation(.easeOut(duration: 0.18)) { seg = i }
                         } label: {
                             HStack(spacing: 5) {
-                                let segGlyphs: [NavGlyph] = [.nearby, .market, .crew]
-                                NavLineIcon(glyph: segGlyphs[i],
+                                NavLineIcon(glyph: segItems[i].glyph,
                                             color: seg == i ? Color.white : NavPalette.inactive,
                                             size: 18, bold: seg == i)
-                                Text(segs[i]).font(.system(size: 14.5, weight: .bold))
+                                Text(segItems[i].title).font(.system(size: 14.5, weight: .bold))
                             }
                             .foregroundStyle(seg == i ? .white : AppColors.ink2)
                             .frame(maxWidth: .infinity).frame(height: 40)
@@ -1127,12 +1133,12 @@ struct DongneTab: View {
                 .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
                 .padding(.horizontal, Spacing.s5)
 
-                switch seg {
-                case 0:
+                switch segItems[min(seg, segItems.count - 1)] {
+                case .nearby:
                     NearbyScreen()
-                case 1:
+                case .market:
                     MarketScreen()
-                default:
+                case .crew:
                     CrewScreen()
                 }
             }

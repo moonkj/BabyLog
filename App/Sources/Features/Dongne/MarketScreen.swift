@@ -113,7 +113,8 @@ struct MarketItem: Identifiable, Hashable, Codable {
     var photoSeed: Int
     // 실데이터(사용자 등록)
     var description: String = ""
-    var photoRefs: [String] = []
+    var photoRefs: [String] = []          // 로컬 PhotoStore 참조(무료·오프라인)
+    var photoURLs: [String] = []          // 서버 공개 사진 URL(마켓 공유 시)
     var mine: Bool = false
     var status: MarketStatus = .selling
     var createdAt: Date = Date()
