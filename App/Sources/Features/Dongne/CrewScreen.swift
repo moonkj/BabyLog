@@ -131,11 +131,12 @@ struct CrewScreen: View {
     @EnvironmentObject private var store: AppStore
     @State private var isActive: Bool = true   // 로컬 기능 활성 (콜드스타트는 토글로 미리보기)
     @State private var showCreate = false
+    @State private var refreshTick = 0          // 모임 생성 후 활성 화면 재로드 트리거
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             if isActive {
-                CrewActiveContent()
+                CrewActiveContent(refreshTick: refreshTick)
             } else {
                 CrewColdStartContent(onJoinWaitlist: { })
             }
@@ -150,6 +151,7 @@ struct CrewScreen: View {
         .sheet(isPresented: $showCreate) {
             CrewCreateSheet().environmentObject(store).presentationDetents([.large])
         }
+        .onChange(of: showCreate) { _, open in if !open { refreshTick += 1 } }
     }
 
     private var previewToggle: some View {
@@ -188,18 +190,21 @@ private struct CrewActiveContent: View {
     @State private var showAllMeetups = false
     @State private var showAllGroups = false
     @State private var showAllPosts = false
-    /// 서버 공유 게시글(미구성/미로드 시 nil → 로컬 폴백)
+    /// 서버 공유(미구성/미로드 시 nil → 로컬 폴백)
     @State private var sharedPosts: [CrewPost]? = nil
+    @State private var sharedMeetups: [CrewMeetup]? = nil
+    /// 부모(CrewScreen)에서 모임 생성 후 증가 → 재로드 트리거
+    var refreshTick: Int = 0
 
     private let sectionLimit = 5
     private var hood: String { location.localityName ?? "우리 동네" }
-    /// 화면에 쓸 게시글 — 서버 연동 시 공유 글, 아니면 로컬
     private var posts: [CrewPost] { sharedPosts ?? store.crewPosts }
+    private var meetups: [CrewMeetup] { sharedMeetups ?? store.crews }
 
-    private func loadPosts() async {
-        if SupabaseConfig.isConfigured, let p = await CrewBackend.fetchPosts(hood: hood) {
-            sharedPosts = p
-        }
+    private func loadCrew() async {
+        guard SupabaseConfig.isConfigured else { return }
+        if let p = await CrewBackend.fetchPosts(hood: hood) { sharedPosts = p }
+        if let m = await CrewBackend.fetchMeetups(hood: hood) { sharedMeetups = m }
     }
 
     var body: some View {
@@ -223,16 +228,17 @@ private struct CrewActiveContent: View {
                 .presentationDetents([.large])
         }
         .sheet(isPresented: $showAllMeetups) {
-            CrewMeetupListScreen().environmentObject(store)
+            CrewMeetupListScreen(meetups: meetups).environmentObject(store)
         }
         .sheet(isPresented: $showAllGroups) {
             CrewGroupListScreen().environmentObject(store)
         }
         .sheet(isPresented: $showAllPosts) {
-            CrewPostListScreen().environmentObject(store)
+            CrewPostListScreen(posts: posts).environmentObject(store)
         }
-        .task(id: hood) { await loadPosts() }
-        .onChange(of: showWrite) { _, open in if !open { Task { await loadPosts() } } }
+        .task(id: hood) { await loadCrew() }
+        .onChange(of: showWrite) { _, open in if !open { Task { await loadCrew() } } }
+        .onChange(of: refreshTick) { _, _ in Task { await loadCrew() } }
     }
 
     // MARK: 같이 가요
@@ -241,12 +247,12 @@ private struct CrewActiveContent: View {
             BLSectionHead(
                 eyebrow: "주변 모임",
                 title: "같이 가요",
-                action: store.crews.count > sectionLimit ? "전체보기" : nil,
-                onAction: store.crews.count > sectionLimit ? { Haptics.light(); showAllMeetups = true } : nil
+                action: meetups.count > sectionLimit ? "전체보기" : nil,
+                onAction: meetups.count > sectionLimit ? { Haptics.light(); showAllMeetups = true } : nil
             )
             .padding(.horizontal, Spacing.s5)
 
-            ForEach(Array(store.crews.prefix(sectionLimit))) { meetup in
+            ForEach(Array(meetups.prefix(sectionLimit))) { meetup in
                 NavigationLink(value: meetup) {
                     CrewMeetupCard(meetup: meetup)
                         .padding(.horizontal, Spacing.s5)
@@ -340,11 +346,12 @@ private struct CrewActiveContent: View {
 private struct CrewMeetupListScreen: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    var meetups: [CrewMeetup]
     var body: some View {
         NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: Spacing.s3) {
-                    ForEach(store.crews) { meetup in
+                    ForEach(meetups) { meetup in
                         NavigationLink(value: meetup) {
                             CrewMeetupCard(meetup: meetup).padding(.horizontal, Spacing.s5)
                         }
@@ -387,12 +394,13 @@ private struct CrewPostListScreen: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var selectedPost: CrewPost?
+    var posts: [CrewPost]
     var body: some View {
         NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
                 BLCard(padding: 0) {
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(store.crewPosts.enumerated()), id: \.element.id) { idx, post in
+                        ForEach(Array(posts.enumerated()), id: \.element.id) { idx, post in
                             Button { Haptics.light(); selectedPost = post } label: {
                                 CrewPostRow(post: post)
                                     .padding(.horizontal, Spacing.s4).padding(.vertical, 14)

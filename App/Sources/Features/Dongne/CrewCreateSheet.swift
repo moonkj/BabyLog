@@ -6,6 +6,7 @@ import SwiftUI
 struct CrewCreateSheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var location = NearbyLocationProvider.shared
 
     @State private var place = ""
     @State private var when = ""
@@ -76,13 +77,21 @@ struct CrewCreateSheet: View {
                     LiquidButton(fill: canSave ? AppColors.primary : AppColors.ink3, action: {
                         guard canSave else { return }
                         let cap = max(2, Int(capacityText.filter(\.isNumber)) ?? 6)
+                        let placeText = place.trimmingCharacters(in: .whitespaces)
+                        let whenText = when.isEmpty ? "일정 협의" : when
                         let meetup = CrewMeetup(
-                            place: place.trimmingCharacters(in: .whitespaces),
-                            when: when.isEmpty ? "일정 협의" : when,
+                            place: placeText, when: whenText,
                             hostName: nickname, hostTier: .new, joined: 0,
                             capacity: cap, meetupType: type, description: desc, mine: true
                         )
-                        store.addCrew(meetup)
+                        store.addCrew(meetup)   // 로컬 즉시 반영
+                        // 동네 공유 서버에도 생성(+주최자 자동 참가). 미구성/실패 시 로컬만 유지.
+                        let hood = location.localityName ?? ""
+                        Task {
+                            await CrewBackend.createMeetup(
+                                hood: hood, place: placeText, when: whenText,
+                                capacity: cap, meetupType: type.rawValue, hostName: nickname)
+                        }
                         Haptics.success()
                         dismiss()
                     }) {

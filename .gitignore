@@ -17,3 +17,6 @@ Package.resolved
 *.xcconfig.secret
 Secrets.plist
 .env
+
+# Supabase CLI temp
+supabase/.temp/

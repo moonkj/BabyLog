@@ -185,6 +185,83 @@ enum CrewBackend {
         return true
     }
 
+    // MARK: - 모임(동네 공유)
+
+    private struct CrewMeetupDTO: Decodable {
+        let id: String
+        let place: String?
+        let when_text: String?
+        let meetup_type: String?
+        let capacity: Int?
+        let host: String?
+        let host_name: String?
+        let crew_meetup_join: [CrewPostDTO.CountRow]?
+    }
+
+    /// 동네 모임 최신순 조회. 미구성/실패 시 nil(→ 로컬 폴백).
+    static func fetchMeetups(hood: String) async -> [CrewMeetup]? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              !hood.isEmpty, hood != "우리 동네",
+              let h = hood.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let select = "id,place,when_text,meetup_type,capacity,host,host_name,crew_meetup_join(count)"
+        guard let url = URL(string: "\(base)/rest/v1/crew_meetup?hood=eq.\(h)&select=\(select)&order=created_at.desc&limit=50") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dtos = try? JSONDecoder().decode([CrewMeetupDTO].self, from: data) else { return nil }
+        let me = SupabaseConfig.deviceID
+        return dtos.map { d in
+            CrewMeetup(
+                id: d.id,
+                place: d.place ?? "모임",
+                when: d.when_text ?? "일정 협의",
+                hostName: d.host_name ?? "이웃",
+                hostTier: .warm,
+                joined: d.crew_meetup_join?.first?.count ?? 0,
+                capacity: d.capacity ?? 8,
+                meetupType: CrewMeetupType(rawValue: d.meetup_type ?? "park") ?? .park,
+                mine: d.host == me
+            )
+        }
+    }
+
+    /// 동네 모임 생성(+주최자 자동 참가). 성공 true.
+    @discardableResult
+    static func createMeetup(hood: String, place: String, when: String, capacity: Int,
+                             meetupType: String, hostName: String) async -> Bool {
+        guard SupabaseConfig.isConfigured, !hood.isEmpty, hood != "우리 동네",
+              var req = request("/rest/v1/crew_meetup", method: "POST") else { return false }
+        req.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "hood": hood, "title": place, "place": place, "when_text": when,
+            "meetup_type": meetupType, "capacity": capacity,
+            "host": SupabaseConfig.deviceID, "host_name": hostName,
+        ])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        // 주최자 자동 참가
+        if let rows = try? JSONDecoder().decode([CrewMeetupDTO].self, from: data), let id = rows.first?.id {
+            await joinMeetup(meetupId: id)
+        }
+        return true
+    }
+
+    /// 모임 참가(crew_meetup_join upsert).
+    @discardableResult
+    static func joinMeetup(meetupId: String) async -> Bool {
+        guard SupabaseConfig.isConfigured,
+              var req = request("/rest/v1/crew_meetup_join?on_conflict=meetup_id,device_id", method: "POST") else { return false }
+        req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "meetup_id": meetupId, "device_id": SupabaseConfig.deviceID,
+        ])
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
     private static func relativeTime(_ iso: String?) -> String {
         guard let iso else { return "방금" }
         let f = ISO8601DateFormatter()

@@ -10,9 +10,11 @@ create table if not exists public.crew_group (
     age_range    text,
     interest_tags text[] default '{}',
     creator      text not null,            -- 익명 기기 UUID
+    creator_name text,                      -- 표시용 닉네임(개인정보 아님)
     created_at   timestamptz not null default now()
 );
 create index if not exists crew_group_hood_idx on public.crew_group (hood);
+alter table public.crew_group add column if not exists creator_name text;
 
 create table if not exists public.crew_group_member (
     group_id   uuid not null references public.crew_group(id) on delete cascade,
@@ -28,12 +30,14 @@ create table if not exists public.crew_meetup (
     title       text not null,
     place       text,
     when_text   text,
-    meetup_type text,                       -- park/cafe/play 등
+    meetup_type text,                       -- park / indoor
     capacity    int not null default 8,
     host        text not null,              -- 익명 기기 UUID
+    host_name   text,                       -- 표시용 닉네임(개인정보 아님)
     created_at  timestamptz not null default now()
 );
 create index if not exists crew_meetup_hood_idx on public.crew_meetup (hood);
+alter table public.crew_meetup add column if not exists host_name text;
 
 create table if not exists public.crew_meetup_join (
     meetup_id  uuid not null references public.crew_meetup(id) on delete cascade,
