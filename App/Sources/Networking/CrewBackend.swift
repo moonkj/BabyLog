@@ -76,26 +76,26 @@ enum CrewBackend {
             UserDefaults.standard.set(Array(registered), forKey: regKey)
         }
 
-        // 2) 현재 수 + 오픈 시 자동 알림(동네당 1회)
+        // 2) 목표 도달 시 서버 함수 호출 → 그 동네 모든 기기에 실시간 푸시(서버가 중복 발송 방지)
         guard let count = await waitlistCount(hood: hood) else { return nil }
         if count >= openThreshold {
-            let notifiedKey = "crew_opened_notified_hoods"
-            var notified = Set(UserDefaults.standard.stringArray(forKey: notifiedKey) ?? [])
-            if !notified.contains(hood) {
-                notified.insert(hood)
-                UserDefaults.standard.set(Array(notified), forKey: notifiedKey)
-                let center = UNPendingScheduler()
-                if await center.requestAuthorization() {
-                    center.schedule([LocalNotificationRequest(
-                        id: "crew_open_\(hood)",
-                        title: "🌱 \(hood) 크루가 열렸어요",
-                        body: "이웃이 충분히 모였어요. 동네 크루를 확인해 보세요.",
-                        fireDate: Date().addingTimeInterval(3)
-                    )])
-                }
-            }
+            await invokeOpenNotify(hood: hood)
         }
         return count
+    }
+
+    /// Edge Function(notify-crew-open) 호출 — 동네 오픈 푸시 팬아웃(서버에서 crew_hood_status로 1회만).
+    private static func invokeOpenNotify(hood: String) async {
+        guard let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let url = URL(string: "\(base)/functions/v1/notify-crew-open") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["hood": hood])
+        _ = try? await URLSession.shared.data(for: req)
     }
 
     /// APNs 푸시 토큰 등록/갱신(기기당 1행 upsert). 실시간 오픈 푸시용.
