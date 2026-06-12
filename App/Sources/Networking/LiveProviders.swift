@@ -117,9 +117,11 @@ enum HospitalResponseParser {
                 address: item.addr ?? "",
                 phone: item.telno ?? "",
                 department: item.dgsbjtCdNm ?? item.clCdNm ?? "",
-                isOpenNow: false,           // HIRA API는 실시간 운영 여부를 제공하지 않음
+                // HIRA basis API는 실시간 영업 여부를 주지 않음 → 노출되도록 true(미상).
+                // 화면에 "영업 정보는 공공데이터 기반, 방문 전 확인" 면책 있음.
+                isOpenNow: true,
                 lastCheckedMinutesAgo: 0,
-                distanceM: Int(item.distance ?? "0") ?? 0,
+                distanceM: Int(Double(item.distance ?? "0") ?? 0),   // "935.52..." 소수 문자열 → 미터
                 rating: 0.0                 // HIRA API는 평점 미제공
             )
         }
