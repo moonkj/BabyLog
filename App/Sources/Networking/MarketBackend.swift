@@ -50,7 +50,7 @@ enum MarketBackend {
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([ItemDTO].self, from: data) else { return nil }
-        let me = SupabaseConfig.deviceID
+        let me = await SupabaseConfig.ownerID()
         let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoPlain = ISO8601DateFormatter()
         return dtos.map { d in
@@ -83,7 +83,7 @@ enum MarketBackend {
     /// 내 활성(판매중·예약중·미만료) 매물 수 — 무료 1매물 게이트용.
     static func myActiveListingCount() async -> Int {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
-              let s = SupabaseConfig.deviceID.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let s = (await SupabaseConfig.ownerID()).addingPercentEncoding(withAllowedCharacters: .alphanumerics),
               let url = URL(string: "\(base)/rest/v1/market_item?seller=eq.\(s)&status=in.(%ED%8C%90%EB%A7%A4%EC%A4%91,%EC%98%88%EC%95%BD%EC%A4%91)&expires_at=gt.now()&select=id") else { return 0 }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
@@ -132,7 +132,7 @@ enum MarketBackend {
             "description": String(item.description.prefix(2000)),
             "hygiene_checks": item.hygieneChecks,
             "photo_urls": urls,
-            "seller": SupabaseConfig.deviceID,
+            "seller": await SupabaseConfig.ownerID(),
             "seller_name": String(item.sellerName.prefix(40)),
             "status": item.status.rawValue,
         ])
@@ -151,6 +151,7 @@ enum MarketBackend {
         var req = URLRequest(url: url); req.httpMethod = "PATCH"; req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 익명 소유자 RLS 매칭
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["status": status.rawValue])
@@ -168,6 +169,7 @@ enum MarketBackend {
         var req = URLRequest(url: url); req.httpMethod = "DELETE"; req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 익명 소유자 RLS 매칭
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
@@ -193,7 +195,7 @@ enum MarketBackend {
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "item_id": report.itemId,
             "item_title": String(report.itemTitle.prefix(120)),
-            "reporter": SupabaseConfig.deviceID,
+            "reporter": await SupabaseConfig.ownerID(),
             "counterpart": String(report.counterpartName.prefix(40)),
             "reason": String(report.reason.prefix(120)),
             "note": String(report.note.prefix(2000)),
@@ -266,7 +268,7 @@ enum MarketBackend {
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([ChatMessageDTO].self, from: data) else { return nil }
-        let me = SupabaseConfig.deviceID
+        let me = await SupabaseConfig.ownerID()
         let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoPlain = ISO8601DateFormatter()
         return dtos.map { d in
@@ -291,7 +293,7 @@ enum MarketBackend {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "item_id": itemId, "device_id": SupabaseConfig.deviceID,
+            "item_id": itemId, "device_id": await SupabaseConfig.ownerID(),
             "author_name": String(authorName.prefix(40)), "body": String(t.prefix(2000)),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),

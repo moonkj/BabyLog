@@ -16,13 +16,20 @@ enum SupabaseConfig {
     static var anonKey: String? { APIConfig.key("SUPABASE_ANON_KEY") }
     static var isConfigured: Bool { url != nil && anonKey != nil }
 
-    /// 익명 기기 식별 — 영구 저장(개인정보·아동데이터 아님).
+    /// 익명 기기 식별 — 영구 저장(개인정보·아동데이터 아님). 푸시토큰·대기신청·사진경로 등 기기 단위에 사용.
     static var deviceID: String {
         let k = "bl_device_id"
         if let s = UserDefaults.standard.string(forKey: k) { return s }
         let s = UUID().uuidString
         UserDefaults.standard.set(s, forKey: k)
         return s
+    }
+
+    /// 콘텐츠 소유자 식별 — 로그인 시 auth user id, 아니면 기기ID.
+    /// 소유자 기반 RLS(본인 글만 수정/삭제)의 기준. 글·모임·그룹·매물·댓글·좋아요·신고의 owner 컬럼에 사용.
+    static func ownerID() async -> String {
+        if let uid = await AuthStore.shared.userId { return uid }
+        return deviceID
     }
 }
 
@@ -39,7 +46,7 @@ enum CrewBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(SupabaseConfig.deviceID, forHTTPHeaderField: "x-device-id")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")
         return req
     }
 
@@ -164,7 +171,7 @@ enum CrewBackend {
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([CrewPostDTO].self, from: data) else { return nil }
-        let me = SupabaseConfig.deviceID
+        let me = await SupabaseConfig.ownerID()
         return dtos.map { d in
             CrewPost(
                 id: d.id,
@@ -187,7 +194,7 @@ enum CrewBackend {
               var req = await request("/rest/v1/crew_post", method: "POST") else { return false }
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "hood": hood, "category": category, "author": SupabaseConfig.deviceID,
+            "hood": hood, "category": category, "author": await SupabaseConfig.ownerID(),
             "author_name": cap(authorName, Cap.name), "title": cap(title, Cap.title), "body": cap(body, Cap.body),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
@@ -221,7 +228,7 @@ enum CrewBackend {
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([CrewMeetupDTO].self, from: data) else { return nil }
-        let me = SupabaseConfig.deviceID
+        let me = await SupabaseConfig.ownerID()
         return dtos.map { d in
             CrewMeetup(
                 id: d.id,
@@ -247,7 +254,7 @@ enum CrewBackend {
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "title": cap(place, Cap.place), "place": cap(place, Cap.place), "when_text": cap(when, Cap.place),
             "meetup_type": meetupType, "capacity": capacity,
-            "host": SupabaseConfig.deviceID, "host_name": cap(hostName, Cap.name),
+            "host": await SupabaseConfig.ownerID(), "host_name": cap(hostName, Cap.name),
         ])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
@@ -264,7 +271,7 @@ enum CrewBackend {
               var req = await request("/rest/v1/crew_meetup_join?on_conflict=meetup_id,device_id", method: "POST") else { return false }
         req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "meetup_id": meetupId, "device_id": SupabaseConfig.deviceID,
+            "meetup_id": meetupId, "device_id": await SupabaseConfig.ownerID(),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
@@ -315,7 +322,7 @@ enum CrewBackend {
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "name": cap(name, Cap.title), "age_range": cap(ageRange, Cap.tag),
-            "interest_tags": interestTags.prefix(8).map { cap($0, Cap.tag) }, "creator": SupabaseConfig.deviceID,
+            "interest_tags": interestTags.prefix(8).map { cap($0, Cap.tag) }, "creator": await SupabaseConfig.ownerID(),
             "creator_name": cap(creatorName, Cap.name),
         ])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
@@ -334,13 +341,13 @@ enum CrewBackend {
             guard var req = await request("/rest/v1/crew_group_member?on_conflict=group_id,device_id", method: "POST") else { return false }
             req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
             req.httpBody = try? JSONSerialization.data(withJSONObject: [
-                "group_id": groupId, "device_id": SupabaseConfig.deviceID,
+                "group_id": groupId, "device_id": await SupabaseConfig.ownerID(),
             ])
             guard let (_, resp) = try? await URLSession.shared.data(for: req),
                   let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
             return true
         } else {
-            let dev = SupabaseConfig.deviceID
+            let dev = await SupabaseConfig.ownerID()
             guard let d = dev.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
                   let g = groupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
                   var req = await request("/rest/v1/crew_group_member?group_id=eq.\(g)&device_id=eq.\(d)", method: "DELETE") else { return false }
@@ -372,7 +379,7 @@ enum CrewBackend {
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([CrewMessageDTO].self, from: data) else { return nil }
-        let me = SupabaseConfig.deviceID
+        let me = await SupabaseConfig.ownerID()
         let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoPlain = ISO8601DateFormatter()
         return dtos.map { d in
@@ -393,7 +400,7 @@ enum CrewBackend {
               var req = await request("/rest/v1/crew_meetup_message", method: "POST") else { return false }
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "meetup_id": meetupId, "device_id": SupabaseConfig.deviceID,
+            "meetup_id": meetupId, "device_id": await SupabaseConfig.ownerID(),
             "author_name": cap(authorName, Cap.name), "body": cap(t, Cap.body),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
@@ -427,7 +434,7 @@ enum CrewBackend {
               var req = await request("/rest/v1/crew_post_reply", method: "POST") else { return false }
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "post_id": postId, "author": SupabaseConfig.deviceID,
+            "post_id": postId, "author": await SupabaseConfig.ownerID(),
             "author_name": cap(authorName, Cap.name), "body": cap(t, Cap.body),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
@@ -443,13 +450,13 @@ enum CrewBackend {
             guard var req = await request("/rest/v1/crew_post_like?on_conflict=post_id,device_id", method: "POST") else { return false }
             req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
             req.httpBody = try? JSONSerialization.data(withJSONObject: [
-                "post_id": postId, "device_id": SupabaseConfig.deviceID,
+                "post_id": postId, "device_id": await SupabaseConfig.ownerID(),
             ])
             guard let (_, resp) = try? await URLSession.shared.data(for: req),
                   let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
             return true
         } else {
-            let dev = SupabaseConfig.deviceID
+            let dev = await SupabaseConfig.ownerID()
             guard let d = dev.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
                   let p = postId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
                   var req = await request("/rest/v1/crew_post_like?post_id=eq.\(p)&device_id=eq.\(d)", method: "DELETE") else { return false }
@@ -463,7 +470,7 @@ enum CrewBackend {
     /// 모임 참가 취소(crew_meetup_join 삭제). 성공 true.
     @discardableResult
     static func leaveMeetup(meetupId: String) async -> Bool {
-        let dev = SupabaseConfig.deviceID
+        let dev = await SupabaseConfig.ownerID()
         guard SupabaseConfig.isConfigured,
               let d = dev.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
               let m = meetupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
