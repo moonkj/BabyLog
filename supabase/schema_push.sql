@@ -9,9 +9,12 @@ create table if not exists public.crew_push_token (
     device_id   text primary key,                  -- 익명 기기 UUID
     apns_token  text not null,                     -- APNs device token (hex)
     hood        text,                              -- 현재 동네(역지오코딩)
+    env         text,                              -- 'sandbox'(개발) | 'production'(배포) — 서버가 호스트 선택
     updated_at  timestamptz not null default now()
 );
 create index if not exists crew_push_token_hood_idx on public.crew_push_token (hood);
+-- 토큰 환경(샌드박스/운영) — 빌드 구성으로 앱이 채워 보냄. 기존 행(null)은 샌드박스로 간주.
+alter table public.crew_push_token add column if not exists env text;
 
 alter table public.crew_push_token enable row level security;
 

@@ -76,14 +76,16 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ hood, alreadyOpened: true }), { status: 200 });
     }
 
-    // 3) 동네 토큰 수집
+    // 3) 동네 토큰 수집 (env 포함 — 토큰별로 샌드박스/운영 호스트를 다르게 보냄)
     const { data: tokens } = await supabase
-      .from("crew_push_token").select("apns_token").eq("hood", hood);
+      .from("crew_push_token").select("apns_token, env").eq("hood", hood);
     if (!tokens?.length) return new Response(JSON.stringify({ hood, sent: 0 }), { status: 200 });
 
-    // 4) APNs 발송
+    // 4) APNs 발송 — 호스트는 토큰의 env로 결정(개발=샌드박스, 배포=운영).
+    //    빌드 구성별로 토큰이 자동 태깅되므로 APNS_HOST 수동 전환이 필요 없다.
+    //    env가 없는 레거시 행은 APNS_HOST(없으면 샌드박스)로 폴백.
     const jwt = await apnsJWT();
-    const host = Deno.env.get("APNS_HOST") ?? "api.sandbox.push.apple.com";
+    const fallbackHost = Deno.env.get("APNS_HOST") ?? "api.sandbox.push.apple.com";
     const topic = Deno.env.get("APNS_TOPIC")!;
     const body = JSON.stringify({
       aps: { alert: { title: `🌱 ${hood} 크루가 열렸어요`, body: "이웃이 충분히 모였어요. 동네 크루를 확인해 보세요." }, sound: "default" },
@@ -91,6 +93,9 @@ Deno.serve(async (req) => {
     let sent = 0;
     const stale: string[] = [];
     for (const t of tokens) {
+      const host = t.env === "production" ? "api.push.apple.com"
+                 : t.env === "sandbox" ? "api.sandbox.push.apple.com"
+                 : fallbackHost;
       const r = await fetch(`https://${host}/3/device/${t.apns_token}`, {
         method: "POST",
         headers: { authorization: `bearer ${jwt}`, "apns-topic": topic, "apns-push-type": "alert", "apns-priority": "10" },

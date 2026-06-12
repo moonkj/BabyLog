@@ -116,6 +116,16 @@ enum CrewBackend {
         _ = try? await URLSession.shared.data(for: req)
     }
 
+    /// APNs 토큰 환경 — 빌드 구성으로 결정. Debug(개발)=샌드박스, Release(테플/배포)=운영.
+    /// 서버(notify-crew-open)가 토큰마다 맞는 APNs 호스트를 고르는 데 사용 → 수동 호스트 전환 불필요.
+    static var apnsEnvironment: String {
+        #if DEBUG
+        return "sandbox"
+        #else
+        return "production"
+        #endif
+    }
+
     /// APNs 푸시 토큰 등록/갱신(기기당 1행 upsert). 실시간 오픈 푸시용.
     static func uploadPushToken(_ apnsToken: String, hood: String?) async {
         guard SupabaseConfig.isConfigured, !apnsToken.isEmpty,
@@ -124,6 +134,7 @@ enum CrewBackend {
         var body: [String: Any] = [
             "device_id": SupabaseConfig.deviceID,
             "apns_token": apnsToken,
+            "env": apnsEnvironment,
             "updated_at": ISO8601DateFormatter().string(from: Date()),
         ]
         if let hood, !hood.isEmpty, hood != "우리 동네" { body["hood"] = hood }

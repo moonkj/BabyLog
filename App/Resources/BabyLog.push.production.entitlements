@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Push 엔타이틀먼트 — 배포(Release: TestFlight/App Store)용. aps-environment=production.
+  Debug(개발)는 BabyLog.push.entitlements(development=샌드박스)를 쓴다.
+  project.yml에서 빌드 구성별로 자동 선택되므로 출시 시 수동 전환 불필요.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>aps-environment</key>
+    <string>production</string>
+    <key>com.apple.developer.applesignin</key>
+    <array>
+        <string>Default</string>
+    </array>
+</dict>
+</plist>
