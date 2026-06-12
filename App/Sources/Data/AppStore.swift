@@ -356,14 +356,15 @@ final class AppStore: ObservableObject {
     /// 매물/채팅이 이후 삭제돼도 신고 증거(transcript)는 유지된다.
     /// 백엔드 연결 시: 이 시점에 서버로 report+transcript 업로드(보관·적법 제출용) 후 uploaded=true.
     @discardableResult
-    func reportTrade(item: MarketItem, reason: String, note: String = "") -> TradeReport {
+    /// 신고 기록. transcript는 신고 시점의 화면 대화(서버 모드면 호출부가 전달, 없으면 로컬 폴백).
+    func reportTrade(item: MarketItem, reason: String, note: String = "", transcript: [ChatMessage]? = nil) -> TradeReport {
         let report = TradeReport(
             itemId: item.id,
             itemTitle: item.title,
             counterpartName: item.sellerName,
             reason: reason,
             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
-            transcript: marketChats[item.id] ?? []
+            transcript: transcript ?? marketChats[item.id] ?? []
         )
         tradeReports.insert(report, at: 0)
         return report
@@ -373,6 +374,16 @@ final class AppStore: ObservableObject {
     func latestTradeReport(itemId: String) -> TradeReport? {
         tradeReports.first { $0.itemId == itemId }
     }
+
+    /// 서버 업로드 완료 표시.
+    func markReportUploaded(_ id: String) {
+        if let i = tradeReports.firstIndex(where: { $0.id == id }) {
+            tradeReports[i].uploaded = true
+        }
+    }
+
+    /// 아직 업로드 안 된 신고들(오프라인 등으로 실패한 건 재시도용).
+    var pendingReports: [TradeReport] { tradeReports.filter { !$0.uploaded } }
 
     // MARK: - Auto Persist
 

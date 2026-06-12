@@ -175,6 +175,35 @@ enum MarketBackend {
         return true
     }
 
+    // MARK: - 거래 신고(증거 서버 보존)
+
+    /// 신고를 서버에 업로드(증거 보존). 운영자만 열람(RLS). 성공 true.
+    static func uploadReport(_ report: TradeReport) async -> Bool {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let url = URL(string: "\(base)/rest/v1/market_report") else { return false }
+        let iso = ISO8601DateFormatter()
+        let transcript: [[String: Any]] = report.transcript.map {
+            ["text": $0.text, "mine": $0.mine, "date": iso.string(from: $0.date)]
+        }
+        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 15
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "item_id": report.itemId,
+            "item_title": String(report.itemTitle.prefix(120)),
+            "reporter": SupabaseConfig.deviceID,
+            "counterpart": String(report.counterpartName.prefix(40)),
+            "reason": String(report.reason.prefix(120)),
+            "note": String(report.note.prefix(2000)),
+            "transcript": transcript,
+        ])
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
     // MARK: - Storage 사진
 
     /// UIImage 압축·리사이즈 후 Storage 업로드. 공개 URL 반환.

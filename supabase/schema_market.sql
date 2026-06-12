@@ -86,3 +86,26 @@ create policy market_chat_message_ins  on public.market_chat_message for insert 
   with check ( device_id = coalesce(auth.uid()::text, device_id) );
 create policy market_chat_message_del  on public.market_chat_message for delete to anon, authenticated
   using ( device_id = coalesce(auth.uid()::text, device_id) );
+
+-- ───────── 거래 신고(증거 보존, 운영자 전용 열람) ─────────
+-- 신고 시점 대화 스냅샷을 서버에 보존(매물·채팅이 삭제돼도 증거 유지, 적법 절차 제출 대비).
+-- ⚠️ 안전 설계: 누구나 INSERT(신고 제출), SELECT 정책 없음 → anon/authenticated 조회 불가.
+--    운영자(service_role)만 RLS 우회로 열람. 신고 본문엔 대화·상대 표시명이 들어가므로 비공개 필수.
+create table if not exists public.market_report (
+    id           uuid primary key default gen_random_uuid(),
+    item_id      text,                          -- 매물 id(로컬/서버 혼용)
+    item_title   text,
+    reporter     text not null,                 -- 익명 기기 UUID 또는 auth.uid()
+    counterpart  text,                          -- 신고 대상 표시명
+    reason       text not null,
+    note         text,
+    transcript   jsonb not null default '[]',   -- 신고 시점 대화 스냅샷(증거)
+    created_at   timestamptz not null default now()
+);
+create index if not exists market_report_created_idx on public.market_report (created_at desc);
+
+alter table public.market_report enable row level security;
+drop policy if exists market_report_ins on public.market_report;
+-- INSERT만 허용(누구나 신고). SELECT/UPDATE/DELETE 정책 없음 → 운영자(service_role)만 접근.
+create policy market_report_ins on public.market_report for insert to anon, authenticated
+  with check ( reporter = coalesce(auth.uid()::text, reporter) );

@@ -134,7 +134,7 @@ struct MarketChatSheet: View {
         .background(AppColors.canvas)
         .accessibilityElement(children: .contain)
         .sheet(isPresented: $showReport) {
-            TradeReportSheet(item: item).environmentObject(store)
+            TradeReportSheet(item: item, transcript: messages).environmentObject(store)
                 .presentationDetents([.medium, .large])
         }
         .task(id: item.id) { await pollLoop() }
@@ -281,6 +281,7 @@ private struct MkChatBubble: View {
 
 private struct TradeReportSheet: View {
     let item: MarketItem
+    var transcript: [ChatMessage] = []   // 신고 시점 화면 대화(증거)
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
 
@@ -344,9 +345,13 @@ private struct TradeReportSheet: View {
                 .font(AppFont.caption).foregroundStyle(AppColors.ink3).lineSpacing(2)
 
             LiquidButton(fill: AppColors.danger, cornerRadius: Radius.md) {
-                let r = store.reportTrade(item: item, reason: reason, note: note)
+                let r = store.reportTrade(item: item, reason: reason, note: note, transcript: transcript)
                 reportText = ChatTranscript.text(itemTitle: item.title, counterpart: item.sellerName,
                                                  messages: r.transcript, reason: r.reason, note: r.note)
+                // 증거 서버 보존(운영자 열람). 미구성/실패 시 로컬 보관 유지(uploaded=false).
+                if SupabaseConfig.isConfigured {
+                    Task { if await MarketBackend.uploadReport(r) { store.markReportUploaded(r.id) } }
+                }
                 Haptics.success()
                 withAnimation { submitted = true }
             } label: {

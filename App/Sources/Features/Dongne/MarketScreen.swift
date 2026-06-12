@@ -192,6 +192,10 @@ struct MarketScreen: View {
         guard serverMode else { return }
         if let s = await MarketBackend.fetchItems(hood: hood) { sharedItems = s }
         didLoad = true
+        // 업로드 실패한 신고 재시도(증거 유실 방지).
+        for r in store.pendingReports {
+            if await MarketBackend.uploadReport(r) { store.markReportUploaded(r.id) }
+        }
     }
 
     var body: some View {
