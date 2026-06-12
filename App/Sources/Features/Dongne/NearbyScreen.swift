@@ -334,7 +334,8 @@ struct NearbyScreen: View {
         else { await loadPlaces() }
     }
 
-    /// 키즈카페·놀이터 — 애플 지도 MKLocalSearch(키/비즈앱/할당량 불필요).
+    /// 키즈카페·놀이터 — 하이브리드:
+    /// 카카오 키가 있으면 카카오 로컬(한국 POI 더 풍부), 없으면 애플 지도(키/비즈앱 불필요).
     private func loadPlaces() async {
         guard isPlaceCategory else { return }
         if locationProvider.coordinate == nil && !locationProvider.denied {
@@ -345,33 +346,46 @@ struct NearbyScreen: View {
         let c = searchCoord
         placesLoading = true
         let query = category == .kidsCafe ? "키즈카페" : "놀이터"
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = query
-        request.region = MKCoordinateRegion(center: c, latitudinalMeters: 12_000, longitudinalMeters: 12_000)
-        request.resultTypes = [.pointOfInterest]
+        let coord = Coordinate(lat: c.latitude, lng: c.longitude)
         do {
-            let response = try await MKLocalSearch(request: request).start()
-            let me = CLLocation(latitude: c.latitude, longitude: c.longitude)
-            let mapped: [Place] = response.mapItems.compactMap { item in
-                let pm = item.placemark
-                let dist = Int(me.distance(from: CLLocation(latitude: pm.coordinate.latitude, longitude: pm.coordinate.longitude)))
-                return Place(
-                    id: "\(pm.coordinate.latitude),\(pm.coordinate.longitude)-\(item.name ?? "")",
-                    name: item.name ?? "이름 없음",
-                    address: pm.title ?? "",
-                    phone: item.phoneNumber ?? "",
-                    category: query,
-                    distanceM: dist,
-                    rating: 0
-                )
-            }.sorted { $0.distanceM < $1.distanceM }
+            let result: [Place]
+            if !ProviderFactory.isMock(APIConfig.kakaoRESTKeyName) {
+                // 카카오 키 연동됨 → 카카오 로컬(더 촘촘한 한국 장소 데이터)
+                result = try await ProviderFactory.place().search(query, near: coord)
+            } else {
+                // 키 없음 → 애플 지도 MKLocalSearch(지금 바로 동작)
+                result = try await appleLocalSearch(query: query, center: c)
+            }
             guard category == selectedCategory else { return }
-            places = mapped
+            places = result.sorted { $0.distanceM < $1.distanceM }
         } catch {
             guard category == selectedCategory else { return }
             places = []
         }
         placesLoading = false
+    }
+
+    /// 애플 지도 POI 검색 → Place 매핑(직선거리 계산).
+    private func appleLocalSearch(query: String, center: CLLocationCoordinate2D) async throws -> [Place] {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        request.region = MKCoordinateRegion(center: center, latitudinalMeters: 12_000, longitudinalMeters: 12_000)
+        request.resultTypes = [.pointOfInterest]
+        let response = try await MKLocalSearch(request: request).start()
+        let me = CLLocation(latitude: center.latitude, longitude: center.longitude)
+        return response.mapItems.compactMap { item in
+            let pm = item.placemark
+            let dist = Int(me.distance(from: CLLocation(latitude: pm.coordinate.latitude, longitude: pm.coordinate.longitude)))
+            return Place(
+                id: "\(pm.coordinate.latitude),\(pm.coordinate.longitude)-\(item.name ?? "")",
+                name: item.name ?? "이름 없음",
+                address: pm.title ?? "",
+                phone: item.phoneNumber ?? "",
+                category: query,
+                distanceM: dist,
+                rating: 0
+            )
+        }
     }
 
     private func loadHospitals(force: Bool = false) async {
