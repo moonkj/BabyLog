@@ -24,14 +24,21 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
 
     private let client: APIClient
     private let fallback: HospitalInfoProviding
+    private let endpoint: String      // 병원/약국 등 basis 엔드포인트
+    private let dgsbjtCd: String?     // 진료과목코드(병원=11 소아과, 약국=nil)
 
     init(client: APIClient = APIClient(),
-         fallback: HospitalInfoProviding = MockHospitalInfoProvider()) {
+         fallback: HospitalInfoProviding = MockHospitalInfoProvider(),
+         endpoint: String = LiveHospitalInfoProvider.hospitalEndpoint,
+         dgsbjtCd: String? = "11") {
         self.client = client
         self.fallback = fallback
+        self.endpoint = endpoint
+        self.dgsbjtCd = dgsbjtCd
     }
 
-    private static let basisEndpoint = "https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList"
+    static let hospitalEndpoint = "https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList"
+    static let pharmacyEndpoint = "https://apis.data.go.kr/B551182/pharmacyInfoService/getParmacyBasisList"
 
     func hospitals(near coordinate: Coordinate?, openNow: Bool) async throws -> [HospitalInfo] {
         guard let key = APIConfig.key(APIConfig.hiraKeyName) else {
@@ -54,38 +61,45 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         }
     }
 
-    /// 사용자 좌표에서 가장 가까운 소아과 1곳의 시도코드.
+    /// dgsbjtCd가 설정돼 있으면 쿼리에 추가(병원=소아과 필터, 약국=없음).
+    private func appendDgsbjt(_ items: inout [URLQueryItem]) {
+        if let d = dgsbjtCd { items.append(.init(name: "dgsbjtCd", value: d)) }
+    }
+
+    /// 사용자 좌표에서 가장 가까운 1곳의 시도코드.
     private func regionSidoCode(key: String, coord: Coordinate) async throws -> String? {
-        var c = URLComponents(string: Self.basisEndpoint)!
-        c.queryItems = [
+        var c = URLComponents(string: endpoint)!
+        var items: [URLQueryItem] = [
             .init(name: "serviceKey", value: key),
             .init(name: "pageNo", value: "1"),
             .init(name: "numOfRows", value: "1"),
             .init(name: "xPos", value: String(coord.lng)),
             .init(name: "yPos", value: String(coord.lat)),
             .init(name: "radius", value: "20000"),   // 가까운 1곳만 필요(시골 대비 20km)
-            .init(name: "dgsbjtCd", value: "11"),
             .init(name: "_type", value: "json"),
         ]
+        appendDgsbjt(&items)
+        c.queryItems = items
         guard let url = c.url else { return nil }
         let resp = try await client.get(url, as: HIRAHospitalResponse.self)
         return resp.response?.body?.items?.item?.first?.sidoCd
     }
 
-    /// 시도(행정구역) 전체 소아과 — 페이지네이션으로 누락 없이 수집, Haversine 거리 산출.
+    /// 시도(행정구역) 전체 — 페이지네이션으로 누락 없이 수집, Haversine 거리 산출.
     private func regionHospitals(key: String, sidoCd: String, near coord: Coordinate) async throws -> [HospitalInfo] {
         var all: [HospitalInfo] = []
         let pageSize = 500
-        for page in 1...10 {   // 최대 5천건 — 소아과 규모상 충분
-            var c = URLComponents(string: Self.basisEndpoint)!
-            c.queryItems = [
+        for page in 1...10 {   // 최대 5천건 — 규모상 충분
+            var c = URLComponents(string: endpoint)!
+            var items: [URLQueryItem] = [
                 .init(name: "serviceKey", value: key),
                 .init(name: "pageNo", value: String(page)),
                 .init(name: "numOfRows", value: String(pageSize)),
                 .init(name: "sidoCd", value: sidoCd),
-                .init(name: "dgsbjtCd", value: "11"),
                 .init(name: "_type", value: "json"),
             ]
+            appendDgsbjt(&items)
+            c.queryItems = items
             guard let url = c.url else { break }
             let resp = try await client.get(url, as: HIRAHospitalResponse.self)
             let count = resp.response?.body?.items?.item?.count ?? 0
@@ -98,14 +112,16 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
     /// 좌표 기반 반경 폴백(지역코드 미확보 시).
     private func radiusHospitals(key: String, coord: Coordinate?) async throws -> [HospitalInfo] {
         let lat = coord?.lat ?? 37.5665, lng = coord?.lng ?? 126.9780
-        var c = URLComponents(string: Self.basisEndpoint)!
-        c.queryItems = [
+        var c = URLComponents(string: endpoint)!
+        var items: [URLQueryItem] = [
             .init(name: "serviceKey", value: key), .init(name: "pageNo", value: "1"),
             .init(name: "numOfRows", value: "100"),
             .init(name: "xPos", value: String(lng)), .init(name: "yPos", value: String(lat)),
-            .init(name: "radius", value: "5000"), .init(name: "dgsbjtCd", value: "11"),
+            .init(name: "radius", value: "5000"),
             .init(name: "_type", value: "json"),
         ]
+        appendDgsbjt(&items)
+        c.queryItems = items
         guard let url = c.url else { return [] }
         let resp = try await client.get(url, as: HIRAHospitalResponse.self)
         return try HospitalResponseParser.parse(resp, near: coord)

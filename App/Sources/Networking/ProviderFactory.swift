@@ -28,6 +28,18 @@ enum ProviderFactory {
         return MockHospitalInfoProvider()
     }
 
+    /// 약국(HIRA 약국 API) — 병원과 같은 키/구조, 진료과목코드 없이 조회.
+    static func pharmacy(client: APIClient = APIClient()) -> HospitalInfoProviding {
+        if APIConfig.key(APIConfig.hiraKeyName) != nil {
+            return LiveHospitalInfoProvider(
+                client: client,
+                endpoint: LiveHospitalInfoProvider.pharmacyEndpoint,
+                dgsbjtCd: nil
+            )
+        }
+        return MockHospitalInfoProvider()
+    }
+
     // MARK: - Place (카카오맵)
 
     /// `PlaceSearching` 구현을 반환합니다.

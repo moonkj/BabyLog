@@ -250,6 +250,10 @@ struct NearbyScreen: View {
             await loadHospitals()
         }
         .onAppear { locationProvider.start() }
+        // 카테고리 전환 시(소아과↔약국) 재로드
+        .onChange(of: selectedCategory) { _, _ in
+            Task { await loadHospitals() }
+        }
         // 위치 획득 타임아웃(8초) — 끝내 못 잡으면(위치서비스 꺼짐 등) 폴백 지역으로라도 검색 + 안내
         .task {
             try? await Task.sleep(nanoseconds: 8_000_000_000)
@@ -272,8 +276,13 @@ struct NearbyScreen: View {
 
     // MARK: Load Hospitals
 
+    /// HIRA 실데이터로 로드하는 카테고리(소아과·약국)
+    private var isLiveCategory: Bool {
+        selectedCategory == .hospital || selectedCategory == .pharmacy
+    }
+
     private func loadHospitals() async {
-        guard selectedCategory == .hospital else { return }
+        guard isLiveCategory else { return }
         // 현재 위치 확보 전(권한 거부도 아님)이면 폴백(서울)으로 잘못 검색하지 않고 대기.
         // GPS가 도착하면 onChange가 이 함수를 다시 호출 → 그때 실제 내 위치로 검색.
         if locationProvider.coordinate == nil && !locationProvider.denied {
@@ -282,22 +291,29 @@ struct NearbyScreen: View {
         }
         hospitalState = .loading
         let openNow = activeFilters.contains("현재 영업중")
+        let category = selectedCategory
         do {
             let c = searchCoord
-            let results = try await ProviderFactory.hospital()
-                .hospitals(
-                    near: Coordinate(lat: c.latitude, lng: c.longitude),
-                    openNow: openNow
-                )
-            // dgsbjtCd=11은 소아청소년과를 '등록'한 기관이라 가정의학·내과·정형외과 의원까지 섞임.
-            // → 이름에 소아 관련 키워드가 있는 진짜 소아과/아동병원만 추림(없으면 전체 폴백).
-            let pediatricKeywords = ["소아", "아동", "어린이", "키즈"]
-            let pediatric = results.filter { h in
-                pediatricKeywords.contains { h.name.contains($0) }
+            let provider = category == .pharmacy ? ProviderFactory.pharmacy() : ProviderFactory.hospital()
+            let results = try await provider.hospitals(
+                near: Coordinate(lat: c.latitude, lng: c.longitude),
+                openNow: openNow
+            )
+            let finalResults: [HospitalInfo]
+            if category == .hospital {
+                // dgsbjtCd=11은 소아청소년과 '등록' 기관이라 가정의학·내과·정형외과까지 섞임 →
+                // 이름에 소아 관련 키워드 있는 진짜 소아과/아동병원만(없으면 전체 폴백).
+                let pediatricKeywords = ["소아", "아동", "어린이", "키즈"]
+                let pediatric = results.filter { h in pediatricKeywords.contains { h.name.contains($0) } }
+                finalResults = pediatric.isEmpty ? results : pediatric
+            } else {
+                finalResults = results   // 약국은 필터 없이 전체
             }
-            let finalResults = pediatric.isEmpty ? results : pediatric
+            // 응답이 늦게 와도 그 사이 카테고리가 바뀌었으면 무시
+            guard category == selectedCategory else { return }
             hospitalState = finalResults.isEmpty ? .empty : .loaded(finalResults)
         } catch {
+            guard category == selectedCategory else { return }
             hospitalState = .failed(error)
         }
     }
@@ -463,11 +479,11 @@ struct NearbyScreen: View {
 
     private var listSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            // 소아과 카테고리: ProviderFactory 데이터 사용
-            if selectedCategory == .hospital {
+            // 소아과·약국: HIRA 실데이터(현위치·행정구역). 키즈카페·놀이터는 아직 샘플(카카오 연동 예정).
+            if isLiveCategory {
                 hospitalListContent
             } else {
-                // 소아과 외 카테고리: 기존 mockPlaces 기반
+                // 키즈카페·놀이터: 기존 mockPlaces 기반(카카오 비즈앱 승인 후 실데이터 전환)
                 let filtered = filteredMockPlaces
                 Group {
                     resultCountRow(open: filtered.filter(\.isOpen).count)
