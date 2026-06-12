@@ -1134,7 +1134,8 @@ private struct HospitalCard: View {
                         case .checking:
                             BLBadge(tone: .grey, text: "영업시간 확인 중…", systemIcon: nil, dot: false).fixedSize()
                         case .unknown:
-                            BLBadge(tone: .grey, text: "영업시간 미확인", systemIcon: nil, dot: false).fixedSize()
+                            // 공공데이터에 진료시간 레코드가 없는 곳 — 추측하지 않고 전화 확인을 안내.
+                            BLBadge(tone: .grey, text: "전화로 확인", systemIcon: "phone.fill", dot: false).fixedSize()
                         }
 
                         Text("\(Self.distanceText(hospital.distanceM)) · \(hospital.department)")
@@ -1232,7 +1233,7 @@ private struct HospitalCard: View {
         case .open: status = "영업중"
         case .closed: status = "영업종료"
         case .checking: status = "영업시간 확인 중"
-        case .unknown: status = "영업시간 미확인"
+        case .unknown: status = "영업시간 미확인, 전화로 확인 권장"
         }
         return "\(hospital.name), \(status), \(hospital.distanceM)미터, \(hospital.department)"
     }

@@ -63,38 +63,33 @@ struct EmergencyScreen: View {
             let all = try await allRaw
             let peds = try await pedRaw
 
-            // 종합병원급(상급종합·종합병원)
-            let majors = all.filter { $0.isMajorHospital }
-            // 소아과(이름 기반 — 가정의학·내과 혼입 제거)
+            // 대학병원급(상급종합·종합병원) — 응급실 운영이 사실상 보장되므로 영업조회 없이
+            // 가까운 순 최대 3곳을 '항상' 노출한다. (소아과 조회에 묻혀 후보에서 잘리던 버그 수정:
+            // 24h 응급이 필요한 상황에서 큰 병원을 빠뜨리는 건 아동안전 위험.)
+            let majorsNearest = all.filter { $0.isMajorHospital }
+                .sorted { $0.distanceM < $1.distanceM }
+            let topMajors = Array(majorsNearest.prefix(3))
+            let majorIDs = Set(topMajors.map { $0.id })
+
+            // 소아과(이름 기반 — 가정의학·내과 혼입 제거)는 가까운 후보만 상세 영업시간을
+            // 조회해 '영업중'인 곳만 남긴다(빠르게). 대학병원급과 중복되면 제외.
             let kw = ["소아", "아동", "어린이", "키즈"]
             let pediatric = peds.filter { h in kw.contains { h.name.contains($0) } }
-
-            // 합치고 거리순 + 중복 제거(종합병원이 소아과에도 잡히면 1회만)
-            var seen = Set<String>()
-            var combined: [HospitalInfo] = []
-            for h in (majors + pediatric).sorted(by: { $0.distanceM < $1.distanceM }) {
-                if seen.insert(h.id).inserted { combined.append(h) }
-            }
-            // 가까운 후보만 상세 영업시간 조회(응급 — 빠르게). 영업중인 곳만 남긴다.
-            // 상세 조회 실패(서버 혼잡 등) 시: 대학병원급은 24h 응급실 가정으로 노출, 소아과는 제외.
-            let candidates = Array(combined.prefix(14))
-            var openOnly: [HospitalInfo] = []
+                .filter { !majorIDs.contains($0.id) }
+                .sorted { $0.distanceM < $1.distanceM }
+            let pedCandidates = Array(pediatric.prefix(12))
+            var openPeds: [HospitalInfo] = []
             await withTaskGroup(of: (HospitalInfo, Bool?).self) { group in
-                for h in candidates {
+                for h in pedCandidates {
                     group.addTask { (h, await HospitalDetailService.isOpenNow(ykiho: h.id)) }
                 }
-                for await (h, open) in group {
-                    if open == true || (open == nil && h.isMajorHospital) {
-                        openOnly.append(h)
-                    }
+                for await (h, open) in group where open == true {
+                    openPeds.append(h)
                 }
             }
-            openOnly.sort { $0.distanceM < $1.distanceM }
-            // 대학병원급(상급종합·종합)은 가까운 순 최대 3곳까지 노출 — 응급 시 후송 가능한
-            // 큰 병원 선택지를 충분히 주되 과하게 늘어놓지 않는다. 그 뒤 소아과 등 거리순.
-            let majorsOpen = openOnly.filter { $0.isMajorHospital }.prefix(3)
-            let othersOpen = openOnly.filter { !$0.isMajorHospital }
-            hospitals = Array(majorsOpen) + othersOpen
+            openPeds.sort { $0.distanceM < $1.distanceM }
+            // 최상단 = 가까운 대학병원급(최대 3) → 그 뒤 영업중 소아과 거리순
+            hospitals = topMajors + openPeds
         } catch {
             // HIRA 조회 실패 — 빈 결과로 위장하지 않는다(거짓 "병원 없음" = 아동안전 위험).
             hospitals = []
