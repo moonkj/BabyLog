@@ -46,14 +46,9 @@ enum PlaceCategory: String, CaseIterable {
     }
 
     var filterOptions: [String] {
-        switch self {
-        // 소아과·약국: HIRA 기본정보엔 영업시간이 없어 야간/공휴일 필터를 정직하게 지킬 수 없음 →
-        // 칩 미노출(거리순 전체). 야간/공휴일/응급은 응급의료 API 연동 시 응급 탭에서 제공.
-        case .hospital:   return []
-        case .pharmacy:   return []
-        case .kidsCafe:   return ["0-2세", "3-5세", "6세+"]
-        case .playground: return ["실내", "실외"]
-        }
+        // 모든 카테고리 필터칩 미노출 — 데이터 소스가 영업시간/연령/실내외를 정확히 주지 않아
+        // 정직하게 지킬 수 없는 필터는 두지 않는다(거리순 전체 노출).
+        []
     }
 }
 
@@ -243,6 +238,10 @@ struct NearbyScreen: View {
     // 병원 로드 상태
     @State private var hospitalState: HospitalLoadState = .idle
 
+    // 키즈카페·놀이터(카카오 로컬) 로드 상태 — 카카오 키 연동 후 실데이터
+    @State private var places: [Place] = []
+    @State private var placesLoading = false
+
 
     // 지도 카메라 — 망원동 중심 고정
     @State private var cameraPosition: MapCameraPosition = .region(
@@ -291,19 +290,19 @@ struct NearbyScreen: View {
             }
         }
         .task(id: activeFilters) {
-            await loadHospitals()
+            await reloadCurrent()
         }
         .onAppear { locationProvider.start() }
-        // 카테고리 전환 시(소아과↔약국) 재로드
+        // 카테고리 전환 시 재로드(소아과·약국=HIRA / 키즈카페·놀이터=애플 지도)
         .onChange(of: selectedCategory) { _, _ in
-            Task { await loadHospitals() }
+            Task { await reloadCurrent() }
         }
         // 위치 획득 타임아웃(8초) — 끝내 못 잡으면(위치서비스 꺼짐 등) 폴백 지역으로라도 검색 + 안내
         .task {
             try? await Task.sleep(nanoseconds: 8_000_000_000)
             if locationProvider.coordinate == nil && !locationProvider.denied {
                 locationProvider.denied = true
-                await loadHospitals()
+                await reloadCurrent()
             }
         }
         // 현재 위치가 잡히면 그 좌표로 다시 검색 + 지도 이동
@@ -315,16 +314,64 @@ struct NearbyScreen: View {
                     span: MKCoordinateSpan(latitudeDelta: 0.025, longitudeDelta: 0.025)))
             }
             // force:false — GPS가 미세하게 재방출돼도 같은 위치(±400m)면 캐시 적중→재호출 없음.
-            // 실제로 400m 넘게 이동한 경우에만 loadHospitals 내부에서 재조회.
-            Task { await loadHospitals() }
+            Task { await reloadCurrent() }
         }
     }
 
-    // MARK: Load Hospitals
+    // MARK: Load (dispatch)
 
     /// HIRA 실데이터로 로드하는 카테고리(소아과·약국)
     private var isLiveCategory: Bool {
         selectedCategory == .hospital || selectedCategory == .pharmacy
+    }
+    /// 애플 지도(MKLocalSearch)로 검색하는 카테고리(키즈카페·놀이터)
+    private var isPlaceCategory: Bool {
+        selectedCategory == .kidsCafe || selectedCategory == .playground
+    }
+
+    private func reloadCurrent(force: Bool = false) async {
+        if isLiveCategory { await loadHospitals(force: force) }
+        else { await loadPlaces() }
+    }
+
+    /// 키즈카페·놀이터 — 애플 지도 MKLocalSearch(키/비즈앱/할당량 불필요).
+    private func loadPlaces() async {
+        guard isPlaceCategory else { return }
+        if locationProvider.coordinate == nil && !locationProvider.denied {
+            placesLoading = true; places = []
+            return
+        }
+        let category = selectedCategory
+        let c = searchCoord
+        placesLoading = true
+        let query = category == .kidsCafe ? "키즈카페" : "놀이터"
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        request.region = MKCoordinateRegion(center: c, latitudinalMeters: 12_000, longitudinalMeters: 12_000)
+        request.resultTypes = [.pointOfInterest]
+        do {
+            let response = try await MKLocalSearch(request: request).start()
+            let me = CLLocation(latitude: c.latitude, longitude: c.longitude)
+            let mapped: [Place] = response.mapItems.compactMap { item in
+                let pm = item.placemark
+                let dist = Int(me.distance(from: CLLocation(latitude: pm.coordinate.latitude, longitude: pm.coordinate.longitude)))
+                return Place(
+                    id: "\(pm.coordinate.latitude),\(pm.coordinate.longitude)-\(item.name ?? "")",
+                    name: item.name ?? "이름 없음",
+                    address: pm.title ?? "",
+                    phone: item.phoneNumber ?? "",
+                    category: query,
+                    distanceM: dist,
+                    rating: 0
+                )
+            }.sorted { $0.distanceM < $1.distanceM }
+            guard category == selectedCategory else { return }
+            places = mapped
+        } catch {
+            guard category == selectedCategory else { return }
+            places = []
+        }
+        placesLoading = false
     }
 
     private func loadHospitals(force: Bool = false) async {
@@ -570,26 +617,11 @@ struct NearbyScreen: View {
 
     private var listSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            // 소아과·약국: HIRA 실데이터(현위치·행정구역). 키즈카페·놀이터는 아직 샘플(카카오 연동 예정).
+            // 소아과·약국: HIRA 실데이터. 키즈카페·놀이터: 애플 지도(MKLocalSearch) 실데이터.
             if isLiveCategory {
                 hospitalListContent
             } else {
-                // 키즈카페·놀이터: 기존 mockPlaces 기반(카카오 비즈앱 승인 후 실데이터 전환)
-                let filtered = filteredMockPlaces
-                Group {
-                    resultCountRow(open: filtered.filter(\.isOpen).count)
-                    if filtered.isEmpty {
-                        BLEmptyState(
-                            icon: "mappin.slash",
-                            title: "주변에 결과가 없어요",
-                            message: "필터를 조정하거나 다른 카테고리를 선택해 보세요."
-                        )
-                    } else {
-                        ForEach(filtered) { place in
-                            PlaceCard(place: place)
-                        }
-                    }
-                }
+                placeListContent
             }
         }
         .padding(.horizontal, Spacing.s5)
@@ -725,6 +757,71 @@ struct NearbyScreen: View {
         }
     }
 
+    // MARK: Place List Content (키즈카페·놀이터 — 애플 지도 MKLocalSearch)
+
+    @ViewBuilder
+    private var placeListContent: some View {
+        if placesLoading && places.isEmpty {
+            VStack(spacing: Spacing.s3) {
+                RadarSweepView(size: 72, color: selectedCategory.iconColor)
+                Text("주변을 살펴보는 중…")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.ink2)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.s5)
+            .accessibilityLabel("주변을 살펴보는 중")
+        } else if places.isEmpty {
+            BLEmptyState(
+                icon: "mappin.slash",
+                title: "주변에 \(selectedCategory.rawValue)가 없어요",
+                message: "조금 더 넓은 동네로 이동하거나 잠시 후 다시 시도해 보세요.",
+                actionTitle: "다시 불러오기",
+                action: { Task { await loadPlaces() } }
+            )
+        } else {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                HStack(spacing: Spacing.s2) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(selectedCategory.iconColor)
+                        Text("주변 ")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(AppColors.ink2)
+                        + Text("\(places.count)곳")
+                            .font(.system(size: 12.5, weight: .heavy))
+                            .foregroundStyle(AppColors.ink)
+                        + Text(" · 거리순")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(AppColors.ink3)
+                    }
+                    Spacer(minLength: 0)
+                    Button { Task { await loadPlaces() } } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(AppColors.ink2)
+                            .frame(width: 32, height: 32)
+                            .background(AppColors.surface2, in: Circle())
+                            .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
+                    }
+                    .accessibilityLabel("새로고침")
+                }
+                .padding(.horizontal, Spacing.s1)
+
+                ForEach(places) { place in
+                    PlaceResultCard(place: place, category: selectedCategory)
+                }
+
+                Text("장소 정보: Apple 지도. 영업 여부·연령대는 방문 전 확인하세요.")
+                    .font(.system(size: 11.5, weight: .regular))
+                    .foregroundStyle(AppColors.ink3)
+                    .padding(.horizontal, Spacing.s1)
+                    .padding(.top, Spacing.s1)
+            }
+        }
+    }
+
     // MARK: Disclaimer
 
     private var disclaimer: some View {
@@ -764,6 +861,82 @@ struct NearbyScreen: View {
 }
 
 // MARK: - HospitalCard (ProviderFactory HospitalInfo용)
+
+// MARK: - PlaceResultCard (키즈카페·놀이터 — 애플 지도 결과)
+
+private struct PlaceResultCard: View {
+    let place: Place
+    let category: PlaceCategory
+
+    private var distanceText: String {
+        place.distanceM >= 1000 ? String(format: "%.1fkm", Double(place.distanceM) / 1000) : "\(place.distanceM)m"
+    }
+
+    var body: some View {
+        BLCard(padding: Spacing.s4) {
+            HStack(alignment: .top, spacing: Spacing.s3) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                        .fill(category.iconBg)
+                        .frame(width: 48, height: 48)
+                    Image(systemName: category.systemIcon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(category.iconColor)
+                }
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    Text(place.name)
+                        .font(.system(size: 15.5, weight: .bold))
+                        .foregroundStyle(AppColors.ink)
+                        .lineLimit(2)
+                        .lineSpacing(1)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(distanceText) · \(category.rawValue)")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: Spacing.s2) {
+                    if !place.phone.isEmpty {
+                        Button {
+                            let raw = place.phone.filter { $0.isNumber }
+                            if let url = URL(string: "tel://\(raw)") { UIApplication.shared.open(url) }
+                        } label: {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                    .fill(AppColors.primary).frame(width: 44, height: 44)
+                                Image(systemName: "phone.fill")
+                                    .font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
+                            }.blShadow(.chip)
+                        }
+                        .buttonStyle(LiquidPressStyle(scale: 0.94))
+                        .accessibilityLabel("전화하기")
+                    }
+                    Button {
+                        let q = place.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                        if let url = URL(string: "http://maps.apple.com/?q=\(q)") { UIApplication.shared.open(url) }
+                    } label: {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                .fill(AppColors.surface2).frame(width: 44, height: 44)
+                            Image(systemName: "map.fill")
+                                .font(.system(size: 17, weight: .semibold)).foregroundStyle(AppColors.ink2)
+                        }.blShadow(.chip)
+                    }
+                    .buttonStyle(LiquidPressStyle(scale: 0.94))
+                    .accessibilityLabel("길찾기")
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(place.name), \(distanceText), \(category.rawValue)")
+    }
+}
 
 private struct HospitalCard: View {
     let hospital: HospitalInfo

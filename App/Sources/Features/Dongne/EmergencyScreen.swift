@@ -13,14 +13,11 @@ import Foundation
 struct EmergencyScreen: View {
     var onClose: () -> Void
 
-    // 필터 0 — 소아과 & 현재 영업중 & 거리순
-    private var availablePlaces: [NearbyPlace] {
-        mockPlaces
-            .filter { $0.category == .hospital && $0.isOpen }
-            .sorted { $0.distanceMeters < $1.distanceMeters }
-    }
+    @ObservedObject private var location = NearbyLocationProvider.shared
+    @State private var hospitals: [HospitalInfo] = []
+    @State private var loading = true
 
-    // 마지막 확인 시각 (목업)
+    // 마지막 확인 시각 (조회 시점)
     private let lastCheckedAt: String = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ko_KR")
@@ -44,6 +41,35 @@ struct EmergencyScreen: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .onAppear { location.start() }
+        .task { await load() }
+        .onChange(of: location.coordinate?.latitude) { _, lat in
+            if lat != nil { Task { await load() } }
+        }
+    }
+
+    /// 내 위치 기준 실제 소아과 — 주변 탭 캐시 재사용, 없으면 HIRA 조회. 현재 영업중·거리순.
+    private func load() async {
+        // 주변 탭에서 이미 불러온 소아과가 있으면 즉시 사용(빠름)
+        if let cached = NearbyResultCache.shared.entries[.hospital], !cached.results.isEmpty {
+            hospitals = cached.results.filter { $0.isOpenNow }.sorted { $0.distanceM < $1.distanceM }
+            loading = false
+            return
+        }
+        loading = true
+        let coord = location.coordinate.map { Coordinate(lat: $0.latitude, lng: $0.longitude) }
+        do {
+            let results = try await ProviderFactory.hospital().hospitals(near: coord, openNow: true)
+            let peds = results.filter { h in ["소아", "아동", "어린이", "키즈"].contains { h.name.contains($0) } }
+            hospitals = (peds.isEmpty ? results : peds).sorted { $0.distanceM < $1.distanceM }
+        } catch {
+            hospitals = []
+        }
+        loading = false
+    }
+
+    private static func distanceText(_ m: Int) -> String {
+        m >= 1000 ? String(format: "%.1fkm", Double(m) / 1000) : "\(m)m"
     }
 
     // MARK: Header
@@ -97,11 +123,19 @@ struct EmergencyScreen: View {
     // MARK: Place List
     private var placeList: some View {
         VStack(spacing: 14) {
-            if availablePlaces.isEmpty {
+            if loading {
+                ForEach(0..<3, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                        .fill(AppColors.surface2)
+                        .frame(height: 150)
+                        .redacted(reason: .placeholder)
+                }
+                .accessibilityHidden(true)
+            } else if hospitals.isEmpty {
                 emptyState
             } else {
-                ForEach(Array(availablePlaces.enumerated()), id: \.element.id) { index, place in
-                    EmergencyPlaceCard(place: place, isNearest: index == 0)
+                ForEach(Array(hospitals.enumerated()), id: \.element.id) { index, h in
+                    EmergencyPlaceCard(hospital: h, isNearest: index == 0)
                 }
             }
         }
@@ -202,21 +236,30 @@ struct EmergencyScreen: View {
 // MARK: - EmergencyPlaceCard
 
 private struct EmergencyPlaceCard: View {
-    let place: NearbyPlace
+    let hospital: HospitalInfo
     let isNearest: Bool
+
+    private var distanceText: String {
+        hospital.distanceM >= 1000 ? String(format: "%.1fkm", Double(hospital.distanceM) / 1000) : "\(hospital.distanceM)m"
+    }
+    private var telURL: URL? {
+        let digits = hospital.phone.filter { $0.isNumber }
+        return digits.isEmpty ? nil : URL(string: "tel://\(digits)")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 상단: 이름·거리·야간진료 정보
+            // 상단: 이름·거리·종별
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(place.name)
+                    Text(hospital.name)
                         .font(.system(size: 21, weight: .heavy))
                         .foregroundStyle(AppColors.ink)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: Spacing.s3) {
                         Label {
-                            Text("\(place.distanceMeters)m")
+                            Text(distanceText)
                                 .font(AppFont.num(15))
                                 .foregroundStyle(AppColors.ink2)
                         } icon: {
@@ -224,34 +267,24 @@ private struct EmergencyPlaceCard: View {
                                 .font(.system(size: 13))
                                 .foregroundStyle(AppColors.ink3)
                         }
-
-                        if place.hasNightCare {
-                            HStack(spacing: 4) {
-                                Image(systemName: "moon.stars.fill")
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text("야간진료")
-                                    .font(.system(size: 13.5, weight: .bold))
-                            }
-                            .foregroundStyle(BadgeTone.blue.ink)
-                            .padding(.horizontal, 8)
-                            .frame(height: 24)
-                            .background(BadgeTone.blue.bg, in: Capsule())
-                            .accessibilityLabel("야간진료 가능")
+                        if !hospital.department.isEmpty {
+                            Text(hospital.department)
+                                .font(.system(size: 13.5, weight: .bold))
+                                .foregroundStyle(AppColors.ink3)
                         }
                     }
 
-                    // 확인 시각 뱃지
+                    // HIRA는 실시간 영업정보가 없음 → 전화 확인 안내
                     HStack(spacing: 5) {
-                        Image(systemName: "clock")
+                        Image(systemName: "phone.arrow.up.right")
                             .font(.system(size: 12, weight: .semibold))
-                        Text("\(place.confirmedMinutesAgo)분 전 확인 · 전화로 다시 확인하세요")
+                        Text("방문 전 전화로 영업 여부를 확인하세요")
                             .font(.system(size: 12.5, weight: .medium))
                     }
                     .foregroundStyle(AppColors.ink2)
                     .padding(.horizontal, 10)
                     .frame(minHeight: 26)
                     .background(AppColors.surface2, in: Capsule())
-                    .accessibilityLabel("\(place.confirmedMinutesAgo)분 전 확인. 전화로 다시 확인하세요.")
                 }
 
                 Spacer()
@@ -279,9 +312,7 @@ private struct EmergencyPlaceCard: View {
                     fill: AppColors.emergencyAction,
                     cornerRadius: Radius.md,
                     action: {
-                        if let url = URL(string: place.phone) {
-                            UIApplication.shared.open(url)
-                        }
+                        if let url = telURL { UIApplication.shared.open(url) }
                     }
                 ) {
                     HStack(spacing: 10) {
@@ -292,12 +323,13 @@ private struct EmergencyPlaceCard: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 64)
                 }
-                .accessibilityLabel("\(place.name) 전화하기")
-                .accessibilityHint("탭하면 \(place.name)에 전화를 겁니다")
+                .opacity(telURL == nil ? 0.4 : 1)
+                .accessibilityLabel("\(hospital.name) 전화하기")
+                .accessibilityHint("탭하면 \(hospital.name)에 전화를 겁니다")
 
                 // 지도 버튼 — Apple 지도 앱에서 장소명 검색
                 Button {
-                    let q = place.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                    let q = hospital.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
                     if let url = URL(string: "http://maps.apple.com/?q=\(q)") {
                         UIApplication.shared.open(url)
                     }
@@ -313,7 +345,7 @@ private struct EmergencyPlaceCard: View {
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.93))
                 .accessibilityLabel("지도로 길찾기")
-                .accessibilityHint("\(place.name) 위치를 지도 앱에서 열어봅니다")
+                .accessibilityHint("\(hospital.name) 위치를 지도 앱에서 열어봅니다")
             }
         }
         .padding(18)
@@ -334,7 +366,7 @@ private struct EmergencyPlaceCard: View {
         }
         .blShadow(.card)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(place.name), \(place.distanceMeters)미터\(isNearest ? ", 가장 가까운 병원" : "")")
+        .accessibilityLabel("\(hospital.name), \(distanceText)\(isNearest ? ", 가장 가까운 병원" : "")")
     }
 }
 
