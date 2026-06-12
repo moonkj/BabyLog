@@ -17,6 +17,43 @@ enum MotionIconPalette {
     static let greenSoft = Color(hex: 0xDCEFE6)
 }
 
+// MARK: - 정적 라인 글리프(핸드오프 action_icons_handoff/svg)
+
+/// 지도·길찾기 라인 핀(아웃라인 물방울 + 중심 원). viewBox 24×24의 cubic 경로를 그대로 재현.
+struct MapLineShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 24
+        func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * s, y: y * s) }
+        var p = Path()
+        // 물방울 외곽(원본 c 커브 절대좌표화)
+        p.move(to: P(12, 2.5))
+        p.addCurve(to: P(5.5, 9.0),  control1: P(8.4, 2.5),  control2: P(5.5, 5.4))
+        p.addCurve(to: P(11.5, 18.5), control1: P(5.5, 13.4), control2: P(11.2, 18.3))
+        p.addCurve(to: P(12.5, 18.5), control1: P(11.8, 18.7), control2: P(12.2, 18.7))
+        p.addCurve(to: P(18.5, 9.0),  control1: P(12.8, 18.3), control2: P(18.5, 13.4))
+        p.addCurve(to: P(12, 2.5),    control1: P(18.5, 5.4),  control2: P(15.6, 2.5))
+        p.closeSubpath()
+        // 중심 원 (cx12 cy9 r2.5)
+        p.addEllipse(in: CGRect(x: (12 - 2.5) * s, y: (9 - 2.5) * s, width: 5 * s, height: 5 * s))
+        return p
+    }
+}
+
+/// 공유 라인(연결선 2 + 노드 3). 원본 좌표 그대로.
+struct ShareLineShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 24
+        func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: P(8.5, 11)); p.addLine(to: P(15, 7.5))
+        p.move(to: P(8.5, 13)); p.addLine(to: P(15, 16.5))
+        for c in [(17.0, 6.0), (17.0, 18.0), (6.0, 12.0)] {
+            p.addEllipse(in: CGRect(x: (c.0 - 2.6) * s, y: (c.1 - 2.6) * s, width: 5.2 * s, height: 5.2 * s))
+        }
+        return p
+    }
+}
+
 // MARK: - keyframe 보간 유틸
 
 /// 진행도 p(0~1)에서 (위치, 값) 스톱들을 선형 보간.
@@ -133,7 +170,10 @@ struct PhoneMotionIcon: View {
                     phoneBody(angle: angle, p: p)
                 }
             } else {
-                phoneBody(angle: 0, p: -1)
+                // 정적 = 라인 수화기(핸드오프 아웃라인 스타일)
+                Image(systemName: "phone")
+                    .font(.system(size: size * 0.66, weight: .regular))
+                    .foregroundStyle(color)
             }
         }
         .frame(width: size, height: size)
@@ -198,7 +238,10 @@ struct MapPinMotionIcon: View {
                     pinBody(dy: dy, dot: dot)
                 }
             } else {
-                pinBody(dy: 0, dot: 1)
+                // 정적 = 라인 핀(핸드오프 아웃라인 스타일)
+                MapLineShape()
+                    .stroke(color, style: StrokeStyle(lineWidth: max(1.6, size * 0.085), lineCap: .round, lineJoin: .round))
+                    .frame(width: size, height: size)
             }
         }
         .frame(width: size, height: size)
@@ -246,7 +289,10 @@ struct ShareMotionIcon: View {
                     shareBody(p: p)
                 }
             } else {
-                shareBody(p: -1)
+                // 정적 = 라인 노드(핸드오프 아웃라인 스타일)
+                ShareLineShape()
+                    .stroke(color, style: StrokeStyle(lineWidth: max(1.6, size * 0.085), lineCap: .round, lineJoin: .round))
+                    .frame(width: size, height: size)
             }
         }
         .frame(width: size, height: size)
