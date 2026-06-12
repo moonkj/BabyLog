@@ -1,6 +1,70 @@
 import SwiftUI
 import UIKit
 
+// MARK: - HomeIconBadge (홈 리딩 아이콘 — 그라데이션 스퀴클, 앱아이콘 톤)
+//
+// 평면 단색 SF Symbol을 입체감 있는 squircle 배지로 격상한다.
+// 대각 그라데이션 + 상단 하이라이트 + 헤어라인 + 부드러운 컬러 섀도우로
+// '기본 아이콘' 느낌을 없애고 카드 위계의 시각적 앵커를 만든다.
+struct HomeIconBadge: View {
+    let symbol: String
+    /// 기준 색(강조색). 이 색으로 그라데이션·섀도우를 파생한다.
+    let tint: Color
+    var size: CGFloat = 46
+    /// 채움 스타일 — solid(컬러 배경+흰 심볼) / soft(연한 배경+컬러 심볼)
+    var soft: Bool = false
+
+    private var corner: CGFloat { size * 0.30 }
+
+    var body: some View {
+        ZStack {
+            if soft {
+                // 연한 틴트 배경 + 컬러 심볼 (밝은 카드 위 부드러운 변형)
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [tint.opacity(0.20), tint.opacity(0.12)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                symbolView(color: tint)
+            } else {
+                // 컬러 그라데이션 배경 + 흰 심볼 (강한 앵커)
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [tint.opacity(0.86), tint],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                // 상단 광택 하이라이트
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.30), Color.white.opacity(0.0)],
+                            startPoint: .top, endPoint: .center
+                        )
+                    )
+                symbolView(color: .white)
+            }
+        }
+        .frame(width: size, height: size)
+        .overlay {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .stroke(Color.white.opacity(soft ? 0.0 : 0.28), lineWidth: 0.6)
+        }
+        .shadow(color: tint.opacity(soft ? 0.18 : 0.34), radius: size * 0.16, x: 0, y: size * 0.09)
+        .accessibilityHidden(true)
+    }
+
+    private func symbolView(color: Color) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.46, weight: .semibold))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(color)
+    }
+}
+
 // MARK: - 홈 레이아웃 열거형
 enum HomeLayout: String, CaseIterable {
     case hero      = "hero"
@@ -470,15 +534,8 @@ struct HomeTab: View {
         if let item = priorityItem {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 14) {
-                    // 시각적 무게를 위한 원형 골드 틴트 리딩 아이콘
-                    ZStack {
-                        Circle().fill(AppColors.gold.opacity(0.16))
-                        Image(systemName: priorityIcon(item.kind))
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(AppColors.gold)
-                    }
-                    .frame(width: 46, height: 46)
-                    .accessibilityHidden(true)
+                    // 시각적 무게를 위한 리딩 아이콘 — 그라데이션 스퀴클 배지
+                    HomeIconBadge(symbol: priorityIcon(item.kind), tint: AppColors.gold, size: 46)
                     VStack(alignment: .leading, spacing: 6) {
                         Label("지금 가장 중요해요", systemImage: "sparkles")
                             .font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.gold)
@@ -764,9 +821,7 @@ struct HomeTab: View {
         Button { onNavigate(.record) } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(AppColors.primary)
+                    HomeIconBadge(symbol: "plus", tint: AppColors.primary, size: 44)
                     Spacer()
                 }
                 Spacer()
@@ -800,9 +855,7 @@ struct HomeTab: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Image(systemName: icon)
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(iconColor)
+                    HomeIconBadge(symbol: icon, tint: iconColor, size: 44)
                     Spacer()
                 }
                 Spacer()
@@ -869,14 +922,7 @@ struct HomeTab: View {
                             .frame(width: 54, height: 54)
                             .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                     } else if let icon {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                .fill(tone.bg)
-                                .frame(width: 54, height: 54)
-                            Image(systemName: icon)
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(tone.ink)
-                        }
+                        HomeIconBadge(symbol: icon, tint: tone.ink, size: 54)
                     } else {
                         PhotoPlaceholder(seed: seed, cornerRadius: 11)
                             .frame(width: 54, height: 54)
