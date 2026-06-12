@@ -160,13 +160,17 @@ struct EmergencyScreen: View {
     private var placeList: some View {
         VStack(spacing: 14) {
             if loading {
-                ForEach(0..<3, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                        .fill(AppColors.surface2)
-                        .frame(height: 150)
-                        .redacted(reason: .placeholder)
+                // 주변 탐색과 동일한 레이더 검색 애니메이션(응급 — 가까운 병원 훑는 중)
+                VStack(spacing: Spacing.s4) {
+                    RadarSweepView(size: 132)
+                    Text("가까운 병원을 찾는 중…")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.ink2)
                 }
-                .accessibilityHidden(true)
+                .frame(maxWidth: .infinity, minHeight: 320, alignment: .center)
+                .padding(.top, Spacing.s5)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("가까운 병원을 찾는 중")
             } else if loadFailed {
                 failedState
             } else if hospitals.isEmpty {

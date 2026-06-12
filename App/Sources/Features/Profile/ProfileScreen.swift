@@ -30,11 +30,12 @@ struct ProfileScreen: View {
         return "\(c.name) · \(m)개월"
     }
 
-    // 중고 마켓·크루는 백엔드(Supabase) 연동 전이므로 로컬 기준 0 (정직한 신규 상태)
-    private let tradeCount   = 0
+    // 거래·크루 수는 뱃지 엔진과 동일 소스(로컬 기준)로 산정 — 티어 카드와 뱃지 불일치 방지.
+    // (서버 거래 집계 전까지 로컬 판매완료/가입 기준. 평점은 데이터 없어 0.)
+    private var tradeCount: Int { store.marketItems.filter { $0.mine && $0.status == .sold }.count }
     private let avgRating    = 0.0
     private let joinedMonths = 0
-    private let crewCount    = 0
+    private var crewCount: Int { store.joinedCrewIds.count }
 
     // MARK: 실 로컬 활동치 (기록 기반)
     /// 전체 기록 수 (다이어리 + 성장)
