@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Push 전용 엔타이틀먼트 — 실시간 크루 오픈 알림(APNs).
+  iCloud/App Group은 BabyLog.entitlements(별도, 추후)로 분리해 프로비저닝 단순화.
+  배포(TestFlight/App Store) 시 aps-environment 를 production 으로.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>aps-environment</key>
+    <string>development</string>
+</dict>
+</plist>
