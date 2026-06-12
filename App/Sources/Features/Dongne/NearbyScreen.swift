@@ -289,11 +289,13 @@ struct NearbyScreen: View {
                     near: Coordinate(lat: c.latitude, lng: c.longitude),
                     openNow: openNow
                 )
-            // 주변 탭은 "동네 소아과 의원" 위주 — 종합/상급종합/요양병원은 응급 탭(응급실)에서.
-            // (department = 종별명 clCdNm). 의원만 추리되 비면 전체로 폴백(시골 대응).
-            let bigTypes: Set<String> = ["상급종합", "종합병원", "요양병원", "정신병원"]
-            let clinics = results.filter { !bigTypes.contains($0.department) }
-            let finalResults = clinics.isEmpty ? results : clinics
+            // dgsbjtCd=11은 소아청소년과를 '등록'한 기관이라 가정의학·내과·정형외과 의원까지 섞임.
+            // → 이름에 소아 관련 키워드가 있는 진짜 소아과/아동병원만 추림(없으면 전체 폴백).
+            let pediatricKeywords = ["소아", "아동", "어린이", "키즈"]
+            let pediatric = results.filter { h in
+                pediatricKeywords.contains { h.name.contains($0) }
+            }
+            let finalResults = pediatric.isEmpty ? results : pediatric
             hospitalState = finalResults.isEmpty ? .empty : .loaded(finalResults)
         } catch {
             hospitalState = .failed(error)
@@ -637,38 +639,34 @@ private struct HospitalCard: View {
 
                 // 텍스트 정보
                 VStack(alignment: .leading, spacing: 5) {
-                    // 이름 + 영업 상태 뱃지
-                    HStack(alignment: .center, spacing: Spacing.s2) {
-                        Text(hospital.name)
-                            .font(.system(size: 15.5, weight: .bold))
-                            .foregroundStyle(AppColors.ink)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .layoutPriority(1)
+                    // 이름 — 전체 폭 1줄
+                    Text(hospital.name)
+                        .font(.system(size: 15.5, weight: .bold))
+                        .foregroundStyle(AppColors.ink)
+                        .lineLimit(1)
 
+                    // 영업상태 · 거리 · (평점) · 종별
+                    HStack(spacing: Spacing.s1 + 2) {
                         if hospital.isOpenNow {
                             BLBadge(tone: .mint, text: "영업중", systemIcon: nil, dot: true)
                         } else {
                             BLBadge(tone: .grey, text: "영업종료", systemIcon: nil, dot: false)
                         }
-                        Spacer(minLength: 0)
-                    }
 
-                    // 거리·평점·진료과목
-                    HStack(spacing: Spacing.s1 + 2) {
                         Text("\(hospital.distanceM)m")
                             .font(AppFont.num(12.5))
                             .foregroundStyle(AppColors.ink2)
 
-                        Text("·").foregroundStyle(AppColors.line2)
-
-                        HStack(spacing: 2) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 11))
-                                .foregroundStyle(AppColors.gold)
-                            Text(String(format: "%.1f", hospital.rating))
-                                .font(AppFont.num(12.5))
-                                .foregroundStyle(AppColors.ink2)
+                        if hospital.rating > 0 {   // HIRA는 평점 미제공 → 0이면 숨김
+                            Text("·").foregroundStyle(AppColors.line2)
+                            HStack(spacing: 2) {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppColors.gold)
+                                Text(String(format: "%.1f", hospital.rating))
+                                    .font(AppFont.num(12.5))
+                                    .foregroundStyle(AppColors.ink2)
+                            }
                         }
 
                         Text("·").foregroundStyle(AppColors.line2)
@@ -677,6 +675,8 @@ private struct HospitalCard: View {
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(AppColors.ink2)
                             .lineLimit(1)
+
+                        Spacer(minLength: 0)
                     }
 
                     // "○분 전 확인" 뱃지
