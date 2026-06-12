@@ -254,7 +254,12 @@ struct NearbyScreen: View {
                     near: Coordinate(lat: c.latitude, lng: c.longitude),
                     openNow: openNow
                 )
-            hospitalState = results.isEmpty ? .empty : .loaded(results)
+            // 주변 탭은 "동네 소아과 의원" 위주 — 종합/상급종합/요양병원은 응급 탭(응급실)에서.
+            // (department = 종별명 clCdNm). 의원만 추리되 비면 전체로 폴백(시골 대응).
+            let bigTypes: Set<String> = ["상급종합", "종합병원", "요양병원", "정신병원"]
+            let clinics = results.filter { !bigTypes.contains($0.department) }
+            let finalResults = clinics.isEmpty ? results : clinics
+            hospitalState = finalResults.isEmpty ? .empty : .loaded(finalResults)
         } catch {
             hospitalState = .failed(error)
         }
