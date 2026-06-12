@@ -2,6 +2,35 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
+// MARK: - 사업자 정보 (전자상거래법 고지 · 카카오 비즈 심사 대응)
+//
+// ⚠️ 아래 값은 반드시 (1) 국세청 사업자등록증, (2) 카카오 비즈니스 정보에
+//    등록한 내용과 "정확히 동일"해야 합니다. 다르면 카카오 심사에서 또 반려됩니다.
+//    값을 채운 뒤 빌드→설치하고, [설정 > 사업자 정보] 화면을 캡처해 재제출하세요.
+private enum BusinessInfo {
+    static let company   = "바이브랩"             // 상호 (사업자등록증과 동일)
+    static let owner     = "문경주"               // 대표자명
+    static let regNumber = "874-04-03594"        // 사업자등록번호
+    static let mailOrder = "제2026-충북청주-0608호" // 통신판매업 신고번호
+    static let address   = ""                     // 사업장 소재지 (등록증값 입력 — 비우면 숨김)
+    static let tel       = ""                     // 고객센터 전화 (입력 — 비우면 숨김)
+    static let email     = "imurmkj@naver.com"   // 고객센터 이메일
+    static let host      = "Apple iCloud · Supabase" // 호스팅/인프라 제공
+
+    /// 빈 값은 자동 제외 — 화면에 가짜/플레이스홀더가 찍히지 않도록.
+    static var rows: [(String, String)] {
+        [("상호", company),
+         ("대표자", owner),
+         ("사업자등록번호", regNumber),
+         ("통신판매업 신고", mailOrder),
+         ("사업장 소재지", address),
+         ("고객센터", tel),
+         ("이메일", email),
+         ("호스팅 제공", host)]
+            .filter { !$0.1.isEmpty }
+    }
+}
+
 // MARK: - SettingsScreen
 
 /// 앱 설정 화면 — ProfileScreen 기어 버튼에서 진입.
@@ -51,6 +80,7 @@ struct SettingsScreen: View {
                 iCloudSection
                 dataSection
                 infoSection
+                businessInfoSection
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.bottom, Spacing.s8)
@@ -623,6 +653,52 @@ struct SettingsScreen: View {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(v) (\(b))"
+    }
+
+    // MARK: - 사업자 정보 섹션 (전자상거래법 고지 + 카카오 비즈 심사용 캡처 대상)
+
+    private var businessInfoSection: some View {
+        settingsSection(eyebrow: "사업자 정보", title: "통신판매 사업자 정보") {
+            VStack(alignment: .leading, spacing: 0) {
+                let rows = BusinessInfo.rows
+                ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
+                    if idx > 0 { businessDivider }
+                    businessRow(label: row.0, value: row.1)
+                }
+
+                Text("전자상거래 등에서의 소비자보호에 관한 법률에 따른 사업자 정보입니다. 거래·환불 분쟁은 고객센터로 문의해 주세요.")
+                    .font(.system(size: 11.5, weight: .regular))
+                    .foregroundStyle(AppColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s3)
+                    .padding(.bottom, Spacing.s3)
+            }
+            .padding(.vertical, Spacing.s2)
+        }
+    }
+
+    private var businessDivider: some View {
+        Divider().overlay(AppColors.line).padding(.horizontal, Spacing.s4)
+    }
+
+    private func businessRow(label: String, value: String) -> some View {
+        HStack(alignment: .top, spacing: Spacing.s3) {
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.ink3)
+                .frame(width: 104, alignment: .leading)
+            Text(value)
+                .font(.system(size: 13.5, weight: .medium))
+                .foregroundStyle(AppColors.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(.horizontal, Spacing.s4)
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 
     // MARK: - Helpers
