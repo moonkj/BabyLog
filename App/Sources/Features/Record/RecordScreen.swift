@@ -51,7 +51,16 @@ struct RecordScreen: View {
         .background(AppColors.canvas)
         .sheet(isPresented: $showShareCard) {
             if let child = store.selectedChild {
-                ShareCardView(child: child)
+                // 최신 성장 기록(키/몸무게) + 최근 이정표 텍스트를 함께 넘겨 카드 필드가 비지 않게 한다.
+                // growthRecords는 날짜 오름차순 → .last가 최신. 이정표는 가장 최근 다이어리의 milestone.
+                let latestGrowth = store.growthRecords(for: child.id).last
+                let latestMilestone = store.diaryEntries(for: child.id)
+                    .compactMap { entry -> String? in
+                        guard let m = entry.milestone, !m.isEmpty else { return nil }
+                        return m
+                    }
+                    .first
+                ShareCardView(child: child, record: latestGrowth, milestoneText: latestMilestone)
             }
         }
         .sheet(isPresented: $showAddChild) {

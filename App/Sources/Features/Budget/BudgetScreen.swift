@@ -242,7 +242,7 @@ struct BudgetScreen: View {
         BLEmptyState(
             icon: "wonsign.circle",
             title: "\(monthTitle) 지출 기록이 없어요",
-            message: "오른쪽 아래 + 버튼으로 큰 지출을 추가해보세요.\n마켓 거래·구독은 자동으로 기록돼요."
+            message: "오른쪽 아래 + 버튼으로 지출을 직접 추가해 관리해보세요."
         )
     }
 
@@ -536,15 +536,15 @@ struct BudgetScreen: View {
                 }
             }
 
-            // 자동 수집 안내 문구
-            Text("마켓 거래·구독은 자동으로 기록돼요.\n큰 지출만 가끔 직접 추가하면 충분해요.")
+            // 지출 관리 안내 문구 (정직 — 자동 수집 기능은 없음)
+            Text("지출을 직접 추가해 관리해요.\n큰 지출만 기록해도 한 달 흐름이 보여요.")
                 .font(AppFont.caption)
                 .foregroundStyle(AppColors.ink3)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
                 .frame(maxWidth: .infinity)
                 .padding(.top, Spacing.s1)
-                .accessibilityLabel("자동 수집 안내: 마켓 거래와 구독은 자동으로 기록되며 큰 지출만 직접 추가하세요.")
+                .accessibilityLabel("지출 관리 안내: 지출을 직접 추가해 관리하세요. 큰 지출만 기록해도 한 달 흐름이 보입니다.")
         }
     }
 

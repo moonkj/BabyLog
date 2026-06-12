@@ -17,22 +17,41 @@ struct MarketItemDetail: View {
     @State private var statusBusy = false       // 상태 변경 중복 탭 방지(서버 정합)
     @State private var deleteBusy = false        // 삭제 중복 탭 방지
     @State private var showDeleteFailAlert = false
+    @State private var showStatusFailAlert = false
+    // 서버 모드에선 매물이 store.marketItems에 없어 liveItem.status가 진입 시점 스냅샷으로 고정된다.
+    // 상태 변경을 화면에 즉시 반영하기 위한 낙관적 오버라이드(서버 동기화 실패 시 롤백).
+    @State private var overrideStatus: MarketStatus?
     @Environment(\.dismiss) private var dismiss
 
     private var liveItem: MarketItem { store.marketItems.first(where: { $0.id == item.id }) ?? item }
 
-    /// 판매 상태 변경 — 로컬 우선 갱신 + (구성 시) 서버 동기화, 실패 시 롤백.
+    /// 화면이 읽어야 할 현재 상태 — 오버라이드 우선, 없으면 store/스냅샷 값.
+    private var currentStatus: MarketStatus { overrideStatus ?? liveItem.status }
+
+    /// 모든 하위 뷰가 currentStatus를 읽도록 status만 덮어쓴 표시용 사본.
+    private var displayItem: MarketItem {
+        var copy = liveItem
+        copy.status = currentStatus
+        return copy
+    }
+
+    /// 판매 상태 변경 — 화면 즉시 반영(오버라이드) + 로컬 우선 갱신 + (구성 시) 서버 동기화, 실패 시 롤백.
     private func changeStatus(_ newStatus: MarketStatus) {
         guard !statusBusy else { return }
-        let prev = liveItem.status
+        let prev = currentStatus                          // 화면이 현재 보여주는 상태(서버 모드에선 스냅샷 아님)
         guard prev != newStatus else { return }
-        store.setMarketStatus(id: item.id, newStatus)   // 로컬 우선 반영
+        overrideStatus = newStatus                        // 화면 낙관적 반영(서버 모드 포함)
+        store.setMarketStatus(id: item.id, newStatus)     // 로컬 우선 반영(로컬 모드용)
         guard SupabaseConfig.isConfigured else { return }
         let id = item.id
         statusBusy = true
         Task { @MainActor in
             let ok = await MarketBackend.setStatus(id: id, status: newStatus)
-            if !ok { store.setMarketStatus(id: id, prev) }   // 실패 시 이전 상태로 롤백
+            if !ok {
+                overrideStatus = prev                     // 화면 롤백
+                store.setMarketStatus(id: id, prev)       // 로컬 변경도 되돌림
+                showStatusFailAlert = true
+            }
             statusBusy = false
         }
     }
@@ -47,8 +66,7 @@ struct MarketItemDetail: View {
         }
         let id = item.id
         let urls = liveItem.photoURLs
-        let snapshot = liveItem            // 서버 실패 시 로컬 복원용
-        store.deleteMarketItem(id: id)     // 로컬 우선 삭제
+        store.deleteMarketItem(id: id)     // 로컬 우선 삭제(서버 모드에선 store에 없어 무동작)
         deleteBusy = true
         Task { @MainActor in
             let ok = await MarketBackend.deleteItem(id: id, photoURLs: urls)
@@ -56,18 +74,32 @@ struct MarketItemDetail: View {
             if ok {
                 dismiss()
             } else {
-                store.addMarketItem(snapshot)   // 실패 시 복원, 화면 유지
+                // 서버 모드 전용 경로(로컬 모드는 위에서 early-return). 로컬 삭제가 무동작이라
+                // 재삽입하면 서버 매물이 로컬 store를 오염시키므로 복원하지 않고 안내만, 화면 유지.
                 showDeleteFailAlert = true
             }
         }
+    }
+
+    /// 상태 변경 메뉴 항목 — 현재 상태(currentStatus)면 체크 표시 + 비활성.
+    @ViewBuilder
+    private func statusMenuButton(_ target: MarketStatus, _ title: String) -> some View {
+        Button { changeStatus(target) } label: {
+            if currentStatus == target {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+        .disabled(statusBusy || currentStatus == target)
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    MarketDetailHeroPhoto(item: liveItem)
-                    MarketDetailContent(item: liveItem)
+                    MarketDetailHeroPhoto(item: displayItem)
+                    MarketDetailContent(item: displayItem)
                         .padding(.bottom, 96) // 하단 바 여백
                 }
             }
@@ -75,7 +107,7 @@ struct MarketItemDetail: View {
             .ignoresSafeArea(edges: .top)
 
             MarketDetailBottomBar(
-                item: liveItem,
+                item: displayItem,
                 isFavorited: Binding(
                     get: { store.isMarketSaved(item.id) },
                     set: { _ in store.toggleMarketSaved(item.id) }
@@ -91,9 +123,10 @@ struct MarketItemDetail: View {
             if liveItem.mine {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("판매중으로") { changeStatus(.selling) }
-                        Button("예약중으로") { changeStatus(.reserved) }
-                        Button("판매완료로") { changeStatus(.sold) }
+                        // 현재 상태에 체크 표시 + 같은 상태/변경 중엔 비활성(currentStatus 경유)
+                        statusMenuButton(.selling, "판매중으로")
+                        statusMenuButton(.reserved, "예약중으로")
+                        statusMenuButton(.sold, "판매완료로")
                         Divider()
                         Button("매물 삭제", role: .destructive) { deleteItem() }
                             .disabled(deleteBusy)
@@ -105,12 +138,12 @@ struct MarketItemDetail: View {
             }
         }
         .sheet(isPresented: $showChatSheet) {
-            MarketChatSheet(item: liveItem)
+            MarketChatSheet(item: displayItem)
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
         .sheet(isPresented: $showBuySheet) {
-            MarketBuySheet(item: liveItem, onChat: { showChatSheet = true })
+            MarketBuySheet(item: displayItem, onChat: { showChatSheet = true })
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
@@ -118,6 +151,11 @@ struct MarketItemDetail: View {
             Button("확인", role: .cancel) { }
         } message: {
             Text("네트워크 문제로 매물을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.")
+        }
+        .alert("상태를 변경하지 못했어요", isPresented: $showStatusFailAlert) {
+            Button("확인", role: .cancel) { }
+        } message: {
+            Text("네트워크 문제로 판매 상태를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.")
         }
         .accessibilityElement(children: .contain)
     }

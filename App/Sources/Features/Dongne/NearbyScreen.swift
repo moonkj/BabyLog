@@ -303,6 +303,8 @@ struct NearbyScreen: View {
         .onAppear { locationProvider.start() }
         // 카테고리 전환 시 재로드(소아과·약국=HIRA / 키즈카페·놀이터=애플 지도)
         .onChange(of: selectedCategory) { _, _ in
+            // 장소 카테고리(키즈카페·놀이터)는 지도 미지원 → 리스트로 강제(stale 병원 마커 방지).
+            if isPlaceCategory && showMap { showMap = false }
             Task { await reloadCurrent() }
         }
         // 위치 획득 타임아웃(8초) — 권한은 있는데 GPS가 느린 경우. denied로 위장하지 않고
@@ -355,24 +357,36 @@ struct NearbyScreen: View {
         let category = selectedCategory
         let c = searchCoord
         placesLoading = true
+        placesFailed = false
         // 애플 한국 POI가 단일 키워드론 빈약할 수 있어 동의어를 순차 시도(첫 결과 사용).
         let queries: [String] = category == .kidsCafe
             ? ["키즈카페", "키즈 카페", "어린이카페", "kids cafe", "실내놀이터"]
             : ["놀이터", "어린이공원", "어린이놀이터", "공원", "playground"]
         let coord = Coordinate(lat: c.latitude, lng: c.longitude)
         var result: [Place] = []
-        if !ProviderFactory.isMock(APIConfig.kakaoRESTKeyName) {
-            // 카카오 키 연동됨 → 카카오 로컬(더 촘촘한 한국 장소 데이터)
-            result = (try? await ProviderFactory.place().search(queries[0], near: coord)) ?? []
-        } else {
-            // 키 없음 → 애플 지도 MKLocalSearch(동의어 순차 시도)
-            for q in queries {
-                let r = (try? await appleLocalSearch(query: q, center: c)) ?? []
-                if !r.isEmpty { result = r; break }
+        // 실패(throw)와 "빈 결과"를 구분 — 실패면 placesFailed로 재시도 UI를 보여준다.
+        var didFail = false
+        do {
+            if !ProviderFactory.isMock(APIConfig.kakaoRESTKeyName) {
+                // 카카오 키 연동됨 → 카카오 로컬(더 촘촘한 한국 장소 데이터)
+                result = try await ProviderFactory.place().search(queries[0], near: coord)
+            } else {
+                // 키 없음 → 애플 지도 MKLocalSearch(동의어 순차 시도)
+                for q in queries {
+                    let r = try await appleLocalSearch(query: q, center: c)
+                    if !r.isEmpty { result = r; break }
+                }
             }
+        } catch {
+            didFail = true
         }
         guard category == selectedCategory else { return }
-        places = result.sorted { $0.distanceM < $1.distanceM }
+        if didFail {
+            places = []
+            placesFailed = true
+        } else {
+            places = result.sorted { $0.distanceM < $1.distanceM }
+        }
         placesLoading = false
     }
 
@@ -455,6 +469,7 @@ struct NearbyScreen: View {
     @ViewBuilder
     private var locationHint: some View {
         if locationProvider.denied {
+            // 실제 권한 거부 — 설정 열기 CTA 노출.
             HStack(alignment: .top, spacing: Spacing.s3) {
                 Image(systemName: "location.slash.fill")
                     .font(.system(size: 14, weight: .bold))
@@ -501,31 +516,82 @@ struct NearbyScreen: View {
             .padding(.top, Spacing.s1)
             .padding(.bottom, Spacing.s3)
             .accessibilityElement(children: .contain)
+        } else if locationSlow {
+            // 권한은 있으나 GPS가 느린 상태 — 거부가 아니므로 설정 CTA 대신 "다시 시도"만.
+            HStack(alignment: .top, spacing: Spacing.s3) {
+                Image(systemName: "location.magnifyingglass")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppColors.gold)
+                    .frame(width: 18)
+                    .padding(.top, 1)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("위치를 찾는 중이에요")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppColors.ink)
+                    Text("잠시 후 다시 시도해 주세요. 그동안 기본 지역을 보여드려요.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: Spacing.s2)
+                Button {
+                    locationProvider.start()
+                    Task { await reloadCurrent(force: true) }
+                } label: {
+                    Text("다시 시도")
+                        .font(.system(size: 12.5, weight: .bold))
+                        .foregroundStyle(AppColors.primary)
+                        .padding(.horizontal, Spacing.s3)
+                        .frame(height: 32)
+                        .background(AppColors.surface, in: Capsule())
+                        .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.96))
+                .frame(minHeight: 44)
+                .accessibilityLabel("위치 다시 찾기")
+                .accessibilityHint("현재 위치를 다시 찾아 주변 결과를 새로고침합니다")
+            }
+            .padding(.horizontal, Spacing.s4)
+            .padding(.vertical, Spacing.s3)
+            .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                    .stroke(AppColors.gold.opacity(0.22), lineWidth: 1)
+            }
+            .padding(.horizontal, Spacing.s5)
+            .padding(.top, Spacing.s1)
+            .padding(.bottom, Spacing.s3)
+            .accessibilityElement(children: .contain)
         }
     }
 
     // MARK: Map Toggle Bar
 
+    // 장소 카테고리(키즈카페·놀이터)는 실좌표 지도 마커가 없어 리스트만 노출 → 토글 숨김.
+    @ViewBuilder
     private var mapToggleBar: some View {
-        HStack {
-            Spacer()
-            HStack(spacing: 0) {
-                mapToggleButton(icon: "list.bullet", label: "리스트", isSelected: !showMap) {
-                    withAnimation(.easeInOut(duration: 0.2)) { showMap = false }
+        if isLiveCategory {
+            HStack {
+                Spacer()
+                HStack(spacing: 0) {
+                    mapToggleButton(icon: "list.bullet", label: "리스트", isSelected: !showMap) {
+                        withAnimation(.easeInOut(duration: 0.2)) { showMap = false }
+                    }
+                    mapToggleButton(icon: "map", label: "지도", isSelected: showMap) {
+                        withAnimation(.easeInOut(duration: 0.2)) { showMap = true }
+                    }
                 }
-                mapToggleButton(icon: "map", label: "지도", isSelected: showMap) {
-                    withAnimation(.easeInOut(duration: 0.2)) { showMap = true }
-                }
+                .padding(3)
+                .background(AppColors.surface2, in: Capsule())
+                .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
+                .blShadow(.chip)
             }
-            .padding(3)
-            .background(AppColors.surface2, in: Capsule())
-            .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
-            .blShadow(.chip)
+            .padding(.horizontal, Spacing.s5)
+            .padding(.bottom, Spacing.s3)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("보기 전환")
         }
-        .padding(.horizontal, Spacing.s5)
-        .padding(.bottom, Spacing.s3)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("보기 전환")
     }
 
     private func mapToggleButton(icon: String, label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -634,8 +700,9 @@ struct NearbyScreen: View {
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .padding(.horizontal, Spacing.s5)
         .padding(.bottom, 14)
-        .accessibilityLabel("주변 병원 지도")
-        .accessibilityHint("병원 위치가 지도에 표시됩니다")
+        // 지도는 소아과·약국에서만 노출 → 현재 카테고리 기준 라벨(키즈카페·놀이터 마커 혼동 방지).
+        .accessibilityLabel("주변 \(selectedCategory.rawValue) 지도")
+        .accessibilityHint("\(selectedCategory.rawValue) 위치가 지도에 표시됩니다")
     }
 
     // MARK: List Section
@@ -774,6 +841,12 @@ struct NearbyScreen: View {
             }
             .frame(maxWidth: .infinity, minHeight: 460, alignment: .center)
             .accessibilityLabel("주변을 살펴보는 중")
+        } else if placesFailed {
+            // 조회 실패 — 빈 결과와 구분해 재시도 UI(병원 .failed와 동일 처리).
+            BLErrorState(
+                message: "주변 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
+                retry: { Task { await loadPlaces() } }
+            )
         } else if places.isEmpty {
             BLEmptyState(
                 icon: "mappin.slash",

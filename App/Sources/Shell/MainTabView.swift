@@ -16,6 +16,8 @@ struct MainTabView: View {
     @State private var showQuickRecord = false
     @State private var showAddChild = false
     @State private var showAddPregnancy = false
+    /// 멈춤/상실 임신만 있는 경우 — 새 임신 등록을 권하지 않고 부드러운 안내(민감영역)
+    @State private var showPausedNotice = false
     @State private var showSplash = true
     // FAB 자유 위치(길게 눌러 드래그) — 기준 위치에서의 오프셋 영속
     @AppStorage("bl_fab_dx") private var fabDX: Double = 0
@@ -144,7 +146,12 @@ struct MainTabView: View {
                     if mode == .baby && store.children.isEmpty {
                         showAddChild = true
                     } else if mode == .pregnancy && store.activePregnancy == nil {
-                        showAddPregnancy = true
+                        // 멈춤/상실 임신이 있고 활성 임신이 없으면 새 등록을 권하지 않는다(민감영역).
+                        if store.pregnancies.contains(where: { $0.status == .paused || $0.status == .loss }) {
+                            showPausedNotice = true
+                        } else {
+                            showAddPregnancy = true
+                        }
                     } else {
                         showQuickRecord = true
                     }
@@ -172,6 +179,11 @@ struct MainTabView: View {
         .sheet(isPresented: $showAddPregnancy) {
             AddPregnancySheet().environmentObject(store)
         }
+        .alert("기록이 잠시 멈춰 있어요", isPresented: $showPausedNotice) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("기록 탭에서 언제든 다시 시작할 수 있어요.")
+        }
         .sheet(isPresented: $showQuickRecord) {
             QuickRecordSheet(mode: mode, onSave: {}, onClose: { showQuickRecord = false })
                 .presentationDetents([.medium, .large])
@@ -189,6 +201,14 @@ struct MainTabView: View {
             let b = UIScreen.main.bounds
             let span = b.width - 100, maxUp = b.height - 240
             fabDX = fabOnLeft ? min(span, max(0, fabDX)) : min(0, max(-span, fabDX))
+            fabDY = min(0, max(-maxUp, fabDY))
+        }
+        // FAB 좌우 변경 시: X 오프셋 부호 규약이 반대편과 달라 저장값이 화면 밖이 됨.
+        // 기준 위치(0)로 리셋해 재실행 전까지 사라지는 문제 방지. Y는 화면 안으로 재클램프.
+        .onChange(of: fabSide) { _, _ in
+            fabDX = 0
+            let b = UIScreen.main.bounds
+            let maxUp = b.height - 240
             fabDY = min(0, max(-maxUp, fabDY))
         }
     }

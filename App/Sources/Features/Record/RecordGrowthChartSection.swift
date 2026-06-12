@@ -148,11 +148,18 @@ struct GrowthChartSection: View {
     /// 최신 측정값이 WHO 밴드 어디에 위치하는지 (성별 확인된 경우만 판정)
     private enum BandPosition { case withinRange, belowRange, aboveRange }
 
+    /// 밴드 데이터의 마지막 월령(현재 0–16개월). 이 범위를 크게 벗어나면 판정하지 않는다.
+    private let bandToleranceMonths = 1
+
     /// 월령에 해당하는 밴드를 선형 보간해 p15/p85 경계를 구하고, 측정값의 위치를 판정한다.
+    /// 밴드 데이터 마지막 월령(+허용오차)을 넘어서면 nil(판정 보류) — 오래된 아이를
+    /// 마지막 밴드에 억지로 끼워 "범위 밖"으로 잘못 단정하지 않는다.
     private func bandPosition(value: Double?, month: Int, bands: [WHOBand]) -> BandPosition? {
         guard let v = value else { return nil }
         let sorted = bands.sorted { $0.month < $1.month }
         guard let first = sorted.first, let lastB = sorted.last else { return nil }
+        // 밴드 마지막 월령을 (허용오차 이상) 넘어선 경우 판정 보류
+        guard month <= lastB.month + bandToleranceMonths else { return nil }
         let bound: (p15: Double, p85: Double)
         if month <= first.month {
             bound = (first.p15, first.p85)

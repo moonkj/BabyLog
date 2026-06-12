@@ -335,6 +335,14 @@ struct MkSellFlowSheet: View {
             }
 
             let hood = location.localityName ?? ""
+            // 위치 미확보 시 서버 등록이 실패하므로 시도하지 않고 안내(CrewCreateSheet와 동일 가드).
+            guard !hood.isEmpty, hood != "우리 동네" else {
+                await MainActor.run {
+                    submitting = false
+                    alertMessage = "위치를 확인하고 있어요. 잠시 후 다시 시도해 주세요."
+                }
+                return
+            }
             // 사진은 서버에서 업로드하므로 photoRefs는 비움(로컬 캐시는 store에서 별도 보존)
             let item = MarketItem(
                 title: title.trimmingCharacters(in: .whitespaces),

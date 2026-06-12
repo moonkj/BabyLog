@@ -465,6 +465,9 @@ struct BirthTransitionView: View {
             case .success(let child):
                 store.selectedChildId = child.id
                 createdChildName = child.name
+                // 출산 완료 → 임신 모드에서 육아 모드로 전환
+                // (안 하면 홈이 계속 "임신을 등록해보세요"를 보여줌)
+                UserDefaults.standard.set(AppMode.baby.rawValue, forKey: "bl_app_mode")
                 // 아이 프로필 동기화: 프로필 사진 + 출생 키/몸무게
                 if let img = profilePhoto, let ref = PhotoStore.save(img) {
                     store.updateChild(id: child.id, name: child.name,

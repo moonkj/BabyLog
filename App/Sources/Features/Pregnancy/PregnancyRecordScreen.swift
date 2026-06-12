@@ -27,6 +27,8 @@ struct PregnancyRecordScreen: View {
     private let mockNickname: String = "튼튼이"
 
     // ── 실데이터 vs 목업 ─────────────────────────────────────────────
+    // 목업은 "진짜로 비어 있는(데모/온보딩 전)" 상황에서만 쓴다.
+    // 등록된 임신이 있는데 활성만 아닐 때(출산 완료 등)는 가짜 24주 히어로를 띄우지 않는다.
     private var lmp: Date  { store.activePregnancy?.lmpDate ?? mockLMP }
     private var edd: Date  { store.activePregnancy?.eddDate ?? mockEDD }
     private var nickname: String {
@@ -36,8 +38,13 @@ struct PregnancyRecordScreen: View {
     }
 
     // ── 주수·D-day 계산 ─────────────────────────────────────────────
+    // 주수 계산 불가(데이터 부족)이면 nil — 가짜 24주를 만들지 않는다.
+    private var pregnancyWeekOrNil: (weeks: Int, days: Int)? {
+        AgeCalculator.pregnancyWeeks(lmp: lmp, edd: edd, asOf: Date())
+    }
+
     private var pregnancyWeek: (weeks: Int, days: Int) {
-        AgeCalculator.pregnancyWeeks(lmp: lmp, edd: edd, asOf: Date()) ?? (24, 0)
+        pregnancyWeekOrNil ?? (0, 0)
     }
 
     private var dDayToBirth: Int {
@@ -55,6 +62,16 @@ struct PregnancyRecordScreen: View {
         store.pregnancies.isEmpty && store.activePregnancy == nil
     }
 
+    // ── 활성 임신이 없고, 일시중단/상실도 아닌 임신만 있는 상태 ────────────
+    // (예: 출산 완료 .delivered) — 가짜 24주 히어로 대신 차분한 안내를 보여준다.
+    private var nonActivePregnancyToShow: Pregnancy? {
+        guard store.activePregnancy == nil, !store.pregnancies.isEmpty else { return nil }
+        let p = store.pregnancies.first
+        // 일시중단/상실은 별도 카드에서 처리하므로 여기선 제외
+        if let s = p?.status, s == .loss || s == .paused { return nil }
+        return p
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
@@ -68,10 +85,16 @@ struct PregnancyRecordScreen: View {
                                 .padding(.horizontal, Spacing.s5)
                                 .padding(.top, Spacing.s4)
                         }
-                        // 상실/일시중단 상태면 안내 카드, 아니면 일반 화면
+                        // 상실/일시중단 상태면 안내 카드
                         else if let preg = store.activePregnancy ?? store.pregnancies.first,
                            preg.status == .loss || preg.status == .paused {
                             pausedOrLossCard(pregnancy: preg)
+                                .padding(.horizontal, Spacing.s5)
+                                .padding(.top, Spacing.s4)
+                        }
+                        // 활성 임신이 없고 출산 완료 등 비활성 임신만 있는 경우 — 가짜 주차 대신 차분한 안내
+                        else if store.activePregnancy == nil, nonActivePregnancyToShow != nil {
+                            deliveredOrInactiveCard
                                 .padding(.horizontal, Spacing.s5)
                                 .padding(.top, Spacing.s4)
                         } else {
@@ -283,6 +306,47 @@ struct PregnancyRecordScreen: View {
         .accessibilityElement(children: .contain)
     }
 
+    // MARK: - 출산 완료 등 비활성 임신 안내 카드 (가짜 주차 대신)
+
+    private var deliveredOrInactiveCard: some View {
+        BLCard(flat: true) {
+            VStack(spacing: Spacing.s4) {
+                // 아이콘 — 손을 맞잡은 부모·아이 (육아 모드 연속성)
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: 0xFBEAF0))
+                        .frame(width: 80, height: 80)
+                    Circle()
+                        .stroke(AppColors.pregnancyPink.opacity(0.12), lineWidth: 1)
+                        .frame(width: 80, height: 80)
+                    Image(systemName: "figure.and.child.holdinghands")
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundStyle(AppColors.pregnancyPink.opacity(0.85))
+                }
+                .accessibilityHidden(true)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, Spacing.s3)
+
+                VStack(spacing: Spacing.s2) {
+                    Text("육아 모드에서 이어가요")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppColors.ink)
+                        .multilineTextAlignment(.center)
+
+                    Text("임신 기록은 안전히 보관돼 있어요.\n이제 성장 기록 탭에서 아이의 하루를 담아보세요.")
+                        .font(AppFont.callout)
+                        .foregroundStyle(AppColors.ink2)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                }
+                .padding(.bottom, Spacing.s2)
+            }
+            .padding(.vertical, Spacing.s2)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("육아 모드에서 이어가요. 임신 기록은 안전히 보관돼 있고, 성장 기록 탭에서 아이의 하루를 담을 수 있어요.")
+    }
+
     // MARK: - 툴바
 
     @ToolbarContentBuilder
@@ -316,12 +380,19 @@ struct PregnancyRecordScreen: View {
     // MARK: - ① 태아 히어로 카드
 
     private var heroSection: some View {
-        let week = pregnancyWeek
+        let weekOpt = pregnancyWeekOrNil
+        let week = weekOpt ?? (0, 0)
         let dday = dDayToBirth
         let fruit = FruitData.forWeek(week.weeks)
         let ddayLabel = dday >= 0 ? "D-\(dday)" : "D+\(-dday)"
+        // 주차 계산 불가(데이터 부족)면 가짜 주차 대신 중립 라벨
+        let weekBadgeText = weekOpt != nil
+            ? "\(PregnancyData.trimesterLabel(week.weeks)) · \(week.weeks)주 \(week.days)일"
+            : "주차 계산 불가"
         // 주차 진행감 — 40주 기준 진행률 (시각 보조용, 0~1 클램프)
-        let progress = max(0, min(1, Double(week.weeks * 7 + week.days) / 280.0))
+        let progress = weekOpt != nil
+            ? max(0, min(1, Double(week.weeks * 7 + week.days) / 280.0))
+            : 0
 
         return BLCard(padding: 0) {
             ZStack(alignment: .topTrailing) {
@@ -358,20 +429,21 @@ struct PregnancyRecordScreen: View {
                         VStack(alignment: .leading, spacing: Spacing.s2) {
                             BLBadge(
                                 tone: .pink,
-                                text: "\(PregnancyData.trimesterLabel(week.weeks)) · \(week.weeks)주 \(week.days)일",
+                                text: weekBadgeText,
                                 dot: true
                             )
                             Text(ddayLabel)
                                 .font(AppFont.num(34, weight: .heavy))
                                 .foregroundStyle(AppColors.pregnancyPink)
-                            Text("\(fruit.name)만 해요 · 출산까지")
+                            Text(weekOpt != nil ? "\(fruit.name)만 해요 · 출산까지" : "출산까지")
                                 .font(AppFont.caption)
                                 .foregroundStyle(Color(hex: 0xA8537E))
                         }
                         .accessibilityElement(children: .combine)
                         .accessibilityLabel(
-                            "\(PregnancyData.trimesterLabel(week.weeks)), \(week.weeks)주 \(week.days)일. "
-                            + "출산까지 \(ddayLabel). 태아 크기는 \(fruit.name) 정도예요."
+                            weekOpt != nil
+                            ? "\(PregnancyData.trimesterLabel(week.weeks)), \(week.weeks)주 \(week.days)일. 출산까지 \(ddayLabel). 태아 크기는 \(fruit.name) 정도예요."
+                            : "주차 계산 불가. 출산까지 \(ddayLabel)."
                         )
 
                         Spacer(minLength: 0)
@@ -392,7 +464,7 @@ struct PregnancyRecordScreen: View {
                         .frame(height: 7)
 
                         HStack {
-                            Text("\(week.weeks)주")
+                            Text(weekOpt != nil ? "\(week.weeks)주" : "—주")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(Color(hex: 0xA8537E))
                             Spacer()

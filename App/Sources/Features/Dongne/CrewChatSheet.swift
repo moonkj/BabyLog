@@ -20,6 +20,8 @@ struct CrewChatSheet: View {
     @State private var messageText = ""
     /// 서버 전송 실패 시 입력 바 위에 안내를 띄운다(다시 편집하면 자동 해제).
     @State private var sendFailed = false
+    /// 전송 실패로 입력란에 되돌려둔 텍스트. 이 값과 달라질 때(=사용자가 실제로 고칠 때)만 배너를 해제한다.
+    @State private var lastFailedText: String? = nil
     /// 서버 공유 메시지(미구성/미로드 시 nil → 로컬 폴백)
     @State private var serverMessages: [ChatMessage]? = nil
 
@@ -48,7 +50,10 @@ struct CrewChatSheet: View {
                     if let msgs = await CrewBackend.fetchMessages(meetupId: meetup.id) { serverMessages = msgs }
                 } else {
                     // 전송 실패 — 입력한 내용을 되돌려 다시 시도할 수 있게 한다.
+                    // messageText 복원이 .onChange를 트리거하므로, 복원값을 lastFailedText로 기억해
+                    // 같은 트랜잭션에서 배너가 즉시 사라지는 것을 막는다(사용자가 고칠 때만 해제).
                     messageText = text
+                    lastFailedText = text
                     sendFailed = true
                     Haptics.warning()
                 }
@@ -227,8 +232,12 @@ struct CrewChatSheet: View {
                     .background(AppColors.surface2, in: Capsule())
                     .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
                     .accessibilityLabel("메시지 입력")
-                    .onChange(of: messageText) { _ in
-                        if sendFailed { sendFailed = false }
+                    .onChange(of: messageText) { newValue in
+                        // 복원된 실패 텍스트와 달라질 때(=사용자가 실제로 편집)만 배너 해제.
+                        if sendFailed, newValue != lastFailedText {
+                            sendFailed = false
+                            lastFailedText = nil
+                        }
                     }
 
                 Button {

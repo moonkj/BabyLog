@@ -249,14 +249,17 @@ struct HomeTab: View {
     }
 
     // MARK: Priority Engine — 실데이터(아이 생년월일 기반 표준 접종 일정)
-    private struct StdVaccine { let month: Int; let name: String }
-    /// 질병관리청 표준 예방접종 일정(참조) — 월령 기준.
+    // ⚠️ vaccineId는 반드시 VaccineScheduleProviding 카탈로그와 동일 문자열을 사용한다.
+    //    (접종 완료 키 = "childId|vaccineId" — Record 탭 완료가 홈 우선순위에 반영되려면 id 일치 필수)
+    private struct StdVaccine { let month: Int; let id: String }
+    /// 질병관리청 표준 예방접종 일정(참조) — 월령 기준. id는 provider 카탈로그와 일치.
     private static let standardVaccines: [StdVaccine] = [
-        .init(month: 2,  name: "DTaP 1차"),  .init(month: 4,  name: "DTaP 2차"),
-        .init(month: 6,  name: "DTaP 3차"),  .init(month: 12, name: "MMR 1차"),
-        .init(month: 12, name: "수두"),      .init(month: 12, name: "일본뇌염 1차"),
-        .init(month: 15, name: "DTaP 4차"),  .init(month: 18, name: "일본뇌염 2차"),
-        .init(month: 24, name: "일본뇌염 3차"), .init(month: 48, name: "DTaP 5차"),
+        .init(month: 0,  id: "BCG"),     .init(month: 0,  id: "HepB-1"),
+        .init(month: 1,  id: "HepB-2"),  .init(month: 2,  id: "DTaP-1"),
+        .init(month: 2,  id: "IPV-1"),   .init(month: 2,  id: "Hib-1"),
+        .init(month: 2,  id: "PCV-1"),   .init(month: 4,  id: "DTaP-2"),
+        .init(month: 6,  id: "DTaP-3"),  .init(month: 12, id: "MMR-1"),
+        .init(month: 12, id: "Varicella"), .init(month: 15, id: "DTaP-4"),
     ]
 
     /// 선택 아이의 미완료 표준 접종(실제 생년월일로 예정일 계산)
@@ -264,11 +267,11 @@ struct HomeTab: View {
         guard let c = selectedChild else { return [] }
         let cal = Calendar.current
         return Self.standardVaccines.compactMap { v in
-            guard !store.isVaccineDone(childId: c.id, vaccineId: v.name),
+            guard !store.isVaccineDone(childId: c.id, vaccineId: v.id),
                   let date = cal.date(byAdding: .month, value: v.month, to: c.birthDate) else { return nil }
-            return VaccineRecord(id: UUID(), childId: c.id, vaccineId: v.name,
+            return VaccineRecord(id: UUID(), childId: c.id, vaccineId: v.id,
                                  scheduledDate: date, completedDate: nil,
-                                 hospital: store.vaccineHospital(childId: c.id, vaccineId: v.name))
+                                 hospital: store.vaccineHospital(childId: c.id, vaccineId: v.id))
         }
     }
 
@@ -591,6 +594,27 @@ struct HomeTab: View {
             .accessibilityLabel(accessLabel)
     }
 
+    /// 우선순위 종류별 CTA 라벨 — 종류에 맞는 행동 카피.
+    private func priorityActionLabel(_ kind: PriorityKind) -> String {
+        switch kind {
+        case .vaccine:     return "접종 확인하기"
+        case .recordNudge: return "기록 남기기"
+        case .memory:      return "추억 보기"
+        case .subsidy:     return "지원금 보기"
+        case .emergency:   return "응급 정보"
+        }
+    }
+
+    /// 우선순위 종류별 라우팅 — 전용 내비 훅이 없으면 가장 가까운 탭으로 이동.
+    private func priorityAction(_ kind: PriorityKind) {
+        switch kind {
+        case .vaccine, .recordNudge, .memory, .emergency:
+            onNavigate(.record)
+        case .subsidy:
+            onNavigate(.budget)
+        }
+    }
+
     /// 우선순위 종류별 대표 아이콘 (시각적 무게용 리딩 아이콘).
     private func priorityIcon(_ kind: PriorityKind) -> String {
         switch kind {
@@ -626,15 +650,17 @@ struct HomeTab: View {
                     }
                 }
                 HStack(spacing: 10) {
-                    LiquidButton(fill: AppColors.gold, action: { onNavigate(.record) }) { Text("접종 확인하기") }
-                    Button { onNavigate(.record) } label: {
+                    LiquidButton(fill: AppColors.gold, action: { priorityAction(item.kind) }) {
+                        Text(priorityActionLabel(item.kind))
+                    }
+                    Button { priorityAction(item.kind) } label: {
                         Image(systemName: "bell.fill").font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.gold)
                             .frame(width: 52, height: 52)
                             .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                     }
                     .buttonStyle(LiquidPressStyle())
-                    .accessibilityLabel("접종 일정 보기")
+                    .accessibilityLabel(priorityActionLabel(item.kind))
                     .fixedSize()
                 }
             }
@@ -1027,30 +1053,6 @@ struct HomeTab: View {
         }
         .buttonStyle(LiquidPressStyle(scale: 0.98))
         .accessibilityLabel("\(day): \(caption)\(badge != nil ? ", \(badge!)" : "")")
-    }
-}
-
-// MARK: - 기록
-struct RecordTab: View {
-    var body: some View {
-        TabScaffold(title: "기록", sub: "아이 타임라인") {
-            HStack(spacing: 8) {
-                ForEach(["타임라인", "성장차트", "예방접종"], id: \.self) { s in
-                    Text(s).font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(s == "타임라인" ? .white : AppColors.ink2)
-                        .frame(maxWidth: .infinity).frame(height: 38)
-                        .background(s == "타임라인" ? AppColors.ink : AppColors.surface,
-                                    in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                        .blShadow(s == "타임라인" ? .chip : .chip)
-                }
-            }
-            BLCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    BLBadge(tone: .amber, text: "첫 걸음마", systemIcon: "figure.walk")
-                    Text("임신부터 성장까지 끊김 없는 타임라인").font(AppFont.body).foregroundStyle(AppColors.ink2)
-                }
-            }
-        }
     }
 }
 

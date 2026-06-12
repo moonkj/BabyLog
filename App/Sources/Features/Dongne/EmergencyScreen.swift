@@ -16,6 +16,8 @@ struct EmergencyScreen: View {
     @ObservedObject private var location = NearbyLocationProvider.shared
     @State private var hospitals: [HospitalInfo] = []
     @State private var loading = true
+    /// 조회 실패 — 실제 "0곳"과 구분(아동안전: 거짓 "병원 없음" 방지). 재시도 UI 노출.
+    @State private var loadFailed = false
 
     // 마지막 확인 시각 (조회 시점)
     private let lastCheckedAt: String = {
@@ -52,6 +54,7 @@ struct EmergencyScreen: View {
     /// 정렬: ① 가장 가까운 대학병원급 최상단 → ② 종합병원급·소아과 거리순.
     private func load() async {
         loading = true
+        loadFailed = false
         let coord = location.coordinate.map { Coordinate(lat: $0.latitude, lng: $0.longitude) }
         do {
             // 두 조회 병렬: 전체 병원(종별 식별용) + 소아과(진료과목 11)
@@ -94,7 +97,9 @@ struct EmergencyScreen: View {
                 hospitals = openOnly
             }
         } catch {
+            // HIRA 조회 실패 — 빈 결과로 위장하지 않는다(거짓 "병원 없음" = 아동안전 위험).
             hospitals = []
+            loadFailed = true
         }
         loading = false
     }
@@ -162,6 +167,8 @@ struct EmergencyScreen: View {
                         .redacted(reason: .placeholder)
                 }
                 .accessibilityHidden(true)
+            } else if loadFailed {
+                failedState
             } else if hospitals.isEmpty {
                 emptyState
             } else {
@@ -205,6 +212,60 @@ struct EmergencyScreen: View {
         .padding(.vertical, Spacing.s7)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("주변에서 병원을 찾지 못했어요. 위급하면 119 구급 상담을 이용하세요.")
+    }
+
+    // MARK: Failed State (조회 실패 — "0곳"과 구분, 재시도)
+    // 아동안전: 서버 실패를 "병원 없음"으로 보여주면 보호자가 위험 판단을 그르친다.
+    private var failedState: some View {
+        VStack(spacing: Spacing.s4) {
+            ZStack {
+                Circle()
+                    .fill(AppColors.dangerTint)
+                    .frame(width: 88, height: 88)
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.system(size: 34, weight: .medium))
+                    .foregroundStyle(AppColors.danger)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .accessibilityHidden(true)
+
+            VStack(spacing: Spacing.s2) {
+                Text("병원 정보를 불러오지 못했어요")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(AppColors.ink)
+                    .multilineTextAlignment(.center)
+                Text("일시적인 오류일 수 있어요. 다시 시도하거나, 위급하면 아래 119 구급 상담을 이용하세요.")
+                    .font(.system(size: 14.5, weight: .medium))
+                    .foregroundStyle(AppColors.ink3)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, Spacing.s6)
+
+            // 다시 시도 — 44pt 이상 터치 타깃
+            Button {
+                Task { await load() }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 15, weight: .bold))
+                    Text("다시 시도")
+                        .font(.system(size: 15.5, weight: .bold))
+                }
+                .foregroundStyle(AppColors.ink)
+                .padding(.horizontal, Spacing.s5)
+                .frame(minHeight: 48)
+                .background(AppColors.surface, in: Capsule())
+                .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.96))
+            .accessibilityLabel("병원 정보 다시 불러오기")
+            .accessibilityHint("주변 병원 정보를 다시 조회합니다")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.s7)
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: 119 Emergency Call Button

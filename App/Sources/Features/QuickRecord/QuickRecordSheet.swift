@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 // MARK: - QuickRecordSheet
 // 빠른 기록 바텀시트 — 2탭 완료(초경량) ↔ 자세히 펼치기 토글.
@@ -175,14 +176,24 @@ struct QuickRecordSheet: View {
         .padding(.bottom, Spacing.s4)
     }
 
+    // 임신 모드는 동영상을 받지 않는다(배사진 타임라인은 사진 전용 — 동영상 무단 누락 방지).
+    private var allowsVideo: Bool { mode != .pregnancy }
+
     // 사진/동영상 드롭존 — 선택 시 스와이프 캐러셀, 미선택 시 드롭존
+    @ViewBuilder
     private var photoDropZone: some View {
         let mediaHeight: CGFloat = showDetail ? 300 : 420
-        return Group {
+        Group {
             if hasMedia {
                 mediaCarousel(height: mediaHeight)
-            } else {
+            } else if allowsVideo {
                 MediaPickerButton(maxImages: 5, images: $selectedImages, videoURL: $selectedVideoURL) {
+                    dropZonePlaceholder(height: showDetail ? 150 : 210)
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.97))
+            } else {
+                // 임신 모드: 사진 전용 피커(동영상 미노출 → 무단 누락 없음)
+                PhotosOnlyPickerButton(maxImages: 5, images: $selectedImages) {
                     dropZonePlaceholder(height: showDetail ? 150 : 210)
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.97))
@@ -216,12 +227,16 @@ struct QuickRecordSheet: View {
 
             // 변경/삭제
             HStack(spacing: 8) {
-                MediaPickerButton(maxImages: 5, images: $selectedImages, videoURL: $selectedVideoURL) {
-                    Label("변경", systemImage: "photo.on.rectangle")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10).frame(height: 32)
-                        .background(.black.opacity(0.45), in: Capsule())
+                Group {
+                    if allowsVideo {
+                        MediaPickerButton(maxImages: 5, images: $selectedImages, videoURL: $selectedVideoURL) {
+                            changeMediaLabel
+                        }
+                    } else {
+                        PhotosOnlyPickerButton(maxImages: 5, images: $selectedImages) {
+                            changeMediaLabel
+                        }
+                    }
                 }
                 Button {
                     selectedImages = []; selectedVideoURL = nil; carouselIndex = 0
@@ -235,6 +250,15 @@ struct QuickRecordSheet: View {
             }
             .padding(10)
         }
+    }
+
+    // "변경" 버튼 라벨 (사진/미디어 피커 공용)
+    private var changeMediaLabel: some View {
+        Label("변경", systemImage: "photo.on.rectangle")
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).frame(height: 32)
+            .background(.black.opacity(0.45), in: Capsule())
     }
 
     private func dropZonePlaceholder(height: CGFloat) -> some View {
@@ -251,7 +275,7 @@ struct QuickRecordSheet: View {
                     Text(photoPrompt)
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("사진·동영상 (최대 5장)")
+                    Text(mode == .pregnancy ? "사진 (최대 5장)" : "사진·동영상 (최대 5장)")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(.white.opacity(0.85))
                 }
@@ -522,14 +546,25 @@ struct QuickRecordSheet: View {
                 savedAnything = true
             }
         }
-        if showDetail, let w = Double(weightText.trimmingCharacters(in: .whitespaces)) {
+        if let w = Double(weightText.trimmingCharacters(in: .whitespaces)) {
             store.addPregnancyWeight(pregnancyId: preg.id, kg: w)
             savedAnything = true
         }
-        // 메모 저장 (손실 방지)
+        // 메모 저장 (손실 방지) — 선택한 이정표가 있으면 메모 앞에 합쳐 함께 보존
         let trimmedMemo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedMemo.isEmpty {
-            store.addPregnancyMemo(pregnancyId: preg.id, text: trimmedMemo)
+        let milestoneText = selectedMilestones.isEmpty
+            ? nil
+            : selectedMilestones.sorted().joined(separator: ", ")
+        let combinedMemo: String? = {
+            switch (milestoneText, trimmedMemo.isEmpty) {
+            case let (ms?, false): return "\(ms) · \(trimmedMemo)"
+            case let (ms?, true):  return ms
+            case (nil, false):     return trimmedMemo
+            case (nil, true):      return nil
+            }
+        }()
+        if let combinedMemo {
+            store.addPregnancyMemo(pregnancyId: preg.id, text: combinedMemo)
             savedAnything = true
         }
         return savedAnything
@@ -569,19 +604,18 @@ struct QuickRecordSheet: View {
                 }
                 didSave = true
             }
-            // 자세히 모드에서 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
-            if showDetail {
-                let heightVal  = Double(heightText.trimmingCharacters(in: .whitespaces))
-                let weightVal  = Double(weightText.trimmingCharacters(in: .whitespaces))
-                if heightVal != nil || weightVal != nil {
-                    store.addGrowthRecord(
-                        childId:             childId,
-                        heightCm:            heightVal,
-                        weightKg:            weightVal,
-                        headCircumferenceCm: nil
-                    )
-                    didSave = true
-                }
+            // 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
+            // (showDetail 여부가 아니라 실제 입력 여부로 판단 — 상세를 접어도 입력값 누락 없음)
+            let heightVal = Double(heightText.trimmingCharacters(in: .whitespaces))
+            let weightVal = Double(weightText.trimmingCharacters(in: .whitespaces))
+            if heightVal != nil || weightVal != nil {
+                store.addGrowthRecord(
+                    childId:             childId,
+                    heightCm:            heightVal,
+                    weightKg:            weightVal,
+                    headCircumferenceCm: nil
+                )
+                didSave = true
             }
         } else {
             onSave(); onClose(); return
@@ -619,6 +653,43 @@ struct QuickRecordSheet: View {
             onSave()
             onClose()
         }
+    }
+}
+
+// MARK: - 사진 전용 피커 버튼 (임신 모드 — 동영상 미노출)
+// 임신 배사진 타임라인은 사진만 저장하므로, 동영상을 아예 선택지에 노출하지 않아
+// 사용자가 고른 동영상이 조용히 누락되는 일을 원천 차단한다.
+private struct PhotosOnlyPickerButton<Label: View>: View {
+    var maxImages: Int = 5
+    @Binding var images: [UIImage]
+    @ViewBuilder var label: () -> Label
+
+    @State private var items: [PhotosPickerItem] = []
+
+    var body: some View {
+        PhotosPicker(
+            selection: $items,
+            maxSelectionCount: maxImages,
+            matching: .images,
+            photoLibrary: .shared()
+        ) {
+            label()
+        }
+        .onChange(of: items) { _, newItems in
+            Task { await load(newItems) }
+        }
+    }
+
+    private func load(_ newItems: [PhotosPickerItem]) async {
+        var imgs: [UIImage] = []
+        for item in newItems where imgs.count < maxImages {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let ui = await blDownsample(data: data) {
+                imgs.append(ui)
+            }
+        }
+        let finalImgs = imgs
+        await MainActor.run { images = finalImgs }
     }
 }
 
