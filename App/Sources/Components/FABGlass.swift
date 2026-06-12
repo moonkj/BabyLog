@@ -85,11 +85,15 @@ struct DraggableFAB: View {
                     dy = min(0, max(-maxUp, ny))
                     if abs(d.translation.width) > 6 || abs(d.translation.height) > 6 {
                         suppressTap = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { suppressTap = false }
                     }
                 }
                 drag = .zero
                 dragging = false
+                // 드래그 중 켜진 탭 억제는 어떤 경로로 끝나든 반드시 해제한다.
+                // (멀리 끌었다가 제자리로 돌아와도 suppressTap이 영구히 남아 탭이 죽는 것 방지)
+                if suppressTap {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { suppressTap = false }
+                }
                 Haptics.success()
             }
     }

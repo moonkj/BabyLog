@@ -130,6 +130,41 @@ extension MarketItemGrade: Codable {}
 extension MarketSellerTier: Codable {}
 extension MarketCategory: Codable {}
 
+// 하위 호환 디코딩 — 필드 추가 시 구 저장파일 keyNotFound로 전체 상태가 날아가는 사고 방지
+// (실제 이력: hygieneChecks·photoURLs 추가 때 두 번 발생). 알 수 없는 enum 값도 기본값으로 흡수.
+extension MarketItem {
+    enum CodingKeys: String, CodingKey {
+        case id, title, category, grade, monthsTag, price, originalPrice, isFree, hasRecall
+        case isGraduate, sellerName, sellerTier, distanceText, favoriteCount, photoSeed
+        case description, photoRefs, photoURLs, mine, status, createdAt, hygieneChecks
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id            = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title         = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        category      = MarketCategory(rawValue: (try? c.decode(String.self, forKey: .category)) ?? "") ?? .etc
+        grade         = MarketItemGrade(rawValue: (try? c.decode(String.self, forKey: .grade)) ?? "") ?? .a
+        monthsTag     = try c.decodeIfPresent(String.self, forKey: .monthsTag) ?? "전 월령"
+        price         = try c.decodeIfPresent(Int.self, forKey: .price) ?? 0
+        originalPrice = try c.decodeIfPresent(Int.self, forKey: .originalPrice)
+        isFree        = try c.decodeIfPresent(Bool.self, forKey: .isFree) ?? false
+        hasRecall     = try c.decodeIfPresent(Bool.self, forKey: .hasRecall) ?? false
+        isGraduate    = try c.decodeIfPresent(Bool.self, forKey: .isGraduate) ?? false
+        sellerName    = try c.decodeIfPresent(String.self, forKey: .sellerName) ?? "이웃"
+        sellerTier    = MarketSellerTier(rawValue: (try? c.decode(String.self, forKey: .sellerTier)) ?? "") ?? .new
+        distanceText  = try c.decodeIfPresent(String.self, forKey: .distanceText) ?? ""
+        favoriteCount = try c.decodeIfPresent(Int.self, forKey: .favoriteCount) ?? 0
+        photoSeed     = try c.decodeIfPresent(Int.self, forKey: .photoSeed) ?? 0
+        description   = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
+        photoRefs     = try c.decodeIfPresent([String].self, forKey: .photoRefs) ?? []
+        photoURLs     = try c.decodeIfPresent([String].self, forKey: .photoURLs) ?? []
+        mine          = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? false
+        status        = MarketStatus(rawValue: (try? c.decode(String.self, forKey: .status)) ?? "") ?? .selling
+        createdAt     = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        hygieneChecks = try c.decodeIfPresent([String].self, forKey: .hygieneChecks) ?? []
+    }
+}
+
 /// "곧 필요해요" 월령 연동 추천 아이템
 struct MarketNeedSoonItem: Identifiable {
     let id: Int

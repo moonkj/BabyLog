@@ -48,8 +48,14 @@ enum MarketBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let dtos = try? JSONDecoder().decode([ItemDTO].self, from: data) else { return nil }
+              let http = resp as? HTTPURLResponse else { return nil }
+        guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            print("[MarketBackend] fetchItems HTTP \(http.statusCode)")  // RLS 회귀 가시화
+            #endif
+            return nil
+        }
+        guard let dtos = try? JSONDecoder().decode([ItemDTO].self, from: data) else { return nil }
         let me = await SupabaseConfig.ownerID()
         let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoPlain = ISO8601DateFormatter()
@@ -138,8 +144,12 @@ enum MarketBackend {
         ])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([ItemDTO].self, from: data) else { return nil }
-        return rows.first?.id
+              let rows = try? JSONDecoder().decode([ItemDTO].self, from: data),
+              let newId = rows.first?.id else {
+            for u in urls { await deletePhoto(u) }   // 행 저장 실패 시 업로드된 사진 고아 객체 정리
+            return nil
+        }
+        return newId
     }
 
     /// 판매 상태 변경(판매중/예약중/판매완료).
@@ -153,10 +163,12 @@ enum MarketBackend {
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 익명 소유자 RLS 매칭
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        req.setValue("return=representation", forHTTPHeaderField: "Prefer")  // RLS 0행 매칭(가짜 성공) 감지용
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["status": status.rawValue])
-        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        // PostgREST는 0행 매칭(RLS 불일치)도 2xx → 실제 변경된 행이 있어야 성공
+        guard let rows = (try? JSONSerialization.jsonObject(with: data)) as? [Any], !rows.isEmpty else { return false }
         return true
     }
 
@@ -170,9 +182,11 @@ enum MarketBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 익명 소유자 RLS 매칭
-        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
-        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+        req.setValue("return=representation", forHTTPHeaderField: "Prefer")  // RLS 0행 매칭(가짜 성공) 감지용
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        // PostgREST는 0행 삭제도 2xx → 실제 삭제된 행이 있을 때만 사진 정리(살아있는 매물 사진 삭제 방지)
+        guard let rows = (try? JSONSerialization.jsonObject(with: data)) as? [Any], !rows.isEmpty else { return false }
         for u in photoURLs { await deletePhoto(u) }   // best-effort
         return true
     }
@@ -266,8 +280,14 @@ enum MarketBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let dtos = try? JSONDecoder().decode([ChatMessageDTO].self, from: data) else { return nil }
+              let http = resp as? HTTPURLResponse else { return nil }
+        guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            print("[MarketBackend] fetchMessages HTTP \(http.statusCode)")  // RLS 회귀 가시화
+            #endif
+            return nil
+        }
+        guard let dtos = try? JSONDecoder().decode([ChatMessageDTO].self, from: data) else { return nil }
         let me = await SupabaseConfig.ownerID()
         let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoPlain = ISO8601DateFormatter()

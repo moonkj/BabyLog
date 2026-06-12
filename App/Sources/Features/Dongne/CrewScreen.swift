@@ -98,6 +98,46 @@ struct CrewPost: Identifiable, Codable, Hashable {
     var createdAt: Date = Date()
 }
 
+// 하위 호환 디코딩 — 필드 추가 시 구 저장파일 전체가 깨지지 않게(데이터 보존 절대원칙).
+extension CrewMeetup {
+    enum CodingKeys: String, CodingKey {
+        case id, place, when, hostName, hostTier, joined, capacity, meetupType, description, mine, createdAt
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id          = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        place       = try c.decodeIfPresent(String.self, forKey: .place) ?? "모임"
+        when        = try c.decodeIfPresent(String.self, forKey: .when) ?? "일정 협의"
+        hostName    = try c.decodeIfPresent(String.self, forKey: .hostName) ?? "이웃"
+        hostTier    = MarketSellerTier(rawValue: (try? c.decode(String.self, forKey: .hostTier)) ?? "") ?? .new
+        joined      = try c.decodeIfPresent(Int.self, forKey: .joined) ?? 0
+        capacity    = try c.decodeIfPresent(Int.self, forKey: .capacity) ?? 8
+        meetupType  = CrewMeetupType(rawValue: (try? c.decode(String.self, forKey: .meetupType)) ?? "") ?? .park
+        description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
+        mine        = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? false
+        createdAt   = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
+}
+
+extension CrewPost {
+    enum CodingKeys: String, CodingKey {
+        case id, category, authorName, timeText, title, body, replyCount, likeCount, mine, createdAt
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id         = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        category   = CrewPostCategory(rawValue: (try? c.decode(String.self, forKey: .category)) ?? "") ?? .info
+        authorName = try c.decodeIfPresent(String.self, forKey: .authorName) ?? "이웃"
+        timeText   = try c.decodeIfPresent(String.self, forKey: .timeText) ?? ""
+        title      = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        body       = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
+        replyCount = try c.decodeIfPresent(Int.self, forKey: .replyCount) ?? 0
+        likeCount  = try c.decodeIfPresent(Int.self, forKey: .likeCount) ?? 0
+        mine       = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? false
+        createdAt  = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
+}
+
 // MARK: - Mock Data
 
 extension CrewMeetup {

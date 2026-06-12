@@ -63,7 +63,8 @@ enum CrewBackend {
     /// 동네 대기 신청(중복은 병합). 성공 true.
     @discardableResult
     static func joinWaitlist(hood: String) async -> Bool {
-        guard SupabaseConfig.isConfigured, var req = await request("/rest/v1/crew_waitlist", method: "POST") else { return false }
+        // on_conflict 미지정 시 PK(id) 기준 병합 → (hood,device_id) unique 충돌이 409로 떨어짐(재설치 후 영구 실패)
+        guard SupabaseConfig.isConfigured, var req = await request("/rest/v1/crew_waitlist?on_conflict=hood,device_id", method: "POST") else { return false }
         req.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "device_id": SupabaseConfig.deviceID,
@@ -169,8 +170,14 @@ enum CrewBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let dtos = try? JSONDecoder().decode([CrewPostDTO].self, from: data) else { return nil }
+              let http = resp as? HTTPURLResponse else { return nil }
+        guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            print("[CrewBackend] fetchPosts HTTP \(http.statusCode)")  // RLS 회귀 가시화
+            #endif
+            return nil
+        }
+        guard let dtos = try? JSONDecoder().decode([CrewPostDTO].self, from: data) else { return nil }
         let me = await SupabaseConfig.ownerID()
         return dtos.map { d in
             CrewPost(
@@ -226,8 +233,14 @@ enum CrewBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let dtos = try? JSONDecoder().decode([CrewMeetupDTO].self, from: data) else { return nil }
+              let http = resp as? HTTPURLResponse else { return nil }
+        guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            print("[CrewBackend] fetchMeetups HTTP \(http.statusCode)")  // RLS 회귀 가시화
+            #endif
+            return nil
+        }
+        guard let dtos = try? JSONDecoder().decode([CrewMeetupDTO].self, from: data) else { return nil }
         let me = await SupabaseConfig.ownerID()
         return dtos.map { d in
             CrewMeetup(
@@ -299,8 +312,14 @@ enum CrewBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let dtos = try? JSONDecoder().decode([CrewGroupDTO].self, from: data) else { return nil }
+              let http = resp as? HTTPURLResponse else { return nil }
+        guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            print("[CrewBackend] fetchGroups HTTP \(http.statusCode)")  // RLS 회귀 가시화
+            #endif
+            return nil
+        }
+        guard let dtos = try? JSONDecoder().decode([CrewGroupDTO].self, from: data) else { return nil }
         return dtos.map { d in
             CrewGroup(
                 id: d.id,
@@ -377,8 +396,14 @@ enum CrewBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let dtos = try? JSONDecoder().decode([CrewMessageDTO].self, from: data) else { return nil }
+              let http = resp as? HTTPURLResponse else { return nil }
+        guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            print("[CrewBackend] fetchMessages HTTP \(http.statusCode)")  // RLS 회귀 가시화
+            #endif
+            return nil
+        }
+        guard let dtos = try? JSONDecoder().decode([CrewMessageDTO].self, from: data) else { return nil }
         let me = await SupabaseConfig.ownerID()
         let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoPlain = ISO8601DateFormatter()
@@ -421,8 +446,14 @@ enum CrewBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let dtos = try? JSONDecoder().decode([CrewReplyDTO].self, from: data) else { return nil }
+              let http = resp as? HTTPURLResponse else { return nil }
+        guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            print("[CrewBackend] fetchReplies HTTP \(http.statusCode)")  // RLS 회귀 가시화
+            #endif
+            return nil
+        }
+        guard let dtos = try? JSONDecoder().decode([CrewReplyDTO].self, from: data) else { return nil }
         return dtos.compactMap { $0.body }
     }
 

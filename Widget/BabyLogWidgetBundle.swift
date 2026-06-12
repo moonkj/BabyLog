@@ -1,6 +1,6 @@
 // BabyLogWidgetBundle.swift — BabyLog Widget Extension
 // WidgetBundle 진입점 (@main)
-// Bundle ID(제안): com.babylog.app.widget
+// Bundle ID: com.vibelab.babylog.widget
 // Deployment Target: iOS 17.0+
 
 import WidgetKit

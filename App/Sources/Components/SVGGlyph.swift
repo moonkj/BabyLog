@@ -59,7 +59,11 @@ enum SVGPathParser {
                 cur = e; hadCubic = false
             case "Z":
                 path.closeSubpath(); cur = sub; hadCubic = false
+                // Z는 인자를 받지 않는다 — 뒤따르는 잘못된 숫자 토큰은 건너뛰어
+                // 루프가 반드시 전진하도록 보장(무한 루프 → 메인 스레드 행 방지).
+                while i < toks.count, case .num = toks[i] { i += 1 }
             default:
+                // 미지원/공백 커맨드 — 토큰을 하나 소비해 루프 전진 보장.
                 i += 1
             }
         }
@@ -232,7 +236,7 @@ struct NavLineIcon: View {
 
 /// 핸드오프 네비 팔레트
 enum NavPalette {
-    static let inactive = Color(hex: 0xA89D8C)  // ink-3 (warm taupe)
+    static let inactive = Color(hex: 0x737373)  // ink-3 (중립 그레이 — 앱 현행 팔레트와 일치)
     static let activeTab = Color(hex: 0x4E8268) // sage
     static let segActive = Color(hex: 0x3F6B55) // sage-press
 }

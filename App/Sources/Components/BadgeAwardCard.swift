@@ -12,6 +12,7 @@ struct BadgeAwardCard: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pop = false
+    @State private var autoDismissWork: DispatchWorkItem?
 
     var body: some View {
         ZStack {
@@ -71,7 +72,15 @@ struct BadgeAwardCard: View {
             if reduceMotion { pop = true }
             else { withAnimation(.spring(response: 0.5, dampingFraction: 0.58)) { pop = true } }
             // 자동 닫힘 (사용자가 먼저 닫지 않으면)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { onDismiss() }
+            // — 취소 가능한 작업으로 보관: 일찍 닫힌 뒤 남은 타이머가 다음 뱃지 카드를 닫아버리는 것 방지
+            autoDismissWork?.cancel()
+            let work = DispatchWorkItem { onDismiss() }
+            autoDismissWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.5, execute: work)
+        }
+        .onDisappear {
+            autoDismissWork?.cancel()
+            autoDismissWork = nil
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("새 뱃지 획득: \(badge.name). \(badge.condition)")

@@ -116,13 +116,9 @@ private struct SmallWidgetView: View {
 
                 Spacer(minLength: 2)
 
-                // 하단: 첫 번째 긴급 할 일
+                // 하단: 첫 번째 할 일 — 실데이터가 있을 때만 표시 (없으면 섹션 숨김)
                 if let task = entry.data.tasks.first {
                     taskBadge(task)
-                } else {
-                    Text("오늘 할 일 없음")
-                        .font(.system(size: 10))
-                        .foregroundStyle(WColor.ink3)
                 }
             }
             .padding(12)
@@ -168,12 +164,24 @@ private struct MediumWidgetView: View {
                     .frame(maxHeight: .infinity)
                     .background(WColor.cream)
 
-                // 오른쪽: 할 일 + 소아과
+                // 오른쪽: 할 일 + 소아과 — 실데이터가 있는 섹션만 표시
                 VStack(alignment: .leading, spacing: 8) {
-                    tasksSection
+                    if !entry.data.tasks.isEmpty {
+                        tasksSection
+                    }
                     if !entry.data.clinics.isEmpty {
-                        Divider()
+                        if !entry.data.tasks.isEmpty { Divider() }
                         clinicSection
+                    }
+                    if entry.data.tasks.isEmpty && entry.data.clinics.isEmpty {
+                        // 할 일·소아과 실데이터 소스 연동 전 — 지어내지 않고 앱으로 안내
+                        Spacer(minLength: 0)
+                        Text("자세한 일정과 주변 정보는\nBabyLog 앱에서 확인해요")
+                            .font(.system(size: 11))
+                            .foregroundStyle(WColor.ink3)
+                            .multilineTextAlignment(.leading)
+                            .lineSpacing(2)
+                        Spacer(minLength: 0)
                     }
                 }
             }
@@ -213,21 +221,15 @@ private struct MediumWidgetView: View {
         .frame(width: 72)
     }
 
-    // 오늘 할 일 섹션
+    // 오늘 할 일 섹션 (tasks 비어있지 않을 때만 호출됨)
     private var tasksSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Label("오늘 할 일", systemImage: "checklist")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(WColor.ink2)
 
-            if entry.data.tasks.isEmpty {
-                Text("예정된 항목이 없어요")
-                    .font(.system(size: 10))
-                    .foregroundStyle(WColor.ink3)
-            } else {
-                ForEach(entry.data.tasks.prefix(3)) { task in
-                    taskRow(task)
-                }
+            ForEach(entry.data.tasks.prefix(3)) { task in
+                taskRow(task)
             }
         }
     }
@@ -302,29 +304,55 @@ private struct MediumWidgetView: View {
     }
 }
 
+// MARK: - No Data Empty State (모든 크기 공통)
+// 실데이터가 없을 때 가짜 콘텐츠 대신 정직한 안내를 보여준다.
+
+private struct NoDataView: View {
+    var body: some View {
+        ZStack {
+            WColor.canvas.ignoresSafeArea()
+
+            VStack(spacing: 8) {
+                Image(systemName: "leaf.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(WColor.sage)
+
+                Text("BabyLog 앱에서 아이를 등록하면\n여기에 요약이 보여요")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(WColor.ink2)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+            .padding(12)
+        }
+    }
+}
+
 // MARK: - Accessibility-aware Entry View Router
 
 struct BabyLogEntryView: View {
     let entry: BabyLogEntry
 
     @Environment(\.widgetFamily) private var family
-    // Reduce Transparency / Reduce Motion 고려 — WidgetKit은 직접 env 제공 안 함
-    // SwiftUI accessibilityReduceTransparency로 불투명 처리
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         Group {
-            switch family {
-            case .systemSmall:
-                SmallWidgetView(entry: entry)
-            case .systemMedium:
-                MediumWidgetView(entry: entry)
-            default:
-                SmallWidgetView(entry: entry) // fallback
+            if entry.data.noData {
+                // 공유 실데이터 없음 → 모든 크기에서 빈 상태 (목업 렌더 금지)
+                NoDataView()
+            } else {
+                switch family {
+                case .systemSmall:
+                    SmallWidgetView(entry: entry)
+                case .systemMedium:
+                    MediumWidgetView(entry: entry)
+                default:
+                    SmallWidgetView(entry: entry) // fallback
+                }
             }
         }
-        // Reduce Transparency 시 배경 불투명 고정
-        .background(reduceTransparency ? WColor.canvas : WColor.canvas)
+        // 불투명 캔버스 고정 (Reduce Transparency 환경 포함)
+        .background(WColor.canvas)
         .redacted(reason: entry.isPlaceholder ? .placeholder : [])
     }
 }

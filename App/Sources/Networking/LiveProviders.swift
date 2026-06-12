@@ -3,6 +3,8 @@
 //
 // 각 프로토콜의 Live 구현 + 순수 응답 파서.
 // 키 미설정 시 Mock 프로바이더로 자동 폴백합니다 (B4 정책).
+// ⚠️ 단, Live 호출 '실패' 시에는 절대 Mock으로 폴백하지 않는다 — 가짜 데이터가
+//    실제 정보처럼 노출되면 안 된다(아동 안전·정직 원칙). 실패는 throw하여 UI가 처리.
 //
 // ⚠️ 의료·병원 정보는 의료 상담을 대체하지 않습니다.
 //    응급상황에는 119에 연락하거나 인근 응급실을 방문하세요.
@@ -44,25 +46,25 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         guard let key = APIConfig.key(APIConfig.hiraKeyName) else {
             return try await fallback.hospitals(near: coordinate, openNow: openNow)
         }
+        // 반경 검색 — HIRA radius는 API가 거리순 정렬 + distance 제공.
+        // 단일 호출이라 빠르고, '집앞'이 항상 최상단에 온다.
+        // (행정구역/probe 방식은 numOfRows=1 probe가 '가장 가까운 1곳'을 보장하지 못해
+        //  엉뚱한 구를 골라 집앞이 누락되는 문제가 있어 반경 방식으로 통일.)
+        //
+        // ⚠️ Live 실패 시 Mock 폴백 금지(아동 안전) — 가짜 병원·약국이 실제처럼 노출되면
+        //    응급 상황에서 존재하지 않는 곳으로 안내할 수 있다. 실패는 그대로 throw하고
+        //    UI의 빈 상태/오류 처리에 맡긴다. Mock은 키 미설정일 때만 사용.
+        var results: [HospitalInfo]
         do {
-            // 반경 검색 — HIRA radius는 API가 거리순 정렬 + distance 제공.
-            // 단일 호출이라 빠르고, '집앞'이 항상 최상단에 온다.
-            // (행정구역/probe 방식은 numOfRows=1 probe가 '가장 가까운 1곳'을 보장하지 못해
-            //  엉뚱한 구를 골라 집앞이 누락되는 문제가 있어 반경 방식으로 통일.)
-            var results: [HospitalInfo]
-            do {
-                results = try await radiusHospitals(key: key, coord: coordinate)
-            } catch {
-                // data.go.kr 일시 혼잡(504 등) — 0.7초 후 1회 재시도 후에야 Mock 폴백.
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                results = try await radiusHospitals(key: key, coord: coordinate)
-            }
-            if openNow { results = results.filter { $0.isOpenNow } }
-            results.sort { $0.distanceM < $1.distanceM }   // 좌표 기반 거리순(가까운 곳 먼저)
-            return results
+            results = try await radiusHospitals(key: key, coord: coordinate)
         } catch {
-            return try await fallback.hospitals(near: coordinate, openNow: openNow)
+            // data.go.kr 일시 혼잡(504 등) — 0.7초 후 1회 재시도. 재시도도 실패하면 throw.
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            results = try await radiusHospitals(key: key, coord: coordinate)
         }
+        if openNow { results = results.filter { $0.isOpenNow } }
+        results.sort { $0.distanceM < $1.distanceM }   // 좌표 기반 거리순(가까운 곳 먼저)
+        return results
     }
 
     /// dgsbjtCd가 설정돼 있으면 쿼리에 추가(병원=소아과 필터, 약국=없음).
@@ -343,21 +345,18 @@ final class LivePlaceSearcher: PlaceSearching {
         ]
 
         guard let url = components.url else {
-            return try await fallback.search(query, near: coordinate)
+            throw APIError.invalidURL
         }
 
-        // 네트워크·파싱 실패 시 샘플로 graceful 폴백
-        do {
-            var request = URLRequest(url: url)
-            request.setValue("KakaoAK \(key)", forHTTPHeaderField: "Authorization")
-            let (data, response) = try await client.session.data(for: request)
-            if let http = response as? HTTPURLResponse,
-               let err = APIClient.mapHTTP(http.statusCode) { throw err }
-            let decoded = try JSONDecoder().decode(KakaoPlaceResponse.self, from: data)
-            return try PlaceResponseParser.parse(decoded)
-        } catch {
-            return try await fallback.search(query, near: coordinate)
-        }
+        // ⚠️ Live 실패 시 Mock 폴백 금지 — 가짜 장소가 실제처럼 노출되면 안 된다(정직 원칙).
+        //    실패는 그대로 throw하고 UI의 빈 상태/오류 처리에 맡긴다. Mock은 키 미설정일 때만.
+        var request = URLRequest(url: url)
+        request.setValue("KakaoAK \(key)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await client.session.data(for: request)
+        if let http = response as? HTTPURLResponse,
+           let err = APIClient.mapHTTP(http.statusCode) { throw err }
+        let decoded = try JSONDecoder().decode(KakaoPlaceResponse.self, from: data)
+        return try PlaceResponseParser.parse(decoded)
     }
 }
 
@@ -467,16 +466,13 @@ final class LiveSubsidyProvider: SubsidyProviding {
         ]
 
         guard let url = components.url else {
-            return try await fallback.subsidies(childAgeMonths: childAgeMonths)
+            throw APIError.invalidURL
         }
 
-        // 네트워크·파싱 실패 시 샘플로 graceful 폴백
-        do {
-            let response = try await client.get(url, as: BokjiroSubsidyResponse.self)
-            return try SubsidyResponseParser.parse(response, childAgeMonths: childAgeMonths)
-        } catch {
-            return try await fallback.subsidies(childAgeMonths: childAgeMonths)
-        }
+        // ⚠️ Live 실패 시 Mock 폴백 금지 — 샘플 지원금이 실제 정보처럼 보이면 안 된다(정직 원칙).
+        //    실패는 그대로 throw하고 UI의 빈 상태/오류 처리에 맡긴다. Mock은 키 미설정일 때만.
+        let response = try await client.get(url, as: BokjiroSubsidyResponse.self)
+        return try SubsidyResponseParser.parse(response, childAgeMonths: childAgeMonths)
     }
 }
 
@@ -627,16 +623,13 @@ final class LiveVaccineScheduleProvider: VaccineScheduleProviding {
         ]
 
         guard let url = components.url else {
-            return try await fallback.schedule(birthDate: birthDate)
+            throw APIError.invalidURL
         }
 
-        // 네트워크·파싱 실패 시 샘플로 graceful 폴백
-        do {
-            let response = try await client.get(url, as: KDCAVaccineResponse.self)
-            return try VaccineResponseParser.parse(response, birthDate: birthDate)
-        } catch {
-            return try await fallback.schedule(birthDate: birthDate)
-        }
+        // ⚠️ Live 실패 시 Mock 폴백 금지 — 샘플 접종일정이 실제 일정처럼 보이면 위험(아동 안전).
+        //    실패는 그대로 throw하고 UI의 빈 상태/오류 처리에 맡긴다. Mock은 키 미설정일 때만.
+        let response = try await client.get(url, as: KDCAVaccineResponse.self)
+        return try VaccineResponseParser.parse(response, birthDate: birthDate)
     }
 }
 

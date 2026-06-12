@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 struct BabyLogApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = AppStore(persistence: .appGroup())
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("bl_onboarded") private var onboarded = false
 
     /// 상실 이벤트 → 임신 알림 자동 차단 구독 (민감영역, 앱 생존 동안 유지)
     private let notifications = NotificationService(scheduler: UNNotificationScheduler())
@@ -33,6 +35,10 @@ struct BabyLogApp: App {
                     notifications.start()
                     await setupNotifications()
                 }
+                // 백그라운드 전환 시 즉시 저장 — debounce(0.5s) 대기 중 강제종료로 마지막 기록이 유실되지 않게.
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .background || phase == .inactive { store.persistNow() }
+                }
         }
     }
 
@@ -41,6 +47,8 @@ struct BabyLogApp: App {
         let scheduler = UNPendingScheduler()
         // 원격 푸시 토큰은 알림 권한과 무관하게 등록(토큰 확보가 목적). Push 역량 없으면 didFail로 무시.
         await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
+        // 온보딩 전엔 시스템 권한 프롬프트를 띄우지 않는다 — 온보딩 4단계(사전 안내 카드)가 먼저.
+        guard onboarded else { return }
         guard await scheduler.requestAuthorization() else { return }
         // (제거됨) 무작위 UUID에 걸던 더미 'DTaP 4차' 백신 알림 — 실제 아이와 무관한 가짜 알림이라 삭제.
         // 실제 접종 알림은 추후 아이의 KDCA 스케줄 기반으로 스케줄링한다.

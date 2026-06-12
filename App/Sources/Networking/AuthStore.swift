@@ -25,13 +25,22 @@ final class AuthStore: ObservableObject {
 
     private init() { session = Keychain.loadSession() }
 
+    /// 진행 중인 refresh 1개를 공유 — 동시 호출이 단일 사용(refresh token)을 두 번 쓰는 레이스 방지.
+    private var refreshTask: Task<StoredSession?, Never>?
+
     // MARK: - 토큰 제공(CrewBackend가 호출)
 
     /// 유효한 access token. 만료 임박 시 refresh 후 반환. 세션 없으면 nil → anon 폴백.
     func validAccessToken() async -> String? {
         guard let s = session else { return nil }
         if s.expiresAt > Date().addingTimeInterval(60) { return s.accessToken }
-        return await refresh()?.accessToken
+        // 이미 refresh 진행 중이면 합류(coalesce). @MainActor라 체크-앤-셋이 원자적.
+        if let task = refreshTask { return await task.value?.accessToken }
+        let task = Task { await self.refresh() }
+        refreshTask = task
+        let result = await task.value
+        refreshTask = nil
+        return result?.accessToken
     }
 
     // MARK: - Apple 로그인
@@ -67,12 +76,17 @@ final class AuthStore: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["refresh_token": s.refreshToken])
-        guard let parsed = await exchange(req) else {
-            await signOut(remote: false)   // refresh 실패 = 세션 만료 → 로컬 정리
-            return nil
+        let (parsed, status) = await exchangeDetailed(req)
+        if let parsed {
+            persist(parsed)
+            return parsed
         }
-        persist(parsed)
-        return parsed
+        // 400/401/403 = refresh token이 확정적으로 무효 → 그때만 로컬 정리.
+        // 그 외(네트워크 오류 status=nil, 5xx 등)는 일시 장애 → 세션 유지, 이번 요청만 anon 폴백.
+        if let status, [400, 401, 403].contains(status) {
+            await signOut(remote: false)
+        }
+        return nil
     }
 
     func signOut(remote: Bool = true) async {
@@ -139,15 +153,24 @@ final class AuthStore: ObservableObject {
     }
 
     private func exchange(_ req: URLRequest) async -> StoredSession? {
+        await exchangeDetailed(req).session
+    }
+
+    /// 토큰 교환 + HTTP 상태 구분. status=nil은 전송 계층 오류(오프라인·타임아웃 등).
+    private func exchangeDetailed(_ req: URLRequest) async -> (session: StoredSession?, status: Int?) {
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let t = try? JSONDecoder().decode(TokenResponse.self, from: data) else { return nil }
-        return StoredSession(
+              let http = resp as? HTTPURLResponse else { return (nil, nil) }
+        guard (200...299).contains(http.statusCode),
+              let t = try? JSONDecoder().decode(TokenResponse.self, from: data) else {
+            return (nil, http.statusCode)
+        }
+        let s = StoredSession(
             accessToken: t.access_token,
             refreshToken: t.refresh_token,
             expiresAt: Date().addingTimeInterval(TimeInterval(t.expires_in)),
             userId: t.user.id
         )
+        return (s, http.statusCode)
     }
 
     private func persist(_ s: StoredSession) {
@@ -169,11 +192,19 @@ private enum Keychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(base as CFDictionary)
+        let deleteStatus = SecItemDelete(base as CFDictionary)
         var add = base
         add[kSecValueData as String] = data
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(add as CFDictionary, nil)
+        let addStatus = SecItemAdd(add as CFDictionary, nil)
+        #if DEBUG
+        if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
+            print("[AuthStore] Keychain delete 실패: \(deleteStatus)")
+        }
+        if addStatus != errSecSuccess {
+            print("[AuthStore] Keychain save 실패: \(addStatus)")
+        }
+        #endif
     }
 
     static func loadSession() -> StoredSession? {
@@ -197,6 +228,11 @@ private enum Keychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(q as CFDictionary)
+        let status = SecItemDelete(q as CFDictionary)
+        #if DEBUG
+        if status != errSecSuccess && status != errSecItemNotFound {
+            print("[AuthStore] Keychain delete 실패: \(status)")
+        }
+        #endif
     }
 }

@@ -112,12 +112,27 @@ struct MoonSwingView: View {
 // MARK: - 대화 말풍선 점 (채팅) §8.5
 
 /// 입력 중을 나타내는 점 3개 통통.
+/// (Timer 대신 TimelineView — 뷰가 사라지면 자동 정지, 재진입 시 중복 타이머 없음)
 struct TypingDotsView: View {
     var tint: Color = AppColors.ink3
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase = 0
 
     var body: some View {
+        Group {
+            if reduceMotion {
+                dots(phase: -1) // 모션 줄이기 — 정지 상태
+            } else {
+                TimelineView(.periodic(from: .now, by: 0.35)) { context in
+                    let phase = Int(context.date.timeIntervalSinceReferenceDate / 0.35) % 3
+                    dots(phase: phase)
+                        .animation(.easeInOut(duration: 0.3), value: phase)
+                }
+            }
+        }
+        .accessibilityLabel("입력 중")
+    }
+
+    private func dots(phase: Int) -> some View {
         HStack(spacing: 4) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
@@ -127,13 +142,6 @@ struct TypingDotsView: View {
                     .opacity(phase == i ? 1 : 0.5)
             }
         }
-        .onAppear {
-            guard !reduceMotion else { return }
-            Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { _ in
-                withAnimation(.easeInOut(duration: 0.3)) { phase = (phase + 1) % 3 }
-            }
-        }
-        .accessibilityLabel("입력 중")
     }
 }
 

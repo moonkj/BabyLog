@@ -391,10 +391,15 @@ final class AppStore: ObservableObject {
     ///
     /// `persistence`가 nil이면 아무 동작도 하지 않는다.
     /// 구독은 내부 `cancellables`에 보관되므로 store 생존 중 유지된다.
+    /// 자동저장 중복 구독 방지 플래그(멱등).
+    private var autoPersistEnabled = false
+
     func enableAutoPersist() {
         guard persistence != nil else { return }
         // 디코딩 실패로 빈 상태일 땐 자동저장을 막아 원본(손상 의심) 파일을 덮어쓰지 않는다.
         guard !loadDidFail else { return }
+        guard !autoPersistEnabled else { return }   // 멱등 — 중복 sink로 이중 저장 방지
+        autoPersistEnabled = true
 
         // 모든 @Published 변경(objectWillChange)을 단일 신호로 받아 0.5s debounce 후 저장한다.
         // combineLatest 4-arity 한계 없이 상태 종류가 늘어나도 그대로 확장된다.
@@ -407,6 +412,13 @@ final class AppStore: ObservableObject {
                 try? self.persistence?.save(self.snapshot())
             }
             .store(in: &cancellables)
+    }
+
+    /// 즉시 저장 — 백그라운드 전환/복원 직후 등 debounce(0.5s)를 기다릴 수 없는 시점용.
+    /// (마지막 기록이 앱 강제종료로 유실되는 것을 방지)
+    func persistNow() {
+        guard !loadDidFail else { return }
+        try? persistence?.save(snapshot())
     }
 
     // MARK: - Persistence Convenience
@@ -472,6 +484,12 @@ final class AppStore: ObservableObject {
         seedMarketIfNeeded()
         seedCrewIfNeeded()
         seedCrewPostsIfNeeded()
+        // 손상 파일로 자동저장이 막혀 있던 경우(백업 복원 시나리오) — 복원본을 신뢰하고
+        // 자동저장을 되살린 뒤 즉시 디스크에 기록한다. 안 하면 복원이 메모리에만 남아
+        // 다음 실행에서 다시 손상 파일을 읽어 "복원했는데 또 사라짐"이 된다.
+        loadDidFail = false
+        enableAutoPersist()
+        persistNow()
     }
 
     // MARK: - 선택 아이 / 온보딩
@@ -511,20 +529,29 @@ final class AppStore: ObservableObject {
         children[idx].birthDate = birthDate
         children[idx].gender = gender
         if let newRef = profileImageRef {   // 이중 옵셔널: 전달된 경우에만 변경(nil로도 초기화 가능)
+            // 교체 시 기존 파일 정리(고아 파일 방지)
+            if let old = children[idx].profileImageRef, old != newRef { PhotoStore.delete(old) }
             children[idx].profileImageRef = newRef
         }
     }
 
     /// 아이를 삭제한다. 연결된 기록(성장·다이어리 사진 포함)도 함께 정리한다.
     func deleteChild(id: UUID) {
+        // 사진·영상 전부 정리 — 첫 장만 지우면 나머지가 기기에 고아로 남음(프라이버시+용량).
         for entry in diaryEntries where entry.childId == id {
-            PhotoStore.delete(entry.photoRef)
+            for ref in entry.photoRefList { PhotoStore.delete(ref) }
+            if entry.photoRefList.isEmpty { PhotoStore.delete(entry.photoRef) }
+            if let v = entry.videoRef { PhotoStore.delete(v) }
+        }
+        if let child = children.first(where: { $0.id == id }), let p = child.profileImageRef {
+            PhotoStore.delete(p)
         }
         diaryEntries.removeAll { $0.childId == id }
         growthRecords.removeAll { $0.childId == id }
-        // 접종 완료 키 정리
+        // 접종 완료 키·병원 메모 정리
         let prefix = "\(id.uuidString)|"
         vaccineCompletions = vaccineCompletions.filter { !$0.hasPrefix(prefix) }
+        vaccineHospitals = vaccineHospitals.filter { !$0.key.hasPrefix(prefix) }
         children.removeAll { $0.id == id }
         if selectedChildId == id { selectedChildId = children.first?.id }
     }
@@ -561,8 +588,14 @@ final class AppStore: ObservableObject {
         pregnancies[idx].eddDate = edd
     }
 
-    /// 임신 기록 삭제 (관련 로그 정리).
+    /// 임신 기록 삭제 (관련 로그·배 사진·검진 키 정리).
+    /// 민감영역: 상실 후 삭제하는 사용자는 배 사진도 기기에서 지워졌다고 기대한다.
     func deletePregnancy(id: UUID) {
+        for log in pregnancyLogs where log.pregnancyId == id {
+            if let ref = log.photoRef { PhotoStore.delete(ref) }
+        }
+        let prefix = "\(id.uuidString)|"
+        checkupDoneKeys = checkupDoneKeys.filter { !$0.hasPrefix(prefix) }
         pregnancyLogs.removeAll { $0.pregnancyId == id }
         pregnancies.removeAll { $0.id == id }
     }

@@ -9,6 +9,19 @@ struct ChatMessage: Identifiable, Codable, Equatable, Hashable {
     var date: Date = Date()
 }
 
+// 하위 호환 디코딩 — 신규 키 추가/누락에도 전체 상태 디코딩이 깨지지 않게(decodeIfPresent+기본값).
+// ⚠️ 정책: 영속되는 모든 중첩 모델은 이 패턴을 따른다(필드 추가 시 구 저장파일 keyNotFound → 전체 데이터 소실 방지).
+extension ChatMessage {
+    enum CodingKeys: String, CodingKey { case id, text, mine, date }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id   = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        mine = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? false
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+    }
+}
+
 // MARK: - TradeReport (거래 신고 + 증거 보존)
 
 /// 거래 사고 신고 기록. 신고 시점의 대화를 스냅샷으로 보존하므로,
@@ -26,6 +39,25 @@ struct TradeReport: Identifiable, Codable, Equatable {
     var createdAt: Date = Date()
     /// 서버 업로드 완료 여부(백엔드 연결 후 사용). 로컬에선 false 유지.
     var uploaded: Bool = false
+}
+
+// 하위 호환 디코딩 — 필드 추가에도 구 저장파일 전체가 깨지지 않게.
+extension TradeReport {
+    enum CodingKeys: String, CodingKey {
+        case id, itemId, itemTitle, counterpartName, reason, note, transcript, createdAt, uploaded
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id              = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        itemId          = try c.decodeIfPresent(String.self, forKey: .itemId) ?? ""
+        itemTitle       = try c.decodeIfPresent(String.self, forKey: .itemTitle) ?? ""
+        counterpartName = try c.decodeIfPresent(String.self, forKey: .counterpartName) ?? ""
+        reason          = try c.decodeIfPresent(String.self, forKey: .reason) ?? ""
+        note            = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        transcript      = try c.decodeIfPresent([ChatMessage].self, forKey: .transcript) ?? []
+        createdAt       = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        uploaded        = try c.decodeIfPresent(Bool.self, forKey: .uploaded) ?? false
+    }
 }
 
 // MARK: - PersistableState

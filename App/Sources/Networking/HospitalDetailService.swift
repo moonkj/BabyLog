@@ -15,13 +15,25 @@ enum HospitalDetailService {
     /// - Returns: 영업중 true / 영업종료 false / 조회 실패·불명 nil
     static func isOpenNow(ykiho: String, at date: Date = Date()) async -> Bool? {
         guard let key = APIConfig.key(APIConfig.hiraKeyName), !ykiho.isEmpty else { return nil }
-        let yk = ykiho.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ykiho
-        let urlString = "https://apis.data.go.kr/B551182/hospInfoServicev2/getDtlInfo2.7"
-            + "?serviceKey=\(key)&ykiho=\(yk)&_type=json"
-        guard let url = URL(string: urlString) else { return nil }
+        // LiveProviders와 동일한 패턴 — URLComponents + queryItems로 일관 인코딩.
+        // (키를 문자열에 직접 보간하면 +/%/= 포함 키가 한쪽 경로에서만 깨진다.)
+        guard var components = URLComponents(string: "https://apis.data.go.kr/B551182/hospInfoServicev2/getDtlInfo2.7") else { return nil }
+        components.queryItems = [
+            URLQueryItem(name: "serviceKey", value: key),
+            URLQueryItem(name: "ykiho", value: ykiho),
+            URLQueryItem(name: "_type", value: "json"),
+        ]
+        // URLComponents는 쿼리의 '+'를 그대로 두는데, 서버가 공백으로 해석할 수 있다
+        // (HIRA serviceKey·ykiho에 '+'가 흔함) → 명시적으로 %2B 인코딩.
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
+        guard let url = components.url else { return nil }
         var req = URLRequest(url: url)
         req.timeoutInterval = 6   // 응급 — 오래 기다리지 않는다
-        guard let (data, _) = try? await URLSession.shared.data(for: req) else { return nil }
+        guard let (data, response) = try? await URLSession.shared.data(for: req) else { return nil }
+        // HTTP 상태 확인 — 5xx 등 오류 본문을 영업정보로 오인하지 않는다(불명 = nil).
+        if let http = response as? HTTPURLResponse,
+           !(200...299).contains(http.statusCode) { return nil }
         guard let resp = try? JSONDecoder().decode(HIRADetailResponse.self, from: data),
               let item = resp.response?.body?.items?.item?.first else { return nil }
         return item.isOpen(at: date)
