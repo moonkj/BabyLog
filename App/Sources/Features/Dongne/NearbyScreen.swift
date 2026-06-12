@@ -639,11 +639,12 @@ private struct HospitalCard: View {
 
                 // 텍스트 정보
                 VStack(alignment: .leading, spacing: 6) {
-                    // 이름 — 전체 폭 1줄
+                    // 이름 — 긴 이름은 2줄까지 표시(짤림 방지)
                     Text(hospital.name)
                         .font(.system(size: 15.5, weight: .bold))
                         .foregroundStyle(AppColors.ink)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     // 영업상태 뱃지(안 잘리게 고정) + 거리·종별 한 줄
                     HStack(spacing: Spacing.s2) {
