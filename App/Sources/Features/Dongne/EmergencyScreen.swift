@@ -72,11 +72,26 @@ struct EmergencyScreen: View {
             for h in (majors + pediatric).sorted(by: { $0.distanceM < $1.distanceM }) {
                 if seen.insert(h.id).inserted { combined.append(h) }
             }
+            // 가까운 후보만 상세 영업시간 조회(응급 — 빠르게). 영업중인 곳만 남긴다.
+            // 상세 조회 실패(서버 혼잡 등) 시: 대학병원급은 24h 응급실 가정으로 노출, 소아과는 제외.
+            let candidates = Array(combined.prefix(14))
+            var openOnly: [HospitalInfo] = []
+            await withTaskGroup(of: (HospitalInfo, Bool?).self) { group in
+                for h in candidates {
+                    group.addTask { (h, await HospitalDetailService.isOpenNow(ykiho: h.id)) }
+                }
+                for await (h, open) in group {
+                    if open == true || (open == nil && h.isMajorHospital) {
+                        openOnly.append(h)
+                    }
+                }
+            }
+            openOnly.sort { $0.distanceM < $1.distanceM }
             // 최상단 = 가장 가까운 대학병원급
-            if let top = combined.first(where: { $0.isMajorHospital }) {
-                hospitals = [top] + combined.filter { $0.id != top.id }
+            if let top = openOnly.first(where: { $0.isMajorHospital }) {
+                hospitals = [top] + openOnly.filter { $0.id != top.id }
             } else {
-                hospitals = combined
+                hospitals = openOnly
             }
         } catch {
             hospitals = []
@@ -109,7 +124,7 @@ struct EmergencyScreen: View {
                     .foregroundStyle(AppColors.ink)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("대학병원급 우선 · 가까운 순 · \(lastCheckedAt) 기준")
+                Text("영업중 · 대학병원급 우선 · 가까운 순 · \(lastCheckedAt) 기준")
                     .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(AppColors.ink3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -295,7 +310,14 @@ private struct EmergencyPlaceCard: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 6) {
-                    Image(systemName: "figure.walk").font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                    // 영업중 확인 마커 — 노출되는 곳은 모두 영업중(상세 영업시간/응급실 기준)
+                    HStack(spacing: 3) {
+                        Circle().fill(BadgeTone.mint.ink).frame(width: 6, height: 6)
+                        Text(hospital.isMajorHospital ? "응급실 운영" : "영업중")
+                            .font(.system(size: 11.5, weight: .heavy))
+                            .foregroundStyle(BadgeTone.mint.ink)
+                    }
+                    Text("·").foregroundStyle(AppColors.line2)
                     Text(distanceText).font(AppFont.num(13.5)).foregroundStyle(AppColors.ink2)
                     if !typeLabel.isEmpty {
                         Text("·").foregroundStyle(AppColors.line2)
