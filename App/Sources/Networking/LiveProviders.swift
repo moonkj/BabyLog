@@ -46,9 +46,9 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         }
         do {
             var results: [HospitalInfo]
-            // 좌표가 있으면: 가까운 1곳으로 시도코드 파악 → 해당 시도(특별/광역시·도) 전체 소아과 조회
-            if let coord = coordinate, let sidoCd = try await regionSidoCode(key: key, coord: coord) {
-                results = try await regionHospitals(key: key, sidoCd: sidoCd, near: coord)
+            // 좌표가 있으면: 가까운 1곳으로 행정구역 파악 → 시군구(좁고 빠름) 우선, 없으면 시도 전체.
+            if let coord = coordinate, let region = try await regionCode(key: key, coord: coord) {
+                results = try await regionHospitals(key: key, region: region, near: coord)
             } else {
                 // 좌표/지역 미확보 → 반경 폴백
                 results = try await radiusHospitals(key: key, coord: coordinate)
@@ -66,8 +66,10 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         if let d = dgsbjtCd { items.append(.init(name: "dgsbjtCd", value: d)) }
     }
 
-    /// 사용자 좌표에서 가장 가까운 1곳의 시도코드.
-    private func regionSidoCode(key: String, coord: Coordinate) async throws -> String? {
+    /// 사용자 좌표에서 가장 가까운 1곳의 행정구역 코드.
+    /// 시군구(sgguCd)를 우선 — 시/군/구 단위로 좁아 조회가 빠르고 "내 동네"에 부합.
+    /// 시군구가 없으면 시도(sidoCd) 폴백.
+    private func regionCode(key: String, coord: Coordinate) async throws -> (name: String, value: String)? {
         var c = URLComponents(string: endpoint)!
         var items: [URLQueryItem] = [
             .init(name: "serviceKey", value: key),
@@ -82,11 +84,14 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         c.queryItems = items
         guard let url = c.url else { return nil }
         let resp = try await client.get(url, as: HIRAHospitalResponse.self)
-        return resp.response?.body?.items?.item?.first?.sidoCd
+        guard let item = resp.response?.body?.items?.item?.first else { return nil }
+        if let sggu = item.sgguCd, !sggu.isEmpty { return ("sgguCd", sggu) }
+        if let sido = item.sidoCd, !sido.isEmpty { return ("sidoCd", sido) }
+        return nil
     }
 
-    /// 시도(행정구역) 전체 — 페이지네이션으로 누락 없이 수집, Haversine 거리 산출.
-    private func regionHospitals(key: String, sidoCd: String, near coord: Coordinate) async throws -> [HospitalInfo] {
+    /// 행정구역(시군구 또는 시도) 전체 — 페이지네이션으로 누락 없이 수집, Haversine 거리 산출.
+    private func regionHospitals(key: String, region: (name: String, value: String), near coord: Coordinate) async throws -> [HospitalInfo] {
         var all: [HospitalInfo] = []
         let pageSize = 500
         for page in 1...10 {   // 최대 5천건 — 규모상 충분
@@ -95,7 +100,7 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
                 .init(name: "serviceKey", value: key),
                 .init(name: "pageNo", value: String(page)),
                 .init(name: "numOfRows", value: String(pageSize)),
-                .init(name: "sidoCd", value: sidoCd),
+                .init(name: region.name, value: region.value),
                 .init(name: "_type", value: "json"),
             ]
             appendDgsbjt(&items)
@@ -179,7 +184,7 @@ enum HospitalResponseParser {
                 id: item.ykiho ?? UUID().uuidString,
                 name: item.yadmNm ?? "알 수 없음",
                 address: item.addr ?? "",
-                phone: item.telno ?? "",
+                phone: normalizedPhone(item.telno, sidoNm: item.sidoCdNm),
                 department: item.dgsbjtCdNm ?? item.clCdNm ?? "",
                 // HIRA basis API는 실시간 영업 여부를 주지 않음 → 노출되도록 true(미상).
                 // 화면에 "영업 정보는 공공데이터 기반, 방문 전 확인" 면책 있음.
@@ -191,6 +196,35 @@ enum HospitalResponseParser {
                 longitude: lng
             )
         }
+    }
+
+    /// HIRA telno 정상화 — HIRA는 시내번호의 지역번호를 자주 생략한다(예: "221-1122").
+    /// 그대로 두면 휴대폰에서 잘못 걸리거나 "2-211-122"처럼 이상하게 표기되므로,
+    /// 0/1로 시작하지 않는 시내번호엔 시도(sidoCdNm) 기준 지역번호를 앞에 붙인다.
+    static func normalizedPhone(_ raw: String?, sidoNm: String?) -> String {
+        guard let raw else { return "" }
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return "" }
+        // 이미 지역번호(0…) 또는 전국대표번호(1588 등)면 그대로
+        if t.hasPrefix("0") || t.hasPrefix("1") { return t }
+        guard let code = areaCode(forSido: sidoNm) else { return t }
+        return "\(code)-\(t)"
+    }
+
+    /// 시도명 → 지역번호. (HIRA sidoCdNm 표기 기준)
+    private static func areaCode(forSido nm: String?) -> String? {
+        guard let nm else { return nil }
+        let map: [String: String] = [
+            "서울": "02", "부산": "051", "대구": "053", "인천": "032",
+            "광주": "062", "대전": "042", "울산": "052", "세종": "044",
+            "경기": "031", "강원": "033", "충북": "043", "충남": "041",
+            "전북": "063", "전남": "061", "경북": "054", "경남": "055",
+            "제주": "064",
+        ]
+        if let exact = map[nm] { return exact }
+        // "충청북도"·"서울특별시"처럼 풀네임으로 와도 매칭
+        for (k, v) in map where nm.hasPrefix(k) { return v }
+        return nil
     }
 
     /// 두 좌표 간 직선거리(미터) — Haversine.
@@ -271,9 +305,11 @@ struct HIRAHospitalItem: Decodable {
     let xpos: Double?            // 경도
     let ypos: Double?            // 위도
     let sidoCd: String?          // 시도코드(행정구역 단위 조회용)
+    let sgguCd: String?          // 시군구코드(좁은 단위 조회용 — 빠름)
+    let sidoCdNm: String?        // 시도명(지역번호 보정용)
 
     enum CodingKeys: String, CodingKey {
-        case ykiho, yadmNm, addr, telno, dgsbjtCdNm, clCdNm, distance, XPos, YPos, sidoCd
+        case ykiho, yadmNm, addr, telno, dgsbjtCdNm, clCdNm, distance, XPos, YPos, sidoCd, sgguCd, sidoCdNm
     }
 
     init(from decoder: Decoder) throws {
@@ -289,6 +325,8 @@ struct HIRAHospitalItem: Decodable {
         xpos = HIRAHospitalItem.flexDouble(c, .XPos)
         ypos = HIRAHospitalItem.flexDouble(c, .YPos)
         sidoCd = HIRAHospitalItem.flexString(c, .sidoCd)
+        sgguCd = HIRAHospitalItem.flexString(c, .sgguCd)
+        sidoCdNm = HIRAHospitalItem.flexString(c, .sidoCdNm)
     }
 
     /// 문자열·숫자 어느 쪽이든 Double로 안전 변환.

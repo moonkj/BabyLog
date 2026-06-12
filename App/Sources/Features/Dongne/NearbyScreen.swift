@@ -202,6 +202,15 @@ struct NearbyScreen: View {
     // 병원 로드 상태
     @State private var hospitalState: HospitalLoadState = .idle
 
+    // 카테고리별 결과 캐시 — 탭 전환(소아과↔약국) 시 재호출 없이 즉시 표시.
+    // 위치가 크게 바뀌거나(±400m) 오래되면(10분) 자동 재조회.
+    private struct CachedHospitals {
+        let coord: CLLocationCoordinate2D
+        let results: [HospitalInfo]
+        let at: Date
+    }
+    @State private var resultCache: [PlaceCategory: CachedHospitals] = [:]
+
     // 지도 카메라 — 망원동 중심 고정
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
@@ -267,12 +276,13 @@ struct NearbyScreen: View {
         // 현재 위치가 잡히면 그 좌표로 다시 검색 + 지도 이동
         .onChange(of: locationProvider.coordinate?.latitude) { _, lat in
             guard lat != nil else { return }
+            resultCache.removeAll()   // 위치가 바뀌면 캐시 무효화 → 새 위치로 재조회
             withAnimation {
                 cameraPosition = .region(MKCoordinateRegion(
                     center: searchCoord,
                     span: MKCoordinateSpan(latitudeDelta: 0.025, longitudeDelta: 0.025)))
             }
-            Task { await loadHospitals() }
+            Task { await loadHospitals(force: true) }
         }
     }
 
@@ -283,7 +293,7 @@ struct NearbyScreen: View {
         selectedCategory == .hospital || selectedCategory == .pharmacy
     }
 
-    private func loadHospitals() async {
+    private func loadHospitals(force: Bool = false) async {
         guard isLiveCategory else { return }
         // 현재 위치 확보 전(권한 거부도 아님)이면 폴백(서울)으로 잘못 검색하지 않고 대기.
         // GPS가 도착하면 onChange가 이 함수를 다시 호출 → 그때 실제 내 위치로 검색.
@@ -291,11 +301,18 @@ struct NearbyScreen: View {
             hospitalState = .loading
             return
         }
+        let category = selectedCategory
+        let c = searchCoord
+        // 캐시 히트 — 같은 위치(±400m)·10분 이내면 네트워크 호출 없이 즉시 표시(탭 전환 빠름)
+        if !force, let cached = resultCache[category],
+           Self.metersBetween(cached.coord, c) < 400,
+           Date().timeIntervalSince(cached.at) < 600 {
+            hospitalState = cached.results.isEmpty ? .empty : .loaded(cached.results)
+            return
+        }
         hospitalState = .loading
         let openNow = activeFilters.contains("현재 영업중")
-        let category = selectedCategory
         do {
-            let c = searchCoord
             let provider = category == .pharmacy ? ProviderFactory.pharmacy() : ProviderFactory.hospital()
             let results = try await provider.hospitals(
                 near: Coordinate(lat: c.latitude, lng: c.longitude),
@@ -313,11 +330,18 @@ struct NearbyScreen: View {
             }
             // 응답이 늦게 와도 그 사이 카테고리가 바뀌었으면 무시
             guard category == selectedCategory else { return }
+            resultCache[category] = CachedHospitals(coord: c, results: finalResults, at: Date())
             hospitalState = finalResults.isEmpty ? .empty : .loaded(finalResults)
         } catch {
             guard category == selectedCategory else { return }
             hospitalState = .failed(error)
         }
+    }
+
+    /// 두 좌표 간 직선거리(미터) — 캐시 무효화 판단용.
+    private static func metersBetween(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
+        CLLocation(latitude: a.latitude, longitude: a.longitude)
+            .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
     }
 
     // MARK: 위치 권한 안내
@@ -541,35 +565,53 @@ struct NearbyScreen: View {
 
     private func resultCountRow(open: Int) -> some View {
         HStack(spacing: Spacing.s2) {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(BadgeTone.mint.ink)
-                    .frame(width: 6, height: 6)
-                Text("현재 영업중 ")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(AppColors.ink2)
-                + Text("\(open)곳")
-                    .font(.system(size: 12.5, weight: .heavy))
-                    .foregroundStyle(AppColors.ink)
+            HStack(spacing: Spacing.s2) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(BadgeTone.mint.ink)
+                        .frame(width: 6, height: 6)
+                    Text("현재 영업중 ")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(AppColors.ink2)
+                    + Text("\(open)곳")
+                        .font(.system(size: 12.5, weight: .heavy))
+                        .foregroundStyle(AppColors.ink)
+                }
+                Text("·")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(AppColors.line2)
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(AppColors.ink3)
+                    Text("거리순")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(AppColors.ink3)
+                }
             }
-            Text("·")
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(AppColors.line2)
-            HStack(spacing: 3) {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 9.5, weight: .bold))
-                    .foregroundStyle(AppColors.ink3)
-                Text("거리순")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(AppColors.ink3)
-            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("현재 영업중 \(open)곳, 거리순 정렬")
+
             Spacer(minLength: 0)
+
+            // 수동 새로고침 — 캐시 무시하고 현재 위치로 재조회
+            if isLiveCategory {
+                Button {
+                    Task { await loadHospitals(force: true) }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppColors.ink2)
+                        .frame(width: 32, height: 32)
+                        .background(AppColors.surface2, in: Circle())
+                        .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
+                }
+                .accessibilityLabel("새로고침")
+            }
         }
         .padding(.horizontal, Spacing.s1)
         .padding(.top, Spacing.s1)
         .padding(.bottom, Spacing.s1)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("현재 영업중 \(open)곳, 거리순 정렬")
     }
 
     // MARK: Hospital List Content (ProviderFactory 배선)
