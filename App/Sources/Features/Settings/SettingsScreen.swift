@@ -159,12 +159,12 @@ struct SettingsScreen: View {
             settingsSection(eyebrow: "계정", title: "로그인") {
                 if auth.isLoggedIn {
                     settingsRow(icon: "checkmark.seal.fill",
-                                iconBg: Color(hex: 0xDCEFE6), iconFg: Color(hex: 0x2E7A5C)) {
+                                iconBg: AppColors.primarySoft, iconFg: AppColors.primary) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Apple로 로그인됨")
-                                .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                                .font(.system(size: 14.5, weight: .bold)).foregroundStyle(AppColors.primary)
                             Text("기기를 바꿔도 내 글·모임이 유지돼요")
-                                .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                                .font(.system(size: 12)).foregroundStyle(AppColors.ink2)
                         }
                     }
                     .accessibilityLabel("Apple로 로그인됨")
@@ -197,7 +197,7 @@ struct SettingsScreen: View {
                             .font(.system(size: 12.5)).foregroundStyle(AppColors.ink3)
                             .fixedSize(horizontal: false, vertical: true)
                         AppleSignInButton { ok in
-                            authAlert = ok ? "로그인했어요 🤍" : "로그인에 실패했어요. 잠시 후 다시 시도해 주세요."
+                            authAlert = ok ? "로그인했어요 🌿" : "로그인에 실패했어요. 잠시 후 다시 시도해 주세요."
                         }
                     }
                     .padding(.horizontal, Spacing.s4)
