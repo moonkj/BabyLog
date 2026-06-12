@@ -165,24 +165,57 @@ extension MarketItem {
     }
 }
 
-/// "곧 필요해요" 월령 연동 추천 아이템
+/// "곧 필요해요" 월령 연동 추천 아이템.
+/// 실제 매물이 아니라 월령별 육아용품 타임라인(편집 콘텐츠)에서 산출되는 '카테고리 추천'.
+/// 탭하면 해당 카테고리의 실제 매물로 필터된다.
 struct MarketNeedSoonItem: Identifiable {
     let id: Int
     let title: String
-    let reason: String
-    let photoSeed: Int
     let category: MarketCategory   // 탭 시 해당 카테고리로 필터
+    let fromMonth: Int             // 보통 이 월령부터 필요해지는 용품
+
+    /// 현재 아이 월령 기준 안내 문구.
+    func reason(ageMonths: Int) -> String {
+        let diff = fromMonth - ageMonths
+        if diff <= 0 { return "지금 쓰기 좋아요" }
+        if diff <= 2 { return "곧 필요해요" }
+        return "\(fromMonth)개월쯤 필요해요"
+    }
 }
 
-// MARK: - Mock Data
+// MARK: - 월령별 육아용품 타임라인 (편집 콘텐츠)
 
-private let mkNeedSoonItems: [MarketNeedSoonItem] = [
-    MarketNeedSoonItem(id: 1, title: "걸음마 보조기",   reason: "10개월쯤 필요해요",    photoSeed: 2, category: .ride),
-    MarketNeedSoonItem(id: 2, title: "식사 의자",        reason: "이유식 시작 전 준비", photoSeed: 5, category: .meal),
-    MarketNeedSoonItem(id: 3, title: "욕조 샴푸의자",    reason: "목 가눌 때 부터",     photoSeed: 3, category: .feed),
-    MarketNeedSoonItem(id: 4, title: "보행기",           reason: "6개월+ 권장",         photoSeed: 0, category: .ride),
-    MarketNeedSoonItem(id: 5, title: "유아 체온계",      reason: "지금 당장 필요해요",  photoSeed: 4, category: .feed),
+/// 월령별로 보통 필요해지는 육아용품 카탈로그. 신청·구매가 아닌 '둘러보기 추천'.
+private let mkNeedSoonCatalog: [MarketNeedSoonItem] = [
+    .init(id: 1,  title: "모빌·바운서",      category: .toy,    fromMonth: 1),
+    .init(id: 2,  title: "목욕 의자",        category: .bath,   fromMonth: 3),
+    .init(id: 3,  title: "치발기·쪽쪽이",    category: .feed,   fromMonth: 3),
+    .init(id: 4,  title: "이유식 식기",      category: .meal,   fromMonth: 5),
+    .init(id: 5,  title: "이유식 의자",      category: .meal,   fromMonth: 6),
+    .init(id: 6,  title: "점퍼루·보행기",    category: .ride,   fromMonth: 6),
+    .init(id: 7,  title: "안전문·안전용품",  category: .safety, fromMonth: 8),
+    .init(id: 8,  title: "걸음마 보조기",    category: .ride,   fromMonth: 10),
+    .init(id: 9,  title: "빨대컵·유아식기",  category: .meal,   fromMonth: 12),
+    .init(id: 10, title: "유아 신발",        category: .cloth,  fromMonth: 12),
+    .init(id: 11, title: "회전형 카시트",    category: .safety, fromMonth: 12),
+    .init(id: 12, title: "유아 도서·교구",   category: .book,   fromMonth: 14),
+    .init(id: 13, title: "실내 놀이기구",    category: .toy,    fromMonth: 18),
+    .init(id: 14, title: "배변훈련 변기",    category: .bath,   fromMonth: 20),
+    .init(id: 15, title: "유아 책상·의자",   category: .furn,   fromMonth: 24),
 ]
+
+/// 아이 월령 기준 추천 목록 — 다가올(아직 안 된) 용품을 가까운 순으로 먼저, 그다음 지난 것.
+/// 어떤 월령에서도 항상 채워지도록 거리순 정렬 후 상위 6개.
+private func mkNeedSoonItems(ageMonths: Int) -> [MarketNeedSoonItem] {
+    mkNeedSoonCatalog
+        .sorted { a, b in
+            let ua = a.fromMonth >= ageMonths, ub = b.fromMonth >= ageMonths
+            if ua != ub { return ua }                       // 다가올 것 먼저
+            return abs(a.fromMonth - ageMonths) < abs(b.fromMonth - ageMonths)  // 가까운 순
+        }
+        .prefix(6)
+        .map { $0 }
+}
 
 extension MarketItem {
     /// 데모 시드(첫 실행 시 AppStore에 1회 주입). 이후 사용자가 등록/삭제 가능.
@@ -216,6 +249,12 @@ struct MarketScreen: View {
     private var hood: String { location.localityName ?? "우리 동네" }
     private var isLoading: Bool { serverMode && !didLoad }
 
+    /// 선택된 아이의 월령(없으면 nil) — "곧 필요해요" 월령 기반 추천에 사용.
+    private var childAgeMonths: Int? {
+        guard let child = store.selectedChild else { return nil }
+        return AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: Date()).months
+    }
+
     /// 화면에 쓸 매물 — 서버 모드면 공유 목록, 아니면 로컬.
     private var items: [MarketItem] { serverMode ? (sharedItems ?? []) : store.marketItems }
 
@@ -248,7 +287,10 @@ struct MarketScreen: View {
                         .padding(.top, Spacing.s3)
                         .padding(.bottom, Spacing.s2)
                 }
-                needSoonSection
+                // 월령 기반 추천 — 아이가 등록돼 월령을 알 때만 노출(없으면 '월령 기반'이 거짓이 됨).
+                if let age = childAgeMonths {
+                    needSoonSection(age: age)
+                }
                 categoryChips
                 if isLoading {
                     marketLoadingView
@@ -283,8 +325,8 @@ struct MarketScreen: View {
         .accessibilityLabel("우리 동네 매물을 불러오는 중")
     }
 
-    // MARK: 곧 필요해요 섹션
-    private var needSoonSection: some View {
+    // MARK: 곧 필요해요 섹션 (월령 기반)
+    private func needSoonSection(age: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
@@ -294,7 +336,7 @@ struct MarketScreen: View {
                     .font(AppFont.title)
                     .foregroundStyle(AppColors.ink)
                 Spacer()
-                BLBadge(tone: .grey, text: "월령 기반", systemIcon: nil, dot: false)
+                BLBadge(tone: .grey, text: "\(age)개월 기준", systemIcon: nil, dot: false)
             }
             .padding(.horizontal, Spacing.s5)
             .padding(.top, Spacing.s3)
@@ -302,8 +344,8 @@ struct MarketScreen: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.s3) {
-                    ForEach(mkNeedSoonItems) { item in
-                        MkNeedSoonCard(item: item) {
+                    ForEach(mkNeedSoonItems(ageMonths: age)) { item in
+                        MkNeedSoonCard(item: item, reason: item.reason(ageMonths: age)) {
                             Haptics.selection()
                             withAnimation(.easeInOut(duration: 0.2)) { selectedCategory = item.category }
                         }
@@ -315,7 +357,7 @@ struct MarketScreen: View {
         }
         .padding(.bottom, Spacing.s4)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("곧 필요해요 — 월령 기반 추천")
+        .accessibilityLabel("곧 필요해요 — \(age)개월 기준 추천")
     }
 
     // MARK: 카테고리 칩
@@ -435,20 +477,27 @@ struct MarketScreen: View {
 
 private struct MkNeedSoonCard: View {
     let item: MarketNeedSoonItem
+    let reason: String
     var onTap: () -> Void = {}
 
     var body: some View {
         Button { onTap() } label: {
             VStack(alignment: .leading, spacing: 7) {
+                // 실제 매물이 아니라 카테고리 추천이므로 가짜 사진 대신 카테고리 아이콘 타일.
                 ZStack {
-                    PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [AppColors.primaryTint, AppColors.primaryTint.opacity(0.55)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
+                        )
                         .frame(width: 124, height: 92)
-                    Image(systemName: "bag.fill")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
+                    Image(systemName: item.category.systemIcon)
+                        .font(.system(size: 30, weight: .medium))
+                        .foregroundStyle(AppColors.primary)
                 }
                 .overlay {
-                    // 캔버스와 카드가 섞이지 않도록 옅은 테두리로 구분
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.line, lineWidth: 0.5)
                 }
@@ -458,15 +507,23 @@ private struct MkNeedSoonCard: View {
                     .foregroundStyle(AppColors.ink)
                     .lineLimit(1)
 
-                Text(item.reason)
-                    .font(.system(size: 11.5, weight: .regular))
-                    .foregroundStyle(AppColors.ink3)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(item.category.rawValue)
+                        .font(.system(size: 10.5, weight: .heavy))
+                        .foregroundStyle(AppColors.primary)
+                    Text("·")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(AppColors.ink3)
+                    Text(reason)
+                        .font(.system(size: 11.5, weight: .regular))
+                        .foregroundStyle(AppColors.ink3)
+                        .lineLimit(1)
+                }
             }
             .frame(width: 124)
         }
         .buttonStyle(LiquidPressStyle(scale: 0.97))
-        .accessibilityLabel("\(item.title) — \(item.reason)")
+        .accessibilityLabel("\(item.title), \(item.category.rawValue) — \(reason). 탭하면 해당 카테고리 매물을 봅니다.")
     }
 }
 

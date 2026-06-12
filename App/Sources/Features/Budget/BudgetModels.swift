@@ -244,6 +244,28 @@ extension BudgetSummary {
         return total(expenses, from: prevStart, to: prevNow)
     }
 
+    /// 특정 연도(1~12월)의 지출 합계.
+    static func yearTotal(
+        _ expenses: [Expense], year: Int, calendar cal: Calendar = .current
+    ) -> Int {
+        expenses
+            .filter { cal.component(.year, from: $0.date) == year }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    /// 특정 연도의 1~12월 월별 추이 버킷(지출 0인 달도 포함).
+    static func yearTrend(
+        _ expenses: [Expense], year: Int, calendar cal: Calendar = .current
+    ) -> [TrendBucket] {
+        (1...12).compactMap { m -> TrendBucket? in
+            guard let monthStart = cal.date(from: DateComponents(year: year, month: m, day: 1)) else { return nil }
+            let amt = expenses
+                .filter { cal.isDate($0.date, equalTo: monthStart, toGranularity: .month) }
+                .reduce(0) { $0 + $1.amount }
+            return TrendBucket(date: monthStart, amount: amt)
+        }
+    }
+
     /// 추이 차트용 버킷 배열(지출 0인 구간도 포함해 축이 전체 기간을 덮도록 함).
     static func trend(
         _ expenses: [Expense], _ period: BudgetPeriod,

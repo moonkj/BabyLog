@@ -60,6 +60,8 @@ struct BudgetScreen: View {
     @State private var period: BudgetPeriod = .month
     @State private var showAddExpense = false
     @State private var showAllExpenses = false
+    /// '1년' 모드에서 보는 연도(연도별 탐색). 기본 = 올해.
+    @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
 
     // MARK: Computed
 
@@ -72,9 +74,20 @@ struct BudgetScreen: View {
     /// 실데이터 — store에 영속된 지출 전체
     private var allExpenses: [Expense] { store.expenses }
 
+    /// '1년' 세그먼트에서 특정 연도(1~12월)를 보는 모드.
+    private var isYearMode: Bool { period == .year }
+
+    /// 총액·차트 헤더 레이블 ('1년' 모드면 "2026년").
+    private var rangeLabel: String {
+        isYearMode ? "\(selectedYear)년" : period.rangeLabel
+    }
+
     /// 선택 기간에 속하는 지출
     private var periodExpenses: [Expense] {
-        BudgetSummary.inPeriod(allExpenses, period)
+        if isYearMode {
+            return allExpenses.filter { Calendar.current.component(.year, from: $0.date) == selectedYear }
+        }
+        return BudgetSummary.inPeriod(allExpenses, period)
     }
 
     private var hasPeriodExpenses: Bool { !periodExpenses.isEmpty }
@@ -84,7 +97,8 @@ struct BudgetScreen: View {
     }
 
     private var previousPeriodTotal: Int {
-        BudgetSummary.previousTotal(allExpenses, period)
+        if isYearMode { return BudgetSummary.yearTotal(allExpenses, year: selectedYear - 1) }
+        return BudgetSummary.previousTotal(allExpenses, period)
     }
 
     /// 전기 대비 증감 % (직전 동일 길이 구간 지출 0이면 nil)
@@ -94,8 +108,17 @@ struct BudgetScreen: View {
     }
 
     private var trendBuckets: [TrendBucket] {
-        BudgetSummary.trend(allExpenses, period)
+        if isYearMode { return BudgetSummary.yearTrend(allExpenses, year: selectedYear) }
+        return BudgetSummary.trend(allExpenses, period)
     }
+
+    /// 연도별 탐색 범위 — 가장 오래된 지출 연도 ~ 올해.
+    private var currentYear: Int { Calendar.current.component(.year, from: Date()) }
+    private var earliestYear: Int {
+        allExpenses.map { Calendar.current.component(.year, from: $0.date) }.min() ?? currentYear
+    }
+    private var canGoPrevYear: Bool { selectedYear > earliestYear }
+    private var canGoNextYear: Bool { selectedYear < currentYear }
 
     private var categoryBreakdown: [(category: ExpenseCategory, amount: Int)] {
         let dict = BudgetSummary.byCategory(periodExpenses)
@@ -185,9 +208,12 @@ struct BudgetScreen: View {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 periodSegment
 
+                // '1년' 모드: 연도별 탐색 스텝퍼
+                if isYearMode { yearStepper }
+
                 // 총액 + 전기 대비
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("\(period.rangeLabel) 총 지출")
+                    Text("\(rangeLabel) 총 지출")
                         .font(.system(size: 11.5, weight: .semibold))
                         .foregroundStyle(AppColors.ink3)
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
@@ -205,7 +231,7 @@ struct BudgetScreen: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(
-                    "\(period.rangeLabel) 총 지출 \(amountFull(periodTotal))"
+                    "\(rangeLabel) 총 지출 \(amountFull(periodTotal))"
                     + (periodOverPeriodPct.map { ", 직전 대비 \($0)퍼센트" } ?? ""))
 
                 // 막대 차트 (실데이터)
@@ -243,6 +269,53 @@ struct BudgetScreen: View {
             }
         }
         .padding(4)
+        .background(AppColors.surface2, in: Capsule())
+    }
+
+    /// 연도별 탐색 — ◀ 2026년 ▶ (미래·데이터 없는 과거로는 이동 제한)
+    private var yearStepper: some View {
+        HStack(spacing: Spacing.s2) {
+            Button {
+                guard canGoPrevYear else { return }
+                Haptics.light()
+                withAnimation(.easeInOut(duration: 0.2)) { selectedYear -= 1 }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(canGoPrevYear ? AppColors.ink2 : AppColors.ink3.opacity(0.3))
+                    .frame(width: 40, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.9))
+            .disabled(!canGoPrevYear)
+            .accessibilityLabel("이전 연도 보기")
+
+            Text("\(String(selectedYear))년")
+                .font(.system(size: 14, weight: .heavy))
+                .foregroundStyle(AppColors.ink)
+                .frame(maxWidth: .infinity)
+                .contentTransition(.numericText())
+                .accessibilityLabel("선택한 연도 \(selectedYear)년")
+                .accessibilityAddTraits(.isHeader)
+
+            Button {
+                guard canGoNextYear else { return }
+                Haptics.light()
+                withAnimation(.easeInOut(duration: 0.2)) { selectedYear += 1 }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(canGoNextYear ? AppColors.ink2 : AppColors.ink3.opacity(0.3))
+                    .frame(width: 40, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.9))
+            .disabled(!canGoNextYear)
+            .accessibilityLabel("다음 연도 보기")
+            .accessibilityHint(canGoNextYear ? "" : "올해 이후로는 이동할 수 없어요")
+        }
+        .padding(.horizontal, Spacing.s2)
+        .frame(height: 40)
         .background(AppColors.surface2, in: Capsule())
     }
 
@@ -299,7 +372,7 @@ struct BudgetScreen: View {
                 }
             }
         }
-        .accessibilityLabel("\(period.rangeLabel) 지출 추이 막대 차트. 총 \(amountFull(periodTotal))")
+        .accessibilityLabel("\(rangeLabel) 지출 추이 막대 차트. 총 \(amountFull(periodTotal))")
     }
 
     private var trendEmpty: some View {
@@ -307,7 +380,7 @@ struct BudgetScreen: View {
             Image(systemName: "chart.bar.xaxis")
                 .font(.system(size: 30, weight: .light))
                 .foregroundStyle(AppColors.ink3.opacity(0.6))
-            Text("\(period.rangeLabel) 지출 기록이 없어요")
+            Text("\(rangeLabel) 지출 기록이 없어요")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.ink3)
             Text("오른쪽 아래 + 버튼으로 지출을 추가해 보세요.")
@@ -316,7 +389,7 @@ struct BudgetScreen: View {
         }
         .frame(maxWidth: .infinity, minHeight: 150)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(period.rangeLabel) 지출 기록이 없어요. 오른쪽 아래 더하기 버튼으로 지출을 추가하세요.")
+        .accessibilityLabel("\(rangeLabel) 지출 기록이 없어요. 오른쪽 아래 더하기 버튼으로 지출을 추가하세요.")
     }
 
     /// 전기 대비 증감 배지 (색+부호+레이블)
@@ -401,14 +474,14 @@ struct BudgetScreen: View {
             }
             .accessibilityHidden(true)
         }
-        .accessibilityLabel("카테고리별 지출 비중 도넛 차트. \(period.rangeLabel) 총 \(amountFull(periodTotal))")
+        .accessibilityLabel("카테고리별 지출 비중 도넛 차트. \(rangeLabel) 총 \(amountFull(periodTotal))")
     }
 
     // MARK: 3. 카테고리 분해 리스트
 
     private var categoryListSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            BLSectionHead(eyebrow: period.rangeLabel, title: "카테고리별 지출")
+            BLSectionHead(eyebrow: rangeLabel, title: "카테고리별 지출")
                 .accessibilityAddTraits(.isHeader)
 
             BLCard(padding: 0) {
