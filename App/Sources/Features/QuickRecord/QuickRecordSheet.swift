@@ -546,7 +546,7 @@ struct QuickRecordSheet: View {
                 savedAnything = true
             }
         }
-        if let w = Double(weightText.trimmingCharacters(in: .whitespaces)) {
+        if let w = blDecimal(weightText) {
             store.addPregnancyWeight(pregnancyId: preg.id, kg: w)
             savedAnything = true
         }
@@ -606,8 +606,8 @@ struct QuickRecordSheet: View {
             }
             // 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
             // (showDetail 여부가 아니라 실제 입력 여부로 판단 — 상세를 접어도 입력값 누락 없음)
-            let heightVal = Double(heightText.trimmingCharacters(in: .whitespaces))
-            let weightVal = Double(weightText.trimmingCharacters(in: .whitespaces))
+            let heightVal = blDecimal(heightText)
+            let weightVal = blDecimal(weightText)
             if heightVal != nil || weightVal != nil {
                 store.addGrowthRecord(
                     childId:             childId,

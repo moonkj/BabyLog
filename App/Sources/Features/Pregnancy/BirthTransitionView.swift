@@ -474,8 +474,8 @@ struct BirthTransitionView: View {
                                       birthDate: child.birthDate, gender: child.gender,
                                       profileImageRef: .some(ref))
                 }
-                let h = Double(birthHeight.trimmingCharacters(in: .whitespaces))
-                let w = Double(birthWeight.trimmingCharacters(in: .whitespaces))
+                let h = blDecimal(birthHeight)
+                let w = blDecimal(birthWeight)
                 if h != nil || w != nil {
                     store.addGrowthRecord(childId: child.id, heightCm: h, weightKg: w,
                                           headCircumferenceCm: nil)

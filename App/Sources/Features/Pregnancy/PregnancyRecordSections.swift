@@ -185,7 +185,7 @@ struct PregnancyMomRecordSection: View {
             TextField("예: 58.4", text: $weightText)
                 .keyboardType(.decimalPad)
             Button("저장") {
-                if let pid = pregnancyId, let kg = Double(weightText), kg > 0 {
+                if let pid = pregnancyId, let kg = blDecimal(weightText), kg > 0 {
                     store.addPregnancyWeight(pregnancyId: pid, kg: kg)
                     Haptics.success()
                 }

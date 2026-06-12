@@ -1,0 +1,27 @@
+# 알려진 미해결 이슈 (2026-06-13 전체 재리뷰 기준)
+
+3차에 걸친 병렬 코드 재리뷰에서 대부분의 P0/P1과 다수 P2를 수정·배포했다(커밋 fb2b7bf·eef9adc·18bea28·b527b13). 아래는 **아직 안 고친 항목** — 서버 배포가 필요하거나(현재 access token 폐기로 에이전트가 못 올림), 제품 결정/대규모 작업이 필요해 의도적으로 남긴 것들이다.
+
+## A. 서버 재배포 필요 (사용자가 SQL Editor / CLI에서)
+1. **claim_device v2 재실행** — `supabase/schema_auth.sql` (마켓 테이블 포함 + 좋아요/참가/멤버십 행단위 충돌 병합). 미실행 시: 로그인 후 기존(익명) 매물을 본인이 수정/삭제 못 하고, 1매물 제한 우회.
+2. **delete-account 재배포** — `supabase/functions/delete-account` (활성 매물 판매완료 처리 추가). `supabase functions deploy delete-account`.
+3. **Storage 버킷 RLS 강화** — `market-photos`의 insert/delete가 `bucket_id`만 검사 → 누구나 남의 사진 삭제/대량 업로드 가능. 경로 소유자(`(storage.foldername(name))[1] = auth.uid/헤더`) 기반으로 잠가야 함. (업로드 경로가 `<ownerID>/...`라 적용 가능.)
+4. **crew_push_token / crew_waitlist RLS** — 현재 `using(true)` → 타인 푸시토큰 덮어쓰기/삭제, 가짜 대기자 삽입으로 푸시 스팸 가능. 소유자 패턴 + (가능하면) 레이트리밋.
+5. **notify-crew-open 중복 발송 게이트** — check-then-update 레이스 → `update ... set opened=true where opened=false returning` 원자 게이트로.
+6. **APNs 410 정리** — 만료 토큰(BadDeviceToken) 응답 시 crew_push_token 행 삭제(테이블 무한 증가 방지).
+
+## B. 제품 결정/대규모 작업 필요
+7. **마켓 1:1 채팅이 실제로는 공개 방** — `market_chat_message`가 `item_id`로만 키잉되고 `select using(true)` → 한 매물의 여러 구매자가 서로 메시지를 봄, 익명이 아무 채팅이나 열람 가능. **개인정보 이슈.** 올바른 모델: `(item_id, buyer)` 스레드 키 + 참가자(판매자/해당 구매자)만 select. 판매자용 구매자별 스레드 목록 UI 필요 → 로그인/신원 의존, 스키마+클라 재설계. **출시 전 필수.**
+8. **BackupService 메모리** — 전체 사진/영상을 메인스레드에서 RAM으로 로드 후 plist 인코딩 → 사진 많은 사용자(수 GB)에서 워치독 킬. 스트리밍 zip(파일 복사 후 압축)으로 전환 필요.
+9. **App Group 미활성** — 위젯↔앱 데이터 공유 entitlement 주석 처리(`project.yml`) + 그룹ID가 레거시 `group.com.babylog.app`. 유료 계정에서 켜고 그룹ID 확정 필요(켜기 전엔 위젯이 정직한 빈 상태 — 이미 처리됨).
+10. **Dynamic Type 전면 미지원** — `AppFont`가 모두 고정 size. 접근성 원칙상 text style/relativeTo 마이그레이션 필요(점진).
+
+## C. 남은 소소한 P2 (영향 작음)
+- 성장차트 "최근 2개월"이 실제로는 직전 2개 측정 델타(라벨/계산 불일치); "현재 키/몸무게"가 최신 기록에 해당 항목 없으면 "–"(이전 값 있어도).
+- 가계부: 아이 미등록 시 신생아 지원금 목록 노출(빈 상태 안내와 모순).
+- 홈 "1년 전 오늘" 히어로 카드가 비활성(탭 동작 없음·플레이스홀더); 대시보드 타일은 정상.
+- 성장 기록 삭제 UI 없음(`deleteGrowthRecord` 호출처 0).
+- 소수점 콤마 입력("8,5") 파싱 실패 가능 로케일.
+- 위젯/AuthStore/성장밴드 판정 단위 테스트 공백.
+
+> 우선순위: **B-7(채팅 개인정보)** 과 **A(서버 RLS/배포)** 가 출시 전 가장 중요. A는 토큰 재발급 또는 사용자가 직접 실행해야 함.
