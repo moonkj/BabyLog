@@ -51,14 +51,15 @@
 
 ---
 
-## 3. 크루(동네) 백엔드 🟡
+## 3. 크루(동네) 백엔드 🟢 거의 완료 (2026-06-12)
 
-연결점: `AppStore`(crews/joinedCrewIds/crewPosts/crewPostComments/crewChats/likedCrewPostIds).
+연결점: `CrewBackend.swift`(PostgREST URLSession), `AppStore`(로컬 폴백), `supabase/schema_crew.sql`·`schema_push.sql`.
 
-- **모임/그룹/게시판/댓글 동기화** — 현재 전부 로컬
-- **그룹·모임 실시간 채팅(Realtime)** — 현재 `crewChats` 로컬 + 데모
-- **좋아요/가입/정원 서버 정합** — 동시성·중복 방지
-- **콜드스타트 대기열(waitlist)** — 동네별 오픈(현재 DEBUG 토글 미리보기만)
+- ✅ **모임/그룹/게시판/댓글 동기화** — 동네별 Supabase 공유(`fetchPosts/Meetups/Groups`, `create*`). 미구성 시에만 로컬/목업.
+- ✅ **모임 채팅 + 게시판 댓글** — 3초 폴링(준실시간, `crew_meetup_message`/`crew_post_reply`). scenePhase 절전.
+- ✅ **좋아요/가입/정원 정합** — 카운트 "나 제외" 규약 통일, 중복탭 방지+롤백, 서버 카운트 단일출처.
+- ✅ **콜드스타트 대기열 + 실시간 오픈 푸시** — `crew_waitlist`/APNs Edge Function(임계값 30).
+- ⏳ **남음**: Realtime 구독으로 폴링 대체(선택), 익명→Apple 로그인 + 소유자 기반 RLS(현재 `using(true)` MVP — `docs/AUTH_SETUP.md` 참조), 작성 텍스트 길이 제한·스팸 방지.
 
 ---
 
