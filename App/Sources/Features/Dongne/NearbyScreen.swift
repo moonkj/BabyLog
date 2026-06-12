@@ -456,7 +456,9 @@ struct NearbyScreen: View {
                 // 이름에 소아 관련 키워드 있는 진짜 소아과/아동병원만(없으면 전체 폴백).
                 let pediatricKeywords = ["소아", "아동", "어린이", "키즈"]
                 let pediatric = results.filter { h in pediatricKeywords.contains { h.name.contains($0) } }
-                finalResults = pediatric.isEmpty ? results : pediatric
+                // 표시는 가까운 30곳까지 — 그 전부의 실제 영업여부를 조회해 '미조회 미확인'을 없앤다.
+                // (결과는 provider에서 이미 거리순. 30 초과는 너무 멀어 실효성 낮음.)
+                finalResults = Array((pediatric.isEmpty ? results : pediatric).prefix(30))
             } else {
                 finalResults = results   // 약국은 필터 없이 전체
             }
@@ -477,7 +479,8 @@ struct NearbyScreen: View {
     /// 가까운 순 상위 N곳의 실제 영업 여부를 상세 영업시간으로 동시 조회(쿼터·속도 고려 N=24).
     /// 결과가 도착하는 대로 카드 뱃지가 미확인→영업중/영업종료로 갱신된다. 불명은 미확인 유지.
     private func fetchOpenStatus(_ hospitals: [HospitalInfo], category: PlaceCategory) async {
-        let targets = Array(hospitals.prefix(24))
+        // 표시되는 곳(가까운 30곳)을 전부 조회 — 미조회로 인한 '미확인'을 남기지 않는다.
+        let targets = Array(hospitals.prefix(30))
         openLoading = true
         await withTaskGroup(of: (String, Bool?).self) { group in
             for h in targets {
@@ -497,7 +500,7 @@ struct NearbyScreen: View {
         if let s = openStatus[h.id] { return s ? .open : .closed }
         if openChecked.contains(h.id) { return .unknown }       // 조회했으나 영업시간 불명
         if openLoading && selectedCategory == .hospital { return .checking }  // 아직 조회 중
-        return .unknown                                          // 조회 끝/대상 외(25위+·약국)
+        return .unknown                                          // 조회 끝(진료시간 데이터 없음)·약국
     }
 
     /// 두 좌표 간 직선거리(미터) — 캐시 무효화 판단용.

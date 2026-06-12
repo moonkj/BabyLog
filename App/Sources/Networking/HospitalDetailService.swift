@@ -73,12 +73,15 @@ struct HIRADetailItem: Decodable {
     let trmtSunStart, trmtSunEnd: String?
     // 응급실 운영
     let emyDayYn, emyNgtYn, emyDayStart, emyDayEnd, emyNgtStart, emyNgtEnd: String?
+    // 점심시간 (예: "1시00분~2시00분", "점심시간 없음") — 주중/토 구분
+    let lunchWeek, lunchSat: String?
 
     enum CodingKeys: String, CodingKey {
         case trmtMonStart, trmtMonEnd, trmtTueStart, trmtTueEnd, trmtWedStart, trmtWedEnd
         case trmtThuStart, trmtThuEnd, trmtFriStart, trmtFriEnd, trmtSatStart, trmtSatEnd
         case trmtSunStart, trmtSunEnd
         case emyDayYn, emyNgtYn, emyDayStart, emyDayEnd, emyNgtStart, emyNgtEnd
+        case lunchWeek, lunchSat
     }
 
     init(from d: Decoder) throws {
@@ -98,6 +101,7 @@ struct HIRADetailItem: Decodable {
         emyDayYn = s(.emyDayYn); emyNgtYn = s(.emyNgtYn)
         emyDayStart = s(.emyDayStart); emyDayEnd = s(.emyDayEnd)
         emyNgtStart = s(.emyNgtStart); emyNgtEnd = s(.emyNgtEnd)
+        lunchWeek = s(.lunchWeek); lunchSat = s(.lunchSat)
     }
 
     /// HHMM 문자열 → 정수(분 단위 비교용 HHMM). 빈값/형식오류는 nil.
@@ -113,6 +117,23 @@ struct HIRADetailItem: Decodable {
         return s < e ? (now >= s && now < e) : (now >= s || now < e)
     }
 
+    /// "1시00분~2시00분" 형태의 점심시간 → (시작HHMM, 끝HHMM). 없음/파싱실패 nil.
+    /// 점심은 항상 한낮이므로 1~7시는 오후로 보정(+12). "점심시간 없음" 등은 nil.
+    private func lunchRange(_ s: String?) -> (Int, Int)? {
+        guard let s, s.contains("~") else { return nil }
+        let parts = s.components(separatedBy: "~")
+        guard parts.count == 2 else { return nil }
+        func parse(_ t: String) -> Int? {
+            guard let si = t.range(of: "시") else { return nil }
+            guard var h = Int(t[t.startIndex..<si.lowerBound].filter { $0.isNumber }) else { return nil }
+            let m = Int(t[si.upperBound...].filter { $0.isNumber }) ?? 0
+            if h < 8 { h += 12 }   // 점심 1~7시 = 오후(13~19), 12시는 정오 그대로
+            return h * 100 + m
+        }
+        guard let a = parse(parts[0]), let b = parse(parts[1]), a < b else { return nil }
+        return (a, b)
+    }
+
     func isOpen(at date: Date) -> Bool {
         let cal = Calendar(identifier: .gregorian)
         let now = cal.component(.hour, from: date) * 100 + cal.component(.minute, from: date)
@@ -121,8 +142,9 @@ struct HIRADetailItem: Decodable {
         if emyNgtYn == "Y", inRange(now, hhmm(emyNgtStart), hhmm(emyNgtEnd)) { return true }
         if emyDayYn == "Y", inRange(now, hhmm(emyDayStart), hhmm(emyDayEnd)) { return true }
         // 요일별 정규 진료시간
+        let weekday = cal.component(.weekday, from: date)   // 1=일 … 7=토
         let (st, en): (String?, String?)
-        switch cal.component(.weekday, from: date) {   // 1=일 … 7=토
+        switch weekday {
         case 1: (st, en) = (trmtSunStart, trmtSunEnd)
         case 2: (st, en) = (trmtMonStart, trmtMonEnd)
         case 3: (st, en) = (trmtTueStart, trmtTueEnd)
@@ -131,6 +153,10 @@ struct HIRADetailItem: Decodable {
         case 6: (st, en) = (trmtFriStart, trmtFriEnd)
         default: (st, en) = (trmtSatStart, trmtSatEnd)
         }
-        return inRange(now, hhmm(st), hhmm(en))
+        guard inRange(now, hhmm(st), hhmm(en)) else { return false }
+        // 점심시간이면 닫힘(토=lunchSat, 그 외 평일=lunchWeek; 일요일은 점심 무관)
+        let lunch = weekday == 7 ? lunchRange(lunchSat) : (weekday == 1 ? nil : lunchRange(lunchWeek))
+        if let (ls, le) = lunch, now >= ls, now < le { return false }
+        return true
     }
 }

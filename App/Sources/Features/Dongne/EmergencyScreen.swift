@@ -90,12 +90,11 @@ struct EmergencyScreen: View {
                 }
             }
             openOnly.sort { $0.distanceM < $1.distanceM }
-            // 최상단 = 가장 가까운 대학병원급
-            if let top = openOnly.first(where: { $0.isMajorHospital }) {
-                hospitals = [top] + openOnly.filter { $0.id != top.id }
-            } else {
-                hospitals = openOnly
-            }
+            // 대학병원급(상급종합·종합)은 가까운 순 최대 3곳까지 노출 — 응급 시 후송 가능한
+            // 큰 병원 선택지를 충분히 주되 과하게 늘어놓지 않는다. 그 뒤 소아과 등 거리순.
+            let majorsOpen = openOnly.filter { $0.isMajorHospital }.prefix(3)
+            let othersOpen = openOnly.filter { !$0.isMajorHospital }
+            hospitals = Array(majorsOpen) + othersOpen
         } catch {
             // HIRA 조회 실패 — 빈 결과로 위장하지 않는다(거짓 "병원 없음" = 아동안전 위험).
             hospitals = []
