@@ -169,28 +169,52 @@ extension MarketItem {
 /// DongneTab의 "마켓" 세그먼트에 임베드하는 메인 뷰.
 struct MarketScreen: View {
     @EnvironmentObject private var store: AppStore
+    @ObservedObject private var location = NearbyLocationProvider.shared
     @State private var selectedCategory: MarketCategory = .all
     @State private var showSellSheet: Bool = false
+    @State private var sharedItems: [MarketItem]? = nil
+    @State private var didLoad = false
+
+    /// 서버 공유 모드(Supabase 구성됨). 미구성 시 로컬(기기 저장) 폴백.
+    private var serverMode: Bool { SupabaseConfig.isConfigured }
+    private var hood: String { location.localityName ?? "우리 동네" }
+    private var isLoading: Bool { serverMode && !didLoad }
+
+    /// 화면에 쓸 매물 — 서버 모드면 공유 목록, 아니면 로컬.
+    private var items: [MarketItem] { serverMode ? (sharedItems ?? []) : store.marketItems }
 
     private var filteredItems: [MarketItem] {
-        if selectedCategory == .all { return store.marketItems }
-        return store.marketItems.filter { $0.category == selectedCategory }
+        if selectedCategory == .all { return items }
+        return items.filter { $0.category == selectedCategory }
+    }
+
+    private func loadItems() async {
+        guard serverMode else { return }
+        if let s = await MarketBackend.fetchItems(hood: hood) { sharedItems = s }
+        didLoad = true
     }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                BLSampleNote(message: "내가 등록한 매물은 기기에 저장돼요. 동네 이웃과의 실시간 거래는 곧 열려요.")
-                    .padding(.horizontal, Spacing.s5)
-                    .padding(.top, Spacing.s3)
-                    .padding(.bottom, Spacing.s2)
+                if !serverMode {
+                    BLSampleNote(message: "내가 등록한 매물은 기기에 저장돼요. 동네 이웃과의 실시간 거래는 곧 열려요.")
+                        .padding(.horizontal, Spacing.s5)
+                        .padding(.top, Spacing.s3)
+                        .padding(.bottom, Spacing.s2)
+                }
                 needSoonSection
                 categoryChips
-                itemList
-                    .padding(.bottom, 80) // FAB 여백
+                if isLoading {
+                    marketLoadingView
+                } else {
+                    itemList
+                        .padding(.bottom, 80) // FAB 여백
+                }
             }
         }
         .background(AppColors.canvas.ignoresSafeArea())
+        .refreshable { await loadItems() }
         // 공용 글래스 FAB — 팔기 (모양·위치는 전 화면 공유, 기능만 다름)
         .appFAB { Haptics.light(); showSellSheet = true }
         .sheet(isPresented: $showSellSheet) {
@@ -198,7 +222,20 @@ struct MarketScreen: View {
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
+        .task(id: hood) { didLoad = false; await loadItems() }
+        .onChange(of: showSellSheet) { _, open in if !open { Task { await loadItems() } } }
         .accessibilityElement(children: .contain)
+    }
+
+    private var marketLoadingView: some View {
+        VStack(spacing: Spacing.s3) {
+            ProgressView()
+            Text("우리 동네 매물을 불러오는 중…")
+                .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 100)
+        .accessibilityLabel("우리 동네 매물을 불러오는 중")
     }
 
     // MARK: 곧 필요해요 섹션
@@ -413,13 +450,7 @@ private struct MkItemCard: View {
     }
 
     private var photo: some View {
-        Group {
-            if let img = PhotoStore.image(item.photoRefs.first) {
-                Image(uiImage: img).resizable().scaledToFill()
-            } else {
-                PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
-            }
-        }
+        MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs, seed: item.photoSeed, index: 0, cornerRadius: 0)
         .frame(width: photoSide, height: photoSide)
         .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
         .overlay {

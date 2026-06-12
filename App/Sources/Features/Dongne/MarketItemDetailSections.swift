@@ -14,13 +14,7 @@ struct MarketDetailHeroPhoto: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Group {
-                if let img = PhotoStore.image(item.photoRefs.first) {
-                    Image(uiImage: img).resizable().scaledToFill()
-                } else {
-                    PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
-                }
-            }
+            MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs, seed: item.photoSeed, index: 0, cornerRadius: 0)
                 .frame(maxWidth: .infinity)
                 .frame(height: 280)
                 .clipped()

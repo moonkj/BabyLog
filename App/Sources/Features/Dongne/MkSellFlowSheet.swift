@@ -22,6 +22,9 @@ struct MkSellFlowSheet: View {
     @State private var desc: String = ""
     @State private var hygiene: Set<String> = []
     @State private var showComplete = false
+    @State private var submitting = false
+    @State private var alertMessage: String? = nil
+    @ObservedObject private var location = NearbyLocationProvider.shared
 
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
     private var priceValue: Int { Int(priceText.filter(\.isNumber)) ?? 0 }
@@ -65,6 +68,9 @@ struct MkSellFlowSheet: View {
         .padding(.horizontal, Spacing.s5)
         .background(AppColors.canvas)
         .frame(maxHeight: .infinity)
+        .alert("매물 등록", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
+            Button("확인", role: .cancel) {}
+        } message: { Text(alertMessage ?? "") }
     }
 
     // MARK: Step 0 — 사진 + 제목 + 카테고리
@@ -290,16 +296,81 @@ struct MkSellFlowSheet: View {
             }
             .accessibilityElement(children: .contain)
 
-            LiquidButton(action: { register() }) {
-                Text("등록하기")
+            LiquidButton(fill: submitting ? AppColors.ink3 : AppColors.primary, action: {
+                guard !submitting else { return }
+                register()
+            }) {
+                Text(submitting ? "등록 중…" : "등록하기")
                     .font(.system(size: 16, weight: .bold))
             }
+            .disabled(submitting)
             .accessibilityLabel("매물 등록하기")
         }
     }
 
-    // 실제 등록 — 사진 로컬 저장 후 store에 추가
+    // 실제 등록 — 서버 구성 시 Supabase 업로드, 미구성 시 로컬 저장
     private func register() {
+        if SupabaseConfig.isConfigured {
+            registerToServer()
+        } else {
+            registerLocal()
+        }
+    }
+
+    // 서버 등록 — 무료 1매물 게이트 → 업로드 → 로컬 캐시 → 완료 화면
+    private func registerToServer() {
+        submitting = true
+        Task {
+            // 무료 한도 확인 (무료 회원 1매물)
+            if await MarketBackend.freeLimitReached() {
+                await MainActor.run {
+                    submitting = false
+                    alertMessage = "무료 회원은 매물을 1개까지 올릴 수 있어요. 기존 매물을 판매완료하거나 삭제한 뒤 다시 등록해 주세요."
+                }
+                return
+            }
+
+            let hood = location.localityName ?? ""
+            // 사진은 서버에서 업로드하므로 photoRefs는 비움(로컬 캐시는 store에서 별도 보존)
+            let item = MarketItem(
+                title: title.trimmingCharacters(in: .whitespaces),
+                category: selectedCategory,
+                grade: selectedGrade,
+                monthsTag: monthsTag.isEmpty ? "전 월령" : monthsTag,
+                price: isFree ? 0 : priceValue,
+                originalPrice: nil,
+                isFree: isFree,
+                hasRecall: false,
+                isGraduate: true,
+                sellerName: nickname,
+                sellerTier: .new,
+                distanceText: "내 동네",
+                favoriteCount: 0,
+                photoSeed: 0,
+                description: desc,
+                photoRefs: photos.compactMap { PhotoStore.save($0) },
+                mine: true,
+                status: .selling,
+                hygieneChecks: MarketItem.hygieneOptions.filter { hygiene.contains($0) }
+            )
+
+            let newID = await MarketBackend.createItem(hood: hood, item: item, photos: photos)
+            await MainActor.run {
+                submitting = false
+                if newID != nil {
+                    // 즉시 UI 반영을 위해 로컬에도 추가
+                    store.addMarketItem(item)
+                    Haptics.success()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showComplete = true }
+                } else {
+                    alertMessage = "매물을 등록하지 못했어요. 잠시 후 다시 시도해 주세요."
+                }
+            }
+        }
+    }
+
+    // 로컬 등록 — 사진 로컬 저장 후 store에 추가(서버 미구성 폴백)
+    private func registerLocal() {
         let refs = photos.compactMap { PhotoStore.save($0) }
         let item = MarketItem(
             title: title.trimmingCharacters(in: .whitespaces),

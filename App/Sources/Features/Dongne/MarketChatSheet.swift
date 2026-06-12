@@ -13,13 +13,42 @@ struct MarketChatSheet: View {
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var messageText = ""
     @State private var sellerTyping = false
     @State private var showReport = false
+    /// 서버 공유 메시지(미구성/미로드 시 nil → 로컬 폴백)
+    @State private var serverMessages: [ChatMessage]? = nil
 
-    private var messages: [ChatMessage] { store.marketMessages(itemId: item.id) }
+    private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
+    private var messages: [ChatMessage] { serverMessages ?? store.marketMessages(itemId: item.id) }
     private var transcriptText: String {
         ChatTranscript.text(itemTitle: item.title, counterpart: item.sellerName, messages: messages)
+    }
+
+    /// 채팅 열려 있는 동안 3초 주기 폴링(시트 닫히면 task 취소, 백그라운드면 건너뜀).
+    private func pollLoop() async {
+        guard SupabaseConfig.isConfigured else { return }
+        while !Task.isCancelled {
+            if scenePhase == .active,
+               let msgs = await MarketBackend.fetchMessages(itemId: item.id) { serverMessages = msgs }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+        }
+    }
+
+    private func send() {
+        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        messageText = ""
+        Haptics.light()
+        if SupabaseConfig.isConfigured {
+            Task {
+                await MarketBackend.sendMessage(itemId: item.id, body: text, authorName: nickname)
+                if let msgs = await MarketBackend.fetchMessages(itemId: item.id) { serverMessages = msgs }
+            }
+        } else {
+            store.sendMarketMessage(itemId: item.id, text: text, mine: true)
+        }
     }
 
     var body: some View {
@@ -108,6 +137,7 @@ struct MarketChatSheet: View {
             TradeReportSheet(item: item).environmentObject(store)
                 .presentationDetents([.medium, .large])
         }
+        .task(id: item.id) { await pollLoop() }
     }
 
     private var chatHeader: some View {
@@ -194,18 +224,7 @@ struct MarketChatSheet: View {
                 .accessibilityLabel("메시지 입력")
 
             Button {
-                let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
-                store.sendMarketMessage(itemId: item.id, text: text, mine: true)
-                messageText = ""
-                Haptics.light()
-                // 데모: 판매자 입력 중 → 자동 응답 (백엔드 연동 전)
-                withAnimation { sellerTyping = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                    withAnimation { sellerTyping = false }
-                    store.sendMarketMessage(itemId: item.id,
-                                            text: "네, 확인했어요! 😊 편하신 시간 알려주세요.", mine: false)
-                }
+                send()
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 38, weight: .regular))

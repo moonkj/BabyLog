@@ -63,3 +63,26 @@ create policy market_photos_ins  on storage.objects for insert to anon, authenti
   with check ( bucket_id = 'market-photos' );
 create policy market_photos_del  on storage.objects for delete to anon, authenticated
   using ( bucket_id = 'market-photos' );
+
+-- ───────── 1:1 거래 채팅(매물 문의 대화) ─────────
+-- 매물별 구매자↔판매자 대화. 개인정보 비저장: 익명 기기ID + 닉네임 + 본문.
+-- RLS는 크루와 동일한 전환기 패턴(읽기 개방 / 쓰기·삭제 본인). auth 도입 후 device_id=auth.uid 강제.
+create table if not exists public.market_chat_message (
+    id          uuid primary key default gen_random_uuid(),
+    item_id     uuid not null references public.market_item(id) on delete cascade,
+    device_id   text not null,                 -- 익명 기기 UUID(작성자)
+    author_name text,                          -- 표시용 닉네임(개인정보 아님)
+    body        text not null,
+    created_at  timestamptz not null default now()
+);
+create index if not exists market_chat_message_idx on public.market_chat_message (item_id, created_at);
+
+alter table public.market_chat_message enable row level security;
+drop policy if exists market_chat_message_read on public.market_chat_message;
+drop policy if exists market_chat_message_ins  on public.market_chat_message;
+drop policy if exists market_chat_message_del  on public.market_chat_message;
+create policy market_chat_message_read on public.market_chat_message for select to anon, authenticated using (true);
+create policy market_chat_message_ins  on public.market_chat_message for insert to anon, authenticated
+  with check ( device_id = coalesce(auth.uid()::text, device_id) );
+create policy market_chat_message_del  on public.market_chat_message for delete to anon, authenticated
+  using ( device_id = coalesce(auth.uid()::text, device_id) );

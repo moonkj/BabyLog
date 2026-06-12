@@ -18,6 +18,15 @@ struct MarketItemDetail: View {
 
     private var liveItem: MarketItem { store.marketItems.first(where: { $0.id == item.id }) ?? item }
 
+    /// 판매 상태 변경 — 로컬 갱신 + (구성 시) 서버 동기화.
+    private func changeStatus(_ newStatus: MarketStatus) {
+        store.setMarketStatus(id: item.id, newStatus)
+        if SupabaseConfig.isConfigured {
+            let id = item.id
+            Task { await MarketBackend.setStatus(id: id, status: newStatus) }
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView(.vertical, showsIndicators: false) {
@@ -47,12 +56,17 @@ struct MarketItemDetail: View {
             if liveItem.mine {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("판매중으로") { store.setMarketStatus(id: item.id, .selling) }
-                        Button("예약중으로") { store.setMarketStatus(id: item.id, .reserved) }
-                        Button("판매완료로") { store.setMarketStatus(id: item.id, .sold) }
+                        Button("판매중으로") { changeStatus(.selling) }
+                        Button("예약중으로") { changeStatus(.reserved) }
+                        Button("판매완료로") { changeStatus(.sold) }
                         Divider()
                         Button("매물 삭제", role: .destructive) {
-                            store.deleteMarketItem(id: item.id); dismiss()
+                            store.deleteMarketItem(id: item.id)
+                            if SupabaseConfig.isConfigured {
+                                let id = item.id, urls = liveItem.photoURLs
+                                Task { await MarketBackend.deleteItem(id: id, photoURLs: urls) }
+                            }
+                            dismiss()
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
