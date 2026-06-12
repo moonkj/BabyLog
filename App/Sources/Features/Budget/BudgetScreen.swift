@@ -261,7 +261,14 @@ struct BudgetScreen: View {
             )
             .accessibilityAddTraits(.isHeader)
 
-            if isLoadingSubsidies {
+            if store.selectedChild == nil {
+                // 아이 미등록 시 월령(0개월) 기반 지원금을 노출하지 않고 등록 안내만 표시
+                BLEmptyState(
+                    icon: "banknote",
+                    title: "아이 등록 후 안내해드려요",
+                    message: "아이를 등록하면 월령에 맞는 지원금을\n자동으로 안내해드려요."
+                )
+            } else if isLoadingSubsidies {
                 subsidySkeletonView
             } else if subsidies.isEmpty {
                 BLEmptyState(
@@ -617,6 +624,12 @@ struct BudgetScreen: View {
     // MARK: - Async
 
     private func loadSubsidies() async {
+        // 아이 미등록 시 월령(0개월) 기반 지원금을 불러오지 않음 — 등록 안내만 노출
+        guard store.selectedChild != nil else {
+            subsidies = []
+            isLoadingSubsidies = false
+            return
+        }
         isLoadingSubsidies = true
         do {
             let result = try await ProviderFactory.subsidy().subsidies(childAgeMonths: childAgeMonths)

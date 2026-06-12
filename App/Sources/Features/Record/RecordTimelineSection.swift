@@ -115,6 +115,7 @@ private struct DateGroupHeader: View {
 
 // 성장 측정 카드
 private struct GrowthTimelineCard: View {
+    @EnvironmentObject private var store: AppStore
     var record: GrowthRecord
     var body: some View {
         BLCard(padding: 14) {
@@ -148,6 +149,14 @@ private struct GrowthTimelineCard: View {
                     .foregroundStyle(AppColors.ink2)
                 }
                 Spacer()
+            }
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                Haptics.warning()
+                store.deleteGrowthRecord(id: record.id)
+            } label: {
+                Label("기록 삭제", systemImage: "trash")
             }
         }
         .accessibilityElement(children: .combine)

@@ -226,12 +226,15 @@ enum MarketBackend {
     static func uploadPhoto(_ image: UIImage) async -> String? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let data = compress(image) else { return nil }
-        let path = "\(SupabaseConfig.deviceID)/\(UUID().uuidString).jpg"
+        // 경로 첫 폴더 = ownerID — Storage RLS(소유 폴더만 업/삭제)와 정합. 헤더도 동일하게 보냄.
+        let owner = await SupabaseConfig.ownerID()
+        let path = "\(owner)/\(UUID().uuidString).jpg"
         guard let enc = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
               let url = URL(string: "\(base)/storage/v1/object/market-photos/\(enc)") else { return nil }
         var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 30
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(owner, forHTTPHeaderField: "x-device-id")  // 익명 소유 폴더 RLS 매칭
         req.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
         req.httpBody = data
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
@@ -247,6 +250,7 @@ enum MarketBackend {
         var req = URLRequest(url: url); req.httpMethod = "DELETE"; req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 소유 폴더 RLS 매칭
         _ = try? await URLSession.shared.data(for: req)
     }
 

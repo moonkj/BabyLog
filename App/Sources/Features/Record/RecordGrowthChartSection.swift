@@ -129,15 +129,28 @@ struct GrowthChartSection: View {
     }
 
     private var lastRecord: GrowthRecord? { records.last }
-    private var currentValue: Double? {
-        metric == .weight ? lastRecord?.weightKg : lastRecord?.heightCm
+
+    /// 선택된 지표(키/몸무게) 값을 꺼내는 헬퍼
+    private func value(of record: GrowthRecord) -> Double? {
+        metric == .weight ? record.weightKg : record.heightCm
     }
+
+    /// 해당 지표를 실제로 담고 있는 가장 최근 기록(뒤에서부터 탐색).
+    /// 최신 기록에 몸무게만 있고 키가 없어도, 키가 있는 직전 기록을 찾아 "–"로 비지 않게 한다.
+    private var latestRecordWithValue: GrowthRecord? {
+        records.last(where: { value(of: $0) != nil })
+    }
+
+    private var currentValue: Double? {
+        latestRecordWithValue.flatMap { value(of: $0) }
+    }
+
+    /// 직전 측정 대비 변화량 — 해당 지표를 담은 최근 두 기록을 뒤에서부터 찾아 비교.
+    /// (시간 간격은 보장하지 않으므로 "직전 측정 대비"로 정직하게 라벨링)
     private var recentDelta: Double? {
-        guard records.count >= 2 else { return nil }
-        let prev = metric == .weight ? records[records.count - 2].weightKg : records[records.count - 2].heightCm
-        let curr = currentValue
-        guard let p = prev, let c = curr else { return nil }
-        return c - p
+        let valued = records.compactMap { r -> Double? in value(of: r) }
+        guard valued.count >= 2 else { return nil }
+        return valued[valued.count - 1] - valued[valued.count - 2]
     }
 
     // 성별 확인 시에만 권위 있게 밴드를 그린다(성별 미상이면 잘못된 표준 회피)
@@ -524,7 +537,7 @@ struct GrowthChartSection: View {
             statCell(value: recentDelta.map { (d: Double) in
                 let sign = d >= 0 ? "+" : ""
                 return "\(sign)\(String(format: "%.1f", d))\(metric.unit)"
-            } ?? "–", label: "최근 2개월")
+            } ?? "–", label: "직전 측정 대비")
             Divider().frame(height: 32).background(AppColors.line2)
             statCell(value: "\(records.count)회", label: "총 측정 횟수")
         }

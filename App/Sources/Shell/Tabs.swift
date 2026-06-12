@@ -784,27 +784,41 @@ struct HomeTab: View {
 
     // MARK: 1년 전 오늘 카드
     private var memoryCard: some View {
-        HStack(spacing: 0) {
-            PhotoPlaceholder(seed: 3, cornerRadius: 0)
-                .frame(width: 100)
+        Button {
+            openMemory()
+        } label: {
+            HStack(spacing: 0) {
+                // 실제 추억 사진 노출 — 없을 때만 플레이스홀더로 폴백
+                Group {
+                    if let img = PhotoStore.image(memoryEntry?.photoRef) {
+                        Image(uiImage: img).resizable().scaledToFill()
+                    } else {
+                        PhotoPlaceholder(seed: 3, cornerRadius: 0)
+                    }
+                }
+                .frame(width: 100, height: 100)
+                .clipped()
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 8) {
-                BLBadge(tone: .pink, text: "1년 전 오늘", systemIcon: "clock.badge")
-                Text(memoryEntry?.content ?? memoryEntry?.milestone ?? "소중한 순간을 남긴 날 🥰")
-                    .font(AppFont.callout)
-                    .foregroundStyle(AppColors.ink)
-                    .lineSpacing(2)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 8) {
+                    BLBadge(tone: .pink, text: "1년 전 오늘", systemIcon: "clock.badge")
+                    Text(memoryEntry?.content ?? memoryEntry?.milestone ?? "소중한 순간을 남긴 날 🥰")
+                        .font(AppFont.callout)
+                        .foregroundStyle(AppColors.ink)
+                        .lineSpacing(2)
+                        .lineLimit(1)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 100)
+            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            .blShadow(.card)
         }
-        .frame(height: 100)
-        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-        .blShadow(.card)
+        .buttonStyle(LiquidPressStyle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("1년 전 오늘: \(memoryEntry?.content ?? memoryEntry?.milestone ?? "소중한 순간")")
+        .accessibilityHint("탭하면 추억을 돌아봐요")
     }
 
     // MARK: ═══════════════════════════════════

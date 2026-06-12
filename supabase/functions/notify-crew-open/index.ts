@@ -64,12 +64,17 @@ Deno.serve(async (req) => {
       .eq("hood", hood);
     if ((count ?? 0) < THRESHOLD) return new Response(JSON.stringify({ hood, count, opened: false }), { status: 200 });
 
-    // 2) 오픈 상태(중복 발송 방지)
-    const { data: status } = await supabase
-      .from("crew_hood_status").select("opened").eq("hood", hood).maybeSingle();
-    if (status?.opened) return new Response(JSON.stringify({ hood, alreadyOpened: true }), { status: 200 });
+    // 2) 오픈 상태 — 원자적 게이트(동시 호출 중복 발송 방지: 웹훅 + 클라 직접호출 레이스)
+    //    행 없으면 생성(opened=false) → opened=false인 동안만 true로 전환(UPDATE...WHERE)되어
+    //    딱 한 호출만 성공. 성공한 호출만 푸시를 발송한다.
     await supabase.from("crew_hood_status")
-      .upsert({ hood, opened: true, opened_at: new Date().toISOString() });
+      .upsert({ hood }, { onConflict: "hood", ignoreDuplicates: true });
+    const { data: claimed } = await supabase.from("crew_hood_status")
+      .update({ opened: true, opened_at: new Date().toISOString() })
+      .eq("hood", hood).eq("opened", false).select("hood");
+    if (!claimed || claimed.length === 0) {
+      return new Response(JSON.stringify({ hood, alreadyOpened: true }), { status: 200 });
+    }
 
     // 3) 동네 토큰 수집
     const { data: tokens } = await supabase
@@ -84,15 +89,21 @@ Deno.serve(async (req) => {
       aps: { alert: { title: `🌱 ${hood} 크루가 열렸어요`, body: "이웃이 충분히 모였어요. 동네 크루를 확인해 보세요." }, sound: "default" },
     });
     let sent = 0;
+    const stale: string[] = [];
     for (const t of tokens) {
       const r = await fetch(`https://${host}/3/device/${t.apns_token}`, {
         method: "POST",
         headers: { authorization: `bearer ${jwt}`, "apns-topic": topic, "apns-push-type": "alert", "apns-priority": "10" },
         body,
       });
-      if (r.ok) sent++;
+      if (r.ok) { sent++; continue }
+      // 410 Unregistered → 만료 토큰. 정리해 테이블 무한 증가 방지.
+      if (r.status === 410) stale.push(t.apns_token);
     }
-    return new Response(JSON.stringify({ hood, count, sent }), { status: 200 });
+    if (stale.length) {
+      await supabase.from("crew_push_token").delete().in("apns_token", stale);
+    }
+    return new Response(JSON.stringify({ hood, count, sent, pruned: stale.length }), { status: 200 });
   } catch (e) {
     return new Response(`error: ${e}`, { status: 500 });
   }

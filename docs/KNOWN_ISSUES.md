@@ -5,10 +5,10 @@
 ## A. 서버 재배포 필요 (사용자가 SQL Editor / CLI에서)
 1. **claim_device v2 재실행** — `supabase/schema_auth.sql` (마켓 테이블 포함 + 좋아요/참가/멤버십 행단위 충돌 병합). 미실행 시: 로그인 후 기존(익명) 매물을 본인이 수정/삭제 못 하고, 1매물 제한 우회.
 2. **delete-account 재배포** — `supabase/functions/delete-account` (활성 매물 판매완료 처리 추가). `supabase functions deploy delete-account`.
-3. **Storage 버킷 RLS 강화** — `market-photos`의 insert/delete가 `bucket_id`만 검사 → 누구나 남의 사진 삭제/대량 업로드 가능. 경로 소유자(`(storage.foldername(name))[1] = auth.uid/헤더`) 기반으로 잠가야 함. (업로드 경로가 `<ownerID>/...`라 적용 가능.)
-4. **crew_push_token / crew_waitlist RLS** — 현재 `using(true)` → 타인 푸시토큰 덮어쓰기/삭제, 가짜 대기자 삽입으로 푸시 스팸 가능. 소유자 패턴 + (가능하면) 레이트리밋.
-5. **notify-crew-open 중복 발송 게이트** — check-then-update 레이스 → `update ... set opened=true where opened=false returning` 원자 게이트로.
-6. **APNs 410 정리** — 만료 토큰(BadDeviceToken) 응답 시 crew_push_token 행 삭제(테이블 무한 증가 방지).
+3. ✅ **(코드 완료, 배포 대기)** Storage 버킷 RLS 강화 — `supabase/schema_hardening.sql`(소유 폴더만 insert/delete). 앱 uploadPhoto/deletePhoto가 경로·헤더를 ownerID로 정합. **SQL Editor에서 실행 필요.**
+4. ⏳ **crew_push_token / crew_waitlist RLS** — 보류(기기단위 테이블 vs 공용 ownerID 헤더 불일치 → 적용 시 로그인 정상동작 막힘). device 전용 헤더로 클라 수정 후 잠글 것. schema_hardening.sql 하단 주석 참고. (위험: 중간)
+5. ✅ **(코드 완료, 배포 대기)** notify-crew-open 중복 발송 — 원자 게이트(`update ... where opened=false returning`)로 교체. **`supabase functions deploy notify-crew-open` 재배포 필요.**
+6. ✅ **(코드 완료, 배포 대기)** APNs 410 정리 — 410 응답 토큰 행 삭제 추가. 위 함수 재배포에 포함.
 
 ## B. 제품 결정/대규모 작업 필요
 7. ✅ **(해결, 2026-06-13)** 마켓 1:1 채팅 공개방 문제 — `(item_id, buyer)` 스레드 + 참가자 전용 RLS(해당 구매자/그 매물 판매자만)로 재설계 완료. 판매자 문의 스레드 목록(MarketThreadListSheet) UI 추가. 메시지 사용자 삭제 불가(증거 보존), 운영자 service_role 전체 열람(→ `docs/OPERATOR_LEGAL.md`). **⚠️ `schema_market.sql` 재실행 필요**(buyer 컬럼+새 RLS) — 미배포 시 라이브 마켓 채팅 깨짐.
