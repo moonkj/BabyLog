@@ -53,7 +53,7 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
             URLQueryItem(name: "numOfRows", value: "100"),
             URLQueryItem(name: "xPos", value: String(lng)),
             URLQueryItem(name: "yPos", value: String(lat)),
-            URLQueryItem(name: "radius", value: "3000"),  // 반경 3km(동네)
+            URLQueryItem(name: "radius", value: "5000"),  // 반경 5km
             URLQueryItem(name: "dgsbjtCd", value: "11"),   // 소아청소년과 진료과목코드(49=치과 오류 수정)
             URLQueryItem(name: "_type", value: "json"),
         ]

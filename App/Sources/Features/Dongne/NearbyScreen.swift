@@ -638,55 +638,30 @@ private struct HospitalCard: View {
                 .accessibilityHidden(true)
 
                 // 텍스트 정보
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 6) {
                     // 이름 — 전체 폭 1줄
                     Text(hospital.name)
                         .font(.system(size: 15.5, weight: .bold))
                         .foregroundStyle(AppColors.ink)
                         .lineLimit(1)
 
-                    // 영업상태 · 거리 · (평점) · 종별
-                    HStack(spacing: Spacing.s1 + 2) {
+                    // 영업상태 뱃지(안 잘리게 고정) + 거리·종별 한 줄
+                    HStack(spacing: Spacing.s2) {
                         if hospital.isOpenNow {
                             BLBadge(tone: .mint, text: "영업중", systemIcon: nil, dot: true)
+                                .fixedSize()
                         } else {
                             BLBadge(tone: .grey, text: "영업종료", systemIcon: nil, dot: false)
+                                .fixedSize()
                         }
 
-                        Text("\(hospital.distanceM)m")
-                            .font(AppFont.num(12.5))
-                            .foregroundStyle(AppColors.ink2)
-
-                        if hospital.rating > 0 {   // HIRA는 평점 미제공 → 0이면 숨김
-                            Text("·").foregroundStyle(AppColors.line2)
-                            HStack(spacing: 2) {
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(AppColors.gold)
-                                Text(String(format: "%.1f", hospital.rating))
-                                    .font(AppFont.num(12.5))
-                                    .foregroundStyle(AppColors.ink2)
-                            }
-                        }
-
-                        Text("·").foregroundStyle(AppColors.line2)
-
-                        Text(hospital.department)
-                            .font(.system(size: 12.5, weight: .medium))
+                        Text("\(hospital.distanceM)m · \(hospital.department)")
+                            .font(AppFont.caption)
                             .foregroundStyle(AppColors.ink2)
                             .lineLimit(1)
 
                         Spacer(minLength: 0)
                     }
-
-                    // "○분 전 확인" 뱃지
-                    BLBadge(
-                        tone: hospital.lastCheckedMinutesAgo <= 10 ? .mint : .amber,
-                        text: "\(hospital.lastCheckedMinutesAgo)분 전 확인",
-                        systemIcon: "clock",
-                        dot: false
-                    )
-                    .padding(.top, 2)
                 }
 
                 Spacer(minLength: 0)
