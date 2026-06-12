@@ -704,43 +704,16 @@ struct NearbyScreen: View {
     private var hospitalListContent: some View {
         switch hospitalState {
         case .idle, .loading:
-            // 레이더 스윕 로딩 (§8.4 기능 진입 — 주변 훑기) + BLSkeleton
-            VStack(alignment: .leading, spacing: Spacing.s3) {
-                VStack(spacing: Spacing.s3) {
-                    RadarSweepView(size: 96)
-                    Text("주변을 살펴보는 중…")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppColors.ink2)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, Spacing.s2)
-                .padding(.bottom, Spacing.s4)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("주변을 살펴보는 중")
-                ForEach(0..<3, id: \.self) { _ in
-                    BLCard(padding: Spacing.s4) {
-                        HStack(alignment: .top, spacing: Spacing.s3) {
-                            BLSkeleton(width: 48, height: 48, cornerRadius: Radius.sm)
-                            VStack(alignment: .leading, spacing: Spacing.s2) {
-                                BLSkeleton(height: 15, cornerRadius: Radius.xs)
-                                    .frame(maxWidth: 150)
-                                BLSkeleton(height: 12, cornerRadius: Radius.xs)
-                                    .frame(maxWidth: 190)
-                            }
-                            Spacer(minLength: 0)
-                            VStack(spacing: Spacing.s2) {
-                                BLSkeleton(width: 44, height: 44, cornerRadius: Radius.sm)
-                                HStack(spacing: Spacing.s2) {
-                                    BLSkeleton(width: 44, height: 44, cornerRadius: Radius.sm)
-                                    BLSkeleton(width: 44, height: 44, cornerRadius: Radius.sm)
-                                }
-                            }
-                        }
-                    }
-                }
+            // 화면 중앙에서 도는 레이더(주변 훑기)
+            VStack(spacing: Spacing.s4) {
+                RadarSweepView(size: 132)
+                Text("주변을 살펴보는 중…")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.ink2)
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("주변 결과를 불러오는 중")
+            .frame(maxWidth: .infinity, minHeight: 460, alignment: .center)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("주변을 살펴보는 중")
 
         case .loaded(let hospitals):
             let openCount = hospitals.filter(\.isOpenNow).count
@@ -785,14 +758,13 @@ struct NearbyScreen: View {
     @ViewBuilder
     private var placeListContent: some View {
         if placesLoading && places.isEmpty {
-            VStack(spacing: Spacing.s3) {
-                RadarSweepView(size: 96)
+            VStack(spacing: Spacing.s4) {
+                RadarSweepView(size: 132)
                 Text("주변을 살펴보는 중…")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppColors.ink2)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Spacing.s5)
+            .frame(maxWidth: .infinity, minHeight: 460, alignment: .center)
             .accessibilityLabel("주변을 살펴보는 중")
         } else if places.isEmpty {
             BLEmptyState(

@@ -1115,7 +1115,7 @@ struct DongneTab: View {
                             .frame(maxWidth: .infinity).frame(height: 40)
                             .background {
                                 if seg == i {
-                                    Capsule().fill(AppColors.ink).blShadow(.chip)
+                                    Capsule().fill(Color(hex: 0x4E8268)).blShadow(.chip)  // 세이지그린 선택
                                 }
                             }
                         }
