@@ -29,6 +29,8 @@ struct MkSellFlowSheet: View {
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
     private var priceValue: Int { Int(priceText.filter(\.isNumber)) ?? 0 }
     private var canRegister: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// 가격 단계 통과 조건 — 무료나눔이거나, 유료면 가격 > 0(0원으로 무료처럼 등록되는 것 방지).
+    private var canProceedPrice: Bool { isFree || priceValue > 0 }
     private var sellCategories: [MarketCategory] { MarketCategory.allCases.filter { $0 != .all } }
 
     var body: some View {
@@ -266,10 +268,12 @@ struct MkSellFlowSheet: View {
                 }
             }
 
-            LiquidButton(action: { withAnimation { step = 2 } }) {
-                Text("다음")
+            LiquidButton(fill: canProceedPrice ? AppColors.primary : AppColors.ink3,
+                         action: { guard canProceedPrice else { return }; withAnimation { step = 2 } }) {
+                Text(canProceedPrice ? "다음" : "가격을 입력해주세요")
                     .font(.system(size: 16, weight: .bold))
             }
+            .disabled(!canProceedPrice)
             .accessibilityLabel("다음 단계로")
         }
         .padding(.bottom, 20)

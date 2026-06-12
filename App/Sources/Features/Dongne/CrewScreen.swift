@@ -464,7 +464,7 @@ private struct CrewMeetupListScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: Spacing.s3) {
+                LazyVStack(spacing: Spacing.s3) {
                     ForEach(meetups) { meetup in
                         NavigationLink(value: meetup) {
                             CrewMeetupCard(meetup: meetup).padding(.horizontal, Spacing.s5)
@@ -491,7 +491,7 @@ private struct CrewGroupListScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: Spacing.s3) {
+                LazyVStack(spacing: Spacing.s3) {
                     ForEach(groups) { group in
                         CrewGroupCard(group: group, onToggle: { join in onToggle(group.id, join) })
                             .padding(.horizontal, Spacing.s5)
@@ -516,7 +516,7 @@ private struct CrewPostListScreen: View {
         NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
                 BLCard(padding: 0) {
-                    VStack(alignment: .leading, spacing: 0) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(posts.enumerated()), id: \.element.id) { idx, post in
                             Button { Haptics.light(); selectedPost = post } label: {
                                 CrewPostRow(post: post)
