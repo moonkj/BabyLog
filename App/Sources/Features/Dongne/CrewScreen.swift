@@ -624,8 +624,17 @@ private struct CrewColdStartContent: View {
     @AppStorage("crew_open_notify") private var crewNotifyRequested = false
     @ObservedObject private var location = NearbyLocationProvider.shared
 
-    private let progressPercent: Double = 0.78
-    private let remainingCount: Int = 22
+    /// 서버 연동 시 실제 신청 수(미구성/실패 시 nil → 목업).
+    @State private var realCount: Int? = nil
+    private var target: Int { CrewBackend.openThreshold }
+    private var progressPercent: Double {
+        if let c = realCount { return min(1, Double(c) / Double(max(1, target))) }
+        return 0.78   // 목업
+    }
+    private var remainingCount: Int {
+        if let c = realCount { return max(0, target - c) }
+        return 22     // 목업
+    }
 
     /// 현재 GPS 동네(없으면 일반 표현)
     private var hood: String { location.localityName ?? "우리 동네" }
@@ -645,6 +654,11 @@ private struct CrewColdStartContent: View {
                     .padding(.top, 20)
                     .padding(.bottom, Spacing.s8)
             }
+        }
+        // 서버 연동 시 동네별 실제 대기 수 로드
+        .task(id: hood) {
+            guard SupabaseConfig.isConfigured, hood != "우리 동네" else { return }
+            realCount = await CrewBackend.waitlistCount(hood: hood)
         }
     }
 
@@ -753,10 +767,20 @@ private struct CrewColdStartContent: View {
             .accessibilityLabel("친구 초대하고 빨리 열기")
             .accessibilityHint("공유 시트로 친구를 초대합니다")
 
-            // 오픈 알림 신청 — 로컬 신청 토글
+            // 오픈 알림 신청 — 서버 연동 시 동네 대기자 등록, 미구성 시 로컬 토글
             Button {
-                crewNotifyRequested.toggle()
                 Haptics.success()
+                if SupabaseConfig.isConfigured, hood != "우리 동네" {
+                    Task {
+                        let ok = await CrewBackend.joinWaitlist(hood: hood)
+                        if ok {
+                            crewNotifyRequested = true
+                            realCount = await CrewBackend.waitlistCount(hood: hood)
+                        }
+                    }
+                } else {
+                    crewNotifyRequested.toggle()   // 목업
+                }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: crewNotifyRequested ? "bell.fill" : "bell.badge.fill")
