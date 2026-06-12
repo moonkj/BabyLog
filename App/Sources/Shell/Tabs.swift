@@ -65,6 +65,52 @@ struct HomeIconBadge: View {
     }
 }
 
+// MARK: - 홈 레이아웃 라인 아이콘(핸드오프 home_layout_icons_handoff/svg)
+
+/// 히어로(사진프레임+얼굴) · 대시보드(2×2 타일) · 타임라인(점 연결) 라인 글리프. 24×24 viewBox.
+struct HomeLayoutGlyph: Shape {
+    let layout: HomeLayout
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 24
+        func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * s, y: y * s) }
+        var p = Path()
+        switch layout {
+        case .hero:
+            p.addRoundedRect(in: CGRect(x: 3.5 * s, y: 4.5 * s, width: 17 * s, height: 15 * s),
+                             cornerSize: CGSize(width: 3 * s, height: 3 * s))
+            p.addEllipse(in: CGRect(x: (12 - 2.4) * s, y: (10 - 2.4) * s, width: 4.8 * s, height: 4.8 * s))
+            p.move(to: P(6, 18.5))
+            p.addCurve(to: P(12, 14.5), control1: P(7, 15.9), control2: P(9.2, 14.5))
+            p.addCurve(to: P(18, 18.5), control1: P(14.8, 14.5), control2: P(17, 15.9))
+        case .dashboard:
+            for (x, y) in [(4.0, 4.0), (13.0, 4.0), (4.0, 13.0), (13.0, 13.0)] {
+                p.addRoundedRect(in: CGRect(x: x * s, y: y * s, width: 7 * s, height: 7 * s),
+                                 cornerSize: CGSize(width: 2 * s, height: 2 * s))
+            }
+        case .timeline:
+            p.addEllipse(in: CGRect(x: (6 - 2) * s, y: (7 - 2) * s, width: 4 * s, height: 4 * s))
+            p.addEllipse(in: CGRect(x: (6 - 2) * s, y: (17 - 2) * s, width: 4 * s, height: 4 * s))
+            p.move(to: P(6, 9));  p.addLine(to: P(6, 15))
+            p.move(to: P(11, 7)); p.addLine(to: P(19, 7))
+            p.move(to: P(11, 17)); p.addLine(to: P(19, 17))
+        }
+        return p
+    }
+}
+
+/// 레이아웃 라인 아이콘 뷰(stroke).
+struct HomeLayoutIcon: View {
+    let layout: HomeLayout
+    var color: Color = MotionIconPalette.green
+    var size: CGFloat = 20
+    var body: some View {
+        HomeLayoutGlyph(layout: layout)
+            .stroke(color, style: StrokeStyle(lineWidth: max(1.6, size * 0.08), lineCap: .round, lineJoin: .round))
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
 // MARK: - 홈 레이아웃 열거형
 enum HomeLayout: String, CaseIterable {
     case hero      = "hero"
@@ -79,11 +125,12 @@ enum HomeLayout: String, CaseIterable {
         }
     }
 
+    /// 시스템 메뉴 아이템용 SF 심볼(메뉴는 커스텀 도형 렌더 불가). 버튼은 HomeLayoutIcon 사용.
     var icon: String {
         switch self {
-        case .hero:      return "photo.fill"
-        case .dashboard: return "square.grid.2x2.fill"
-        case .timeline:  return "list.bullet.rectangle.portrait.fill"
+        case .hero:      return "person.crop.rectangle"
+        case .dashboard: return "square.grid.2x2"
+        case .timeline:  return "list.bullet"
         }
     }
 }
@@ -359,9 +406,7 @@ struct HomeTab: View {
                 .accessibilityLabel("레이아웃 \(layout.label)으로 전환")
             }
         } label: {
-            Image(systemName: currentLayout.icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppColors.ink2)
+            HomeLayoutIcon(layout: currentLayout, color: MotionIconPalette.green, size: 22)
                 .frame(width: 44, height: 44)
                 .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                 .overlay {
