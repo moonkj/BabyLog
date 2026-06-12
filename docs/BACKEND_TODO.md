@@ -36,18 +36,16 @@
 
 ---
 
-## 2. 마켓(거래) 백엔드 🟡
+## 2. 마켓(거래) 백엔드 🟢 구현 완료·플래그 숨김 (2026-06-12)
 
-연결점: `AppStore`(marketItems/marketChats/savedMarketIds/tradeReports), `PersistableState`.
+연결점: `MarketBackend.swift`(PostgREST+Storage), `supabase/schema_market.sql`, `AppFeatures.market`(노출 플래그).
+**현재 출시 빌드 미노출**(AppFeatures.market=false → 동네 탭 마켓 세그먼트 숨김). 코드는 완성, 점진 개방용.
 
-- **매물 동기화** — 등록/조회/상태(판매중·예약·완료)를 Postgres에 (현재 로컬 `marketItems`)
-- **실시간 채팅(Realtime)** — 현재 로컬 `marketChats` + **데모 자동응답**. 상대방 실메시지 수신 필요
-- **거래 신고·증거 서버 저장** — `TradeReport`(대화 스냅샷+`uploaded` 플래그) 이미 준비.
-  - 할 일: `!uploaded` 신고 **서버 업로드**, **관리자 콘솔**(열람), **적법 제출 절차**(영장/수사협조), **감사 로그**, **보관기간 정책**
-  - ⚠️ 현재는 로컬 보관만 — 관리자(운영자)가 원격으로 가져올 수 없음(서버 필요)
-- **신뢰·안전** — 거래 후기/평점, 신고 누적 차단, 판매자 티어 산정
-- **사진** — 무료=로컬, **Pro=서버 백업(Storage)**. 아동 사진 서버 비전송 원칙 준수
-- 위치 기반 노출 + 페이지네이션(LazyVStack)
+- ✅ **매물 동기화** — 등록/조회/상태(판매중·예약·완료)/삭제 서버 연동(market_item). 미구성 시 로컬 폴백.
+- ✅ **사진 = 공개 상품 사진** Storage 호스팅(market-photos, 압축 1280px). *원칙 정정*: "사진 서버 비전송"은 아이 사진 약속, 마켓 상품 사진은 별개(사용자가 공개).
+- ✅ **무료 정책** — 1인 1매물(freeListingLimit) + 30일 자동만료(expires_at, fetch는 미만료만). Pro(조부모공유+다중판매)는 출시 후.
+- ✅ **1:1 거래 채팅** — market_chat_message 3초 폴링(준실시간), 데모 자동응답 제거.
+- ⏳ **남음(출시 전/후)**: 소유자 RLS(현재 using(true), auth 후 `docs/AUTH_SETUP.md` §5 패턴), 30일 만료 삭제 잡(pg_cron), **거래 신고·증거 서버 업로드**(TradeReport 로컬→서버·관리자 콘솔·적법절차), 후기/평점·신고누적 차단, 페이지네이션. 스키마 미배포(출시 전 `supabase/schema_market.sql` 실행).
 
 ---
 
