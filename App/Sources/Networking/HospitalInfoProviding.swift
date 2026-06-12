@@ -22,8 +22,11 @@ struct HospitalInfo: Identifiable, Sendable {
     let phone: String
     /// 대표 진료 과목 (예: "소아청소년과", "소아응급의학과")
     let department: String
-    /// 조회 시점 기준 운영 중 여부 (실시간 아님)
+    /// 조회 시점 기준 운영 중 여부 (실시간 아님). hoursKnown=false면 의미 없음(미확인).
     let isOpenNow: Bool
+    /// 영업시간 데이터를 실제로 알고 있는지. 기본 목록(getHospBasisList)엔 영업시간이 없어 false
+    /// → 새벽에도 "영업중"으로 거짓 표시되던 문제 방지(미확인으로 정직 표기). 응급 상세조회 시 true.
+    let hoursKnown: Bool
     /// 마지막 운영 정보 갱신 후 경과 시간 (분)
     let lastCheckedMinutesAgo: Int
     /// 현재 위치로부터의 직선 거리 (미터)
@@ -43,6 +46,7 @@ struct HospitalInfo: Identifiable, Sendable {
         phone: String,
         department: String,
         isOpenNow: Bool,
+        hoursKnown: Bool = true,
         lastCheckedMinutesAgo: Int,
         distanceM: Int,
         rating: Double,
@@ -56,6 +60,7 @@ struct HospitalInfo: Identifiable, Sendable {
         self.phone = phone
         self.department = department
         self.isOpenNow = isOpenNow
+        self.hoursKnown = hoursKnown
         self.lastCheckedMinutesAgo = lastCheckedMinutesAgo
         self.distanceM = distanceM
         self.rating = rating

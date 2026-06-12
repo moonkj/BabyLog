@@ -62,7 +62,9 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
             try? await Task.sleep(nanoseconds: 700_000_000)
             results = try await radiusHospitals(key: key, coord: coordinate)
         }
-        if openNow { results = results.filter { $0.isOpenNow } }
+        // 기본 목록엔 영업시간이 없어 영업 여부를 알 수 없다(hoursKnown=false). 따라서 openNow 필터를
+        // 적용하지 않고 전부 거리순으로 돌려준다 — 새벽에 "영업중" 거짓표시/빈 목록 둘 다 방지.
+        // (실제 영업 여부가 필요한 응급 모드는 EmergencyScreen이 상세조회로 별도 판정한다.)
         results.sort { $0.distanceM < $1.distanceM }   // 좌표 기반 거리순(가까운 곳 먼저)
         return results
     }
@@ -146,9 +148,10 @@ enum HospitalResponseParser {
                 address: item.addr ?? "",
                 phone: normalizedPhone(item.telno, sidoNm: item.sidoCdNm),
                 department: item.dgsbjtCdNm ?? item.clCdNm ?? "",
-                // HIRA basis API는 실시간 영업 여부를 주지 않음 → 노출되도록 true(미상).
-                // 화면에 "영업 정보는 공공데이터 기반, 방문 전 확인" 면책 있음.
-                isOpenNow: true,
+                // HIRA 기본 목록은 영업시간을 주지 않음 → 영업 여부 '미확인'(hoursKnown=false).
+                // 새벽에도 "영업중"으로 거짓표시되던 문제 수정. 화면은 "영업시간 미확인 · 방문 전 전화 확인" 표기.
+                isOpenNow: false,
+                hoursKnown: false,
                 lastCheckedMinutesAgo: 0,
                 distanceM: dist,
                 rating: 0.0,                // HIRA API는 평점 미제공

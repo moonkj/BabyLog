@@ -721,17 +721,22 @@ struct NearbyScreen: View {
 
     // MARK: Result Count Row (영업중 N곳 · 거리순)
 
-    private func resultCountRow(open: Int) -> some View {
-        HStack(spacing: Spacing.s2) {
+    private func resultCountRow(open: Int, total: Int, hoursKnown: Bool) -> some View {
+        // 영업시간을 아는 데이터가 있으면 "영업중 N곳", 없으면(기본 목록) "N곳"만 정직 표기.
+        let countLabel = hoursKnown ? "현재 영업중 " : "주변 "
+        let countValue = hoursKnown ? "\(open)곳" : "\(total)곳"
+        return HStack(spacing: Spacing.s2) {
             HStack(spacing: Spacing.s2) {
                 HStack(spacing: 5) {
-                    Circle()
-                        .fill(BadgeTone.mint.ink)
-                        .frame(width: 6, height: 6)
-                    Text("현재 영업중 ")
+                    if hoursKnown {
+                        Circle()
+                            .fill(BadgeTone.mint.ink)
+                            .frame(width: 6, height: 6)
+                    }
+                    Text(countLabel)
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(AppColors.ink2)
-                    + Text("\(open)곳")
+                    + Text(countValue)
                         .font(.system(size: 12.5, weight: .heavy))
                         .foregroundStyle(AppColors.ink)
                 }
@@ -748,7 +753,7 @@ struct NearbyScreen: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("현재 영업중 \(open)곳, 거리순 정렬")
+            .accessibilityLabel(hoursKnown ? "현재 영업중 \(open)곳, 거리순 정렬" : "주변 \(total)곳, 거리순 정렬")
 
             Spacer(minLength: 0)
 
@@ -790,12 +795,14 @@ struct NearbyScreen: View {
             .accessibilityLabel("주변을 살펴보는 중")
 
         case .loaded(let hospitals):
-            let openCount = hospitals.filter(\.isOpenNow).count
+            // 영업시간 데이터가 있는 곳이 하나라도 있으면 영업중 카운트, 아니면(기본 목록) 총 개수만 정직 표기.
+            let hoursKnownAny = hospitals.contains(where: \.hoursKnown)
+            let openCount = hospitals.filter { $0.hoursKnown && $0.isOpenNow }.count
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 if ProviderFactory.isMock(APIConfig.hiraKeyName) {
                     BLSampleNote(message: "지금은 샘플 병원 정보예요. 공공데이터 키를 연결하면 실제 우리 동네 병원으로 채워져요.")
                 }
-                resultCountRow(open: openCount)
+                resultCountRow(open: openCount, total: hospitals.count, hoursKnown: hoursKnownAny)
                 ForEach(hospitals) { hospital in
                     HospitalCard(
                         hospital: hospital,
@@ -1070,7 +1077,11 @@ private struct HospitalCard: View {
 
                     // 영업상태 뱃지(안 잘리게 고정) + 거리·종별 한 줄
                     HStack(spacing: Spacing.s2) {
-                        if hospital.isOpenNow {
+                        if !hospital.hoursKnown {
+                            // 기본 목록은 영업시간 미제공 → 거짓 "영업중" 대신 정직하게 미확인 표기
+                            BLBadge(tone: .grey, text: "영업시간 미확인", systemIcon: nil, dot: false)
+                                .fixedSize()
+                        } else if hospital.isOpenNow {
                             BLBadge(tone: .mint, text: "영업중", systemIcon: nil, dot: true)
                                 .fixedSize()
                         } else {
@@ -1168,8 +1179,8 @@ private struct HospitalCard: View {
     }
 
     private var accessibilityDescription: String {
-        let status = hospital.isOpenNow ? "영업중" : "영업종료"
-        return "\(hospital.name), \(status), \(hospital.distanceM)미터, 평점 \(String(format: "%.1f", hospital.rating)), \(hospital.lastCheckedMinutesAgo)분 전 확인"
+        let status = hospital.hoursKnown ? (hospital.isOpenNow ? "영업중" : "영업종료") : "영업시간 미확인"
+        return "\(hospital.name), \(status), \(hospital.distanceM)미터, \(hospital.department)"
     }
 }
 
