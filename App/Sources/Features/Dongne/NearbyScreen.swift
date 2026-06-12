@@ -125,8 +125,15 @@ private func syntheticCoordinate(for index: Int, center: CLLocationCoordinate2D)
 /// 주변 검색용 사용자 현재 위치. 권한 허용 시 GPS 좌표 1회 요청.
 /// 거부/미확인이면 coordinate == nil → 화면에서 폴백 좌표 사용.
 final class NearbyLocationProvider: NSObject, ObservableObject, CLLocationManagerDelegate {
+    /// 화면 재생성(세그먼트 전환)에도 위치/권한이 유지되도록 공유 인스턴스 사용.
+    static let shared = NearbyLocationProvider()
+
     @Published var coordinate: CLLocationCoordinate2D?
+    /// 역지오코딩된 현재 행정동(동/읍/면/리) — 제목 옆 표시용.
+    @Published var localityName: String?
     private let manager = CLLocationManager()
+    private let geocoder = CLGeocoder()
+    private var lastGeocodedCoord: CLLocationCoordinate2D?
 
     override init() {
         super.init()
@@ -136,6 +143,24 @@ final class NearbyLocationProvider: NSObject, ObservableObject, CLLocationManage
 
     /// 권한 상태(거부 시 UI에서 안내용)
     @Published var denied: Bool = false
+
+    /// 현재 좌표를 행정동 이름으로 역지오코딩(과호출 방지: 150m 이상 이동 시에만).
+    private func reverseGeocode(_ coord: CLLocationCoordinate2D) {
+        if let last = lastGeocodedCoord {
+            let moved = CLLocation(latitude: last.latitude, longitude: last.longitude)
+                .distance(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
+            if moved < 150, localityName != nil { return }
+        }
+        lastGeocodedCoord = coord
+        let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+        let ko = Locale(identifier: "ko_KR")
+        geocoder.reverseGeocodeLocation(loc, preferredLocale: ko) { [weak self] placemarks, _ in
+            guard let self, let p = placemarks?.first else { return }
+            // 동/읍/면/리는 보통 subLocality, 없으면 locality(시·군·구) 폴백
+            let name = p.subLocality ?? p.locality ?? p.administrativeArea
+            DispatchQueue.main.async { self.localityName = name }
+        }
+    }
 
     func start() {
         switch manager.authorizationStatus {
@@ -153,7 +178,10 @@ final class NearbyLocationProvider: NSObject, ObservableObject, CLLocationManage
     private func beginUpdates() {
         denied = false
         // 캐시된 마지막 위치가 있으면 즉시 사용(빠른 표시)
-        if let cached = manager.location?.coordinate { coordinate = cached }
+        if let cached = manager.location?.coordinate {
+            coordinate = cached
+            reverseGeocode(cached)
+        }
         // 연속 갱신으로 첫 양호 fix 확보(one-shot requestLocation은 실내·타임아웃에 자주 실패)
         manager.startUpdatingLocation()
     }
@@ -173,12 +201,25 @@ final class NearbyLocationProvider: NSObject, ObservableObject, CLLocationManage
         guard let c = locations.last?.coordinate else { return }
         coordinate = c
         denied = false
+        reverseGeocode(c)
         manager.stopUpdatingLocation()   // 첫 양호 fix 후 정지(배터리)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // 위치 실패 → 폴백 좌표 유지(무시), 갱신은 계속 시도됨
     }
+}
+
+/// 카테고리별 결과 캐시 — 화면 재생성(세그먼트 전환: 주변→마켓→주변)에도 유지되도록 싱글톤.
+/// @State로 두면 NearbyScreen이 재생성될 때 캐시가 사라져 매번 재검색된다.
+final class NearbyResultCache {
+    static let shared = NearbyResultCache()
+    struct Entry {
+        let coord: CLLocationCoordinate2D
+        let results: [HospitalInfo]
+        let at: Date
+    }
+    var entries: [PlaceCategory: Entry] = [:]
 }
 
 /// DongneTab의 "주변" 세그먼트에 임베드하는 메인 뷰.
@@ -188,8 +229,8 @@ struct NearbyScreen: View {
     // 위치 권한 거부/미확인 시 폴백 좌표(서울 도심)
     private static let centerCoord = CLLocationCoordinate2D(latitude: 37.5563, longitude: 126.9101)
 
-    /// 실제 사용자 위치 — 허용 시 GPS 좌표로 검색
-    @StateObject private var locationProvider = NearbyLocationProvider()
+    /// 실제 사용자 위치 — 공유 인스턴스(세그먼트 전환에도 유지)
+    @ObservedObject private var locationProvider = NearbyLocationProvider.shared
     /// 검색에 쓸 좌표(현재 위치 우선, 없으면 폴백)
     private var searchCoord: CLLocationCoordinate2D {
         locationProvider.coordinate ?? Self.centerCoord
@@ -202,14 +243,6 @@ struct NearbyScreen: View {
     // 병원 로드 상태
     @State private var hospitalState: HospitalLoadState = .idle
 
-    // 카테고리별 결과 캐시 — 탭 전환(소아과↔약국) 시 재호출 없이 즉시 표시.
-    // 위치가 크게 바뀌거나(±400m) 오래되면(10분) 자동 재조회.
-    private struct CachedHospitals {
-        let coord: CLLocationCoordinate2D
-        let results: [HospitalInfo]
-        let at: Date
-    }
-    @State private var resultCache: [PlaceCategory: CachedHospitals] = [:]
 
     // 지도 카메라 — 망원동 중심 고정
     @State private var cameraPosition: MapCameraPosition = .region(
@@ -305,7 +338,7 @@ struct NearbyScreen: View {
         let category = selectedCategory
         let c = searchCoord
         // 캐시 히트 — 같은 위치(±400m)·10분 이내면 네트워크 호출 없이 즉시 표시(탭 전환 빠름)
-        if !force, let cached = resultCache[category],
+        if !force, let cached = NearbyResultCache.shared.entries[category],
            Self.metersBetween(cached.coord, c) < 400,
            Date().timeIntervalSince(cached.at) < 600 {
             hospitalState = cached.results.isEmpty ? .empty : .loaded(cached.results)
@@ -331,7 +364,7 @@ struct NearbyScreen: View {
             }
             // 응답이 늦게 와도 그 사이 카테고리가 바뀌었으면 무시
             guard category == selectedCategory else { return }
-            resultCache[category] = CachedHospitals(coord: c, results: finalResults, at: Date())
+            NearbyResultCache.shared.entries[category] = .init(coord: c, results: finalResults, at: Date())
             hospitalState = finalResults.isEmpty ? .empty : .loaded(finalResults)
         } catch {
             guard category == selectedCategory else { return }

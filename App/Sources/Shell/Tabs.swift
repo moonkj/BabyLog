@@ -938,6 +938,7 @@ struct RecordTab: View {
 struct DongneTab: View {
     @State private var seg = 0
     @State private var showEmergency = false
+    @ObservedObject private var location = NearbyLocationProvider.shared
     private let segs = ["주변", "마켓", "크루"]
     private let segIcons = ["mappin.and.ellipse", "tag.fill", "person.3.fill"]
 
@@ -948,7 +949,20 @@ struct DongneTab: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("내 주변 · 위치 기반")
                             .font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
-                        Text("동네").font(.system(size: 28, weight: .heavy)).tracking(-0.4).foregroundStyle(AppColors.ink)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("동네").font(.system(size: 28, weight: .heavy)).tracking(-0.4).foregroundStyle(AppColors.ink)
+                            // 현재 행정동(동/읍/면/리) — 역지오코딩 결과
+                            if let loc = location.localityName {
+                                HStack(spacing: 2) {
+                                    Text("📍").font(.system(size: 12))
+                                    Text(loc)
+                                        .font(.system(size: 13.5, weight: .bold))
+                                        .foregroundStyle(AppColors.ink2)
+                                        .lineLimit(1)
+                                }
+                                .accessibilityLabel("현재 위치 \(loc)")
+                            }
+                        }
                     }
                     Spacer()
                     Button { Haptics.light(); showEmergency = true } label: {
@@ -1002,6 +1016,7 @@ struct DongneTab: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(AppColors.canvas)
             .toolbar(.hidden, for: .navigationBar)
+            .onAppear { location.start() }   // 위치 라벨이 세그먼트와 무관하게 채워지도록
             .fullScreenCover(isPresented: $showEmergency) {
                 EmergencyScreen(onClose: { showEmergency = false })
             }

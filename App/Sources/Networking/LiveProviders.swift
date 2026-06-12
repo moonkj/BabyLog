@@ -76,9 +76,11 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         var c = URLComponents(string: endpoint)!
         var items: [URLQueryItem] = [
             .init(name: "serviceKey", value: key), .init(name: "pageNo", value: "1"),
-            .init(name: "numOfRows", value: "100"),
+            // numOfRows를 크게 — 반경 내 결과를 '전부' 받아 클라이언트에서 거리순 정렬한다.
+            // (100이면 반경 내 기관이 100개를 넘을 때 가까운 곳이 잘려 '집앞'이 누락됨)
+            .init(name: "numOfRows", value: "1000"),
             .init(name: "xPos", value: String(lng)), .init(name: "yPos", value: String(lat)),
-            .init(name: "radius", value: "20000"),   // 시/군 전체를 아우르도록 넉넉히(거리순이라 집앞이 먼저)
+            .init(name: "radius", value: "20000"),   // 시/군 전체를 아우르도록 넉넉히
             .init(name: "_type", value: "json"),
         ]
         appendDgsbjt(&items)
