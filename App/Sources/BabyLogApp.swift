@@ -5,6 +5,7 @@ import UIKit
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ app: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+        UserDefaults.standard.set(hex, forKey: "bl_apns_token")   // 동네 잡히면 hood 갱신용 보관
         Task { await CrewBackend.uploadPushToken(hex, hood: NearbyLocationProvider.shared.localityName) }
     }
     func application(_ app: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {

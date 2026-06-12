@@ -63,6 +63,11 @@ enum CrewBackend {
     static func syncNeighborhood(hood: String) async -> Int? {
         guard SupabaseConfig.isConfigured, !hood.isEmpty, hood != "우리 동네" else { return nil }
 
+        // 0) 푸시 토큰 hood 최신화 — 앱 시작 시 위치 미확보로 hood가 비었을 수 있음
+        if let tok = UserDefaults.standard.string(forKey: "bl_apns_token") {
+            await uploadPushToken(tok, hood: hood)
+        }
+
         // 1) 자동 등록 — 로컬 dedup + 서버 unique(hood,device_id)로 이중 중복 방지
         let regKey = "crew_registered_hoods"
         var registered = Set(UserDefaults.standard.stringArray(forKey: regKey) ?? [])
