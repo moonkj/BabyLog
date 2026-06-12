@@ -59,6 +59,7 @@ struct BudgetScreen: View {
     @State private var isLoadingSubsidies = true
     @State private var period: BudgetPeriod = .month
     @State private var showAddExpense = false
+    @State private var showAllExpenses = false
 
     // MARK: Computed
 
@@ -106,8 +107,15 @@ struct BudgetScreen: View {
             .sorted { $0.1 > $1.1 }
     }
 
-    private var recentExpenses: [Expense] {
-        Array(allExpenses.sorted { $0.date > $1.date }.prefix(6))
+    /// 전체 지출(최신순). 최근 지출 리스트는 기본 5개만, 더보기 시 전체.
+    private var sortedExpenses: [Expense] {
+        allExpenses.sorted { $0.date > $1.date }
+    }
+
+    private static let recentCollapsedCount = 5
+
+    private var displayedRecentExpenses: [Expense] {
+        showAllExpenses ? sortedExpenses : Array(sortedExpenses.prefix(Self.recentCollapsedCount))
     }
 
     private var guide: (title: String, body: String) {
@@ -479,7 +487,7 @@ struct BudgetScreen: View {
 
             BLCard(padding: 0) {
                 VStack(spacing: 0) {
-                    ForEach(Array(recentExpenses.enumerated()), id: \.element.id) { index, expense in
+                    ForEach(Array(displayedRecentExpenses.enumerated()), id: \.element.id) { index, expense in
                         if index > 0 {
                             Divider()
                                 .background(AppColors.line)
@@ -498,14 +506,34 @@ struct BudgetScreen: View {
                 }
             }
 
-            Text("지출을 직접 추가해 관리해요.\n큰 지출만 기록해도 흐름이 보여요.")
-                .font(AppFont.caption)
-                .foregroundStyle(AppColors.ink3)
-                .multilineTextAlignment(.center)
-                .lineSpacing(3)
-                .frame(maxWidth: .infinity)
+            // 더보기/접기 — 5개 초과일 때만
+            if sortedExpenses.count > Self.recentCollapsedCount {
+                Button {
+                    Haptics.light()
+                    withAnimation(.easeInOut(duration: 0.22)) { showAllExpenses.toggle() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(showAllExpenses
+                             ? "접기"
+                             : "더보기 \(sortedExpenses.count - Self.recentCollapsedCount)건")
+                            .font(.system(size: 13.5, weight: .bold))
+                        Image(systemName: showAllExpenses ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(AppColors.ink2)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(AppColors.surface, in: Capsule())
+                    .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.97))
                 .padding(.top, Spacing.s1)
-                .accessibilityLabel("지출 관리 안내: 지출을 직접 추가해 관리하세요. 큰 지출만 기록해도 흐름이 보입니다.")
+                .accessibilityLabel(showAllExpenses
+                                    ? "최근 지출 접기"
+                                    : "지출 \(sortedExpenses.count - Self.recentCollapsedCount)건 더보기")
+                .accessibilityHint(showAllExpenses
+                                   ? "최근 5건만 표시합니다"
+                                   : "전체 지출 \(sortedExpenses.count)건을 모두 표시합니다")
+            }
         }
     }
 
