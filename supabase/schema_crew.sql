@@ -84,6 +84,7 @@ create table if not exists public.crew_post_reply (
     body       text not null,
     created_at timestamptz not null default now()
 );
+create index if not exists crew_post_reply_idx on public.crew_post_reply (post_id, created_at);
 
 -- ───────── RLS ─────────
 -- 동네 커뮤니티: 읽기는 모두 허용, 쓰기는 익명 누구나(앱 단에서 device 기준 제어).

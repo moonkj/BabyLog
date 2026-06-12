@@ -43,6 +43,10 @@ enum CrewBackend {
         return req
     }
 
+    // 서버 전송 전 길이 상한(스팸·대용량 페이로드 방어). 무료 RLS(using true) 보강용.
+    private enum Cap { static let name = 40, title = 120, body = 2000, place = 80, tag = 20 }
+    private static func cap(_ s: String, _ max: Int) -> String { String(s.prefix(max)) }
+
     /// 동네 대기 신청(중복은 병합). 성공 true.
     @discardableResult
     static func joinWaitlist(hood: String) async -> Bool {
@@ -178,7 +182,7 @@ enum CrewBackend {
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "category": category, "author": SupabaseConfig.deviceID,
-            "author_name": authorName, "title": title, "body": body,
+            "author_name": cap(authorName, Cap.name), "title": cap(title, Cap.title), "body": cap(body, Cap.body),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
@@ -235,9 +239,9 @@ enum CrewBackend {
               var req = request("/rest/v1/crew_meetup", method: "POST") else { return nil }
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "hood": hood, "title": place, "place": place, "when_text": when,
+            "hood": hood, "title": cap(place, Cap.place), "place": cap(place, Cap.place), "when_text": cap(when, Cap.place),
             "meetup_type": meetupType, "capacity": capacity,
-            "host": SupabaseConfig.deviceID, "host_name": hostName,
+            "host": SupabaseConfig.deviceID, "host_name": cap(hostName, Cap.name),
         ])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
@@ -304,9 +308,9 @@ enum CrewBackend {
               var req = request("/rest/v1/crew_group", method: "POST") else { return nil }
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "hood": hood, "name": name, "age_range": ageRange,
-            "interest_tags": interestTags, "creator": SupabaseConfig.deviceID,
-            "creator_name": creatorName,
+            "hood": hood, "name": cap(name, Cap.title), "age_range": cap(ageRange, Cap.tag),
+            "interest_tags": interestTags.prefix(8).map { cap($0, Cap.tag) }, "creator": SupabaseConfig.deviceID,
+            "creator_name": cap(creatorName, Cap.name),
         ])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
@@ -384,7 +388,7 @@ enum CrewBackend {
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "meetup_id": meetupId, "device_id": SupabaseConfig.deviceID,
-            "author_name": authorName, "body": t,
+            "author_name": cap(authorName, Cap.name), "body": cap(t, Cap.body),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
@@ -418,7 +422,7 @@ enum CrewBackend {
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "post_id": postId, "author": SupabaseConfig.deviceID,
-            "author_name": authorName, "body": t,
+            "author_name": cap(authorName, Cap.name), "body": cap(t, Cap.body),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
