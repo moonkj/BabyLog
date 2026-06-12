@@ -17,6 +17,8 @@ struct MarketChatSheet: View {
     @State private var messageText = ""
     @State private var sellerTyping = false
     @State private var showReport = false
+    /// 서버 전송 실패 시 입력 바 위에 안내를 띄운다(다시 편집하면 자동 해제).
+    @State private var sendFailed = false
     /// 서버 공유 메시지(미구성/미로드 시 nil → 로컬 폴백)
     @State private var serverMessages: [ChatMessage]? = nil
 
@@ -43,8 +45,15 @@ struct MarketChatSheet: View {
         Haptics.light()
         if SupabaseConfig.isConfigured {
             Task {
-                await MarketBackend.sendMessage(itemId: item.id, body: text, authorName: nickname)
-                if let msgs = await MarketBackend.fetchMessages(itemId: item.id) { serverMessages = msgs }
+                let ok = await MarketBackend.sendMessage(itemId: item.id, body: text, authorName: nickname)
+                if ok {
+                    if let msgs = await MarketBackend.fetchMessages(itemId: item.id) { serverMessages = msgs }
+                } else {
+                    // 전송 실패 — 입력한 내용을 되돌려 다시 시도할 수 있게 한다.
+                    messageText = text
+                    sendFailed = true
+                    Haptics.warning()
+                }
             }
         } else {
             store.sendMarketMessage(itemId: item.id, text: text, mine: true)
@@ -214,27 +223,48 @@ struct MarketChatSheet: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
-            TextField("메시지 보내기", text: $messageText)
-                .font(.system(size: 14, weight: .regular))
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(AppColors.surface2, in: Capsule())
-                .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
-                .accessibilityLabel("메시지 입력")
-
-            Button {
-                send()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 38, weight: .regular))
-                    .foregroundStyle(messageText.isEmpty ? AppColors.ink3 : AppColors.primary)
+        VStack(spacing: 0) {
+            if sendFailed {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.danger)
+                        .accessibilityHidden(true)
+                    Text("전송 실패 — 다시 시도해 주세요")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppColors.danger)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Spacing.s5)
+                .padding(.bottom, 8)
+                .accessibilityLabel("전송 실패, 다시 시도해 주세요")
             }
-            .disabled(messageText.isEmpty)
-            .frame(width: 52, height: 52)
-            .accessibilityLabel("전송")
+
+            HStack(spacing: 10) {
+                TextField("메시지 보내기", text: $messageText)
+                    .font(.system(size: 14, weight: .regular))
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(AppColors.surface2, in: Capsule())
+                    .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
+                    .accessibilityLabel("메시지 입력")
+                    .onChange(of: messageText) { _ in
+                        if sendFailed { sendFailed = false }
+                    }
+
+                Button {
+                    send()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 38, weight: .regular))
+                        .foregroundStyle(messageText.isEmpty ? AppColors.ink3 : AppColors.primary)
+                }
+                .disabled(messageText.isEmpty)
+                .frame(width: 52, height: 52)
+                .accessibilityLabel("전송")
+            }
+            .padding(.horizontal, Spacing.s4)
         }
-        .padding(.horizontal, Spacing.s4)
         .padding(.top, 10)
         .padding(.bottom, 26)
         .background(AppColors.surface)

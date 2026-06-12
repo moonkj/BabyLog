@@ -14,34 +14,54 @@ struct MarketDetailHeroPhoto: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs, seed: item.photoSeed, index: 0, cornerRadius: 0)
-                .frame(maxWidth: .infinity)
-                .frame(height: 280)
-                .clipped()
+            // 사진 + 장식 뱃지 — VoiceOver에서 숨김(장식)
+            ZStack(alignment: .topLeading) {
+                MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs, seed: item.photoSeed, index: 0, cornerRadius: 0)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 280)
+                    .clipped()
 
-            // 상태 뱃지 (예약/판매완료)
-            if item.status != .selling {
-                BLBadge(tone: item.status == .sold ? .grey : .amber, text: item.status.rawValue, systemIcon: nil, dot: true)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.top, 52).padding(.trailing, Spacing.s5)
+                // 상태 뱃지 (예약/판매완료)
+                if item.status != .selling {
+                    BLBadge(tone: item.status == .sold ? .grey : .amber, text: item.status.rawValue, systemIcon: nil, dot: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(.top, 52).padding(.trailing, Spacing.s5)
+                }
+
+                // 리콜 뱃지
+                if item.hasRecall {
+                    BLBadge(tone: .coral, text: "리콜", systemIcon: "exclamationmark.triangle.fill", dot: false)
+                        .padding(.top, 52)
+                        .padding(.leading, Spacing.s5)
+                }
+
+                // 졸업템 뱃지
+                if item.isGraduate {
+                    BLBadge(tone: .mint, text: "동네 졸업템", systemIcon: nil, dot: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        .padding(.bottom, Spacing.s3)
+                        .padding(.leading, Spacing.s5)
+                }
             }
+            .accessibilityHidden(true)
 
-            // 리콜 뱃지
-            if item.hasRecall {
-                BLBadge(tone: .coral, text: "리콜", systemIcon: "exclamationmark.triangle.fill", dot: false)
-                    .padding(.top, 52)
-                    .padding(.leading, Spacing.s5)
-            }
-
-            // 졸업템 뱃지
-            if item.isGraduate {
-                BLBadge(tone: .mint, text: "동네 졸업템", systemIcon: nil, dot: true)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .padding(.bottom, Spacing.s3)
-                    .padding(.leading, Spacing.s5)
+            // 사진은 VoiceOver에서 숨기되, 사진 위에 그려진 상태(예약중·판매완료·리콜)는
+            // 별도 접근성 요소로 노출(시각 정보 손실 방지).
+            if let stateLabel = heroStateAccessibilityLabel {
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement()
+                    .accessibilityLabel(stateLabel)
             }
         }
-        .accessibilityHidden(true)
+    }
+
+    /// 사진 오버레이로 표시되는 거래 상태를 VoiceOver 레이블로 합성. 없으면 nil.
+    private var heroStateAccessibilityLabel: String? {
+        var parts: [String] = []
+        if item.status != .selling { parts.append(item.status.rawValue) }   // 예약중 / 판매완료
+        if item.hasRecall { parts.append("리콜 대상") }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 }
 

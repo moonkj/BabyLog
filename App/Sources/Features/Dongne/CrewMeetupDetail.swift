@@ -195,43 +195,31 @@ struct CrewMeetupDetail: View {
                     .padding(.vertical, Spacing.s1)
             }
 
-            // 아바타 그리드
+            // 아바타 그리드 — 실제 참가자 이름은 모르므로 익명 아바타로(가짜 이름 금지)
             HStack(spacing: 10) {
-                ForEach(0..<min(joinedCount, 6), id: \.self) { i in
-                    VStack(spacing: 4) {
-                        Circle()
-                            .fill(CrewAvatarPalette.color(for: i))
-                            .frame(width: 44, height: 44)
-                            .overlay {
-                                Text(CrewAvatarPalette.initial(for: i))
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.white)
-                            }
-                            .overlay { Circle().stroke(AppColors.surface, lineWidth: 2) }
-
-                        Text(CrewAvatarPalette.name(for: i))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AppColors.ink3)
-                            .lineLimit(1)
-                    }
-                    .accessibilityLabel(CrewAvatarPalette.name(for: i))
+                ForEach(0..<min(joinedCount, 8), id: \.self) { i in
+                    Circle()
+                        .fill(CrewAvatarPalette.color(for: i))
+                        .frame(width: 40, height: 40)
+                        .overlay {
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                        .overlay { Circle().stroke(AppColors.surface, lineWidth: 2) }
+                        .accessibilityHidden(true)
                 }
 
-                if joinedCount > 6 {
-                    VStack(spacing: 4) {
-                        Circle()
-                            .fill(AppColors.surface2)
-                            .frame(width: 44, height: 44)
-                            .overlay {
-                                Text("+\(joinedCount - 6)")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(AppColors.ink3)
-                            }
-                        Text("")
-                            .font(.system(size: 10))
-                            .frame(height: 14)
-                    }
-                    .accessibilityLabel("외 \(joinedCount - 6)명")
+                if joinedCount > 8 {
+                    Circle()
+                        .fill(AppColors.surface2)
+                        .frame(width: 40, height: 40)
+                        .overlay {
+                            Text("+\(joinedCount - 8)")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(AppColors.ink3)
+                        }
+                        .accessibilityHidden(true)
                 }
             }
         }

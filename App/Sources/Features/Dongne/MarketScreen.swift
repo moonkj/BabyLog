@@ -174,6 +174,7 @@ struct MarketScreen: View {
     @State private var showSellSheet: Bool = false
     @State private var sharedItems: [MarketItem]? = nil
     @State private var didLoad = false
+    @State private var loadFailed = false
 
     /// 서버 공유 모드(Supabase 구성됨). 미구성 시 로컬(기기 저장) 폴백.
     private var serverMode: Bool { SupabaseConfig.isConfigured }
@@ -190,7 +191,12 @@ struct MarketScreen: View {
 
     private func loadItems() async {
         guard serverMode else { return }
-        if let s = await MarketBackend.fetchItems(hood: hood) { sharedItems = s }
+        if let s = await MarketBackend.fetchItems(hood: hood) {
+            sharedItems = s
+            loadFailed = false
+        } else {
+            loadFailed = true   // 네트워크 실패 — 빈 동네와 구분
+        }
         didLoad = true
         // 업로드 실패한 신고 재시도(증거 유실 방지).
         for r in store.pendingReports {
@@ -226,7 +232,7 @@ struct MarketScreen: View {
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
-        .task(id: hood) { didLoad = false; await loadItems() }
+        .task(id: hood) { didLoad = false; loadFailed = false; await loadItems() }
         .onChange(of: showSellSheet) { _, open in if !open { Task { await loadItems() } } }
         .accessibilityElement(children: .contain)
     }
@@ -310,26 +316,33 @@ struct MarketScreen: View {
     // MARK: 매물 리스트
     private var itemList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("\(filteredItems.count)개 매물")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppColors.ink3)
-                .padding(.horizontal, 2)
-                .padding(.bottom, Spacing.s2)
-
-            if filteredItems.isEmpty {
-                BLEmptyState(
-                    icon: "tag",
-                    title: "이 카테고리에 매물이 없어요",
-                    message: "다른 카테고리를 둘러보거나 직접 올려보세요."
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.top, Spacing.s4)
+            if loadFailed && items.isEmpty {
+                marketLoadFailedView
             } else {
-                ForEach(filteredItems) { item in
-                    NavigationLink(value: item) {
-                        MkItemCard(item: item)
+                Text("\(filteredItems.count)개 매물")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.ink3)
+                    .padding(.horizontal, 2)
+                    .padding(.bottom, Spacing.s2)
+
+                if filteredItems.isEmpty {
+                    BLEmptyState(
+                        icon: "tag",
+                        title: "이 카테고리에 매물이 없어요",
+                        message: "다른 카테고리를 둘러보거나 직접 올려보세요."
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, Spacing.s4)
+                } else {
+                    // 긴 목록 성능 — 행/이미지를 화면에 보일 때 지연 로드
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(filteredItems) { item in
+                            NavigationLink(value: item) {
+                                MkItemCard(item: item)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }
@@ -337,6 +350,48 @@ struct MarketScreen: View {
         .navigationDestination(for: MarketItem.self) { item in
             MarketItemDetail(item: item)
         }
+    }
+
+    // MARK: 불러오기 실패 (네트워크) — 빈 동네와 구분
+    private var marketLoadFailedView: some View {
+        VStack(spacing: Spacing.s3) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 34, weight: .regular))
+                .foregroundStyle(AppColors.ink3)
+                .accessibilityHidden(true)
+            Text("매물을 불러오지 못했어요")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppColors.ink)
+            Text("네트워크 연결을 확인하고 다시 시도해 주세요.")
+                .font(AppFont.caption)
+                .foregroundStyle(AppColors.ink3)
+                .multilineTextAlignment(.center)
+
+            Button {
+                Haptics.light()
+                Task { await loadItems() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("다시 시도")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(AppColors.ink)
+                .padding(.horizontal, 18)
+                .frame(height: 40)
+                .background(AppColors.surface, in: Capsule())
+                .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.96))
+            .padding(.top, Spacing.s1)
+            .accessibilityLabel("다시 시도")
+            .accessibilityHint("매물 목록을 다시 불러옵니다")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("매물을 불러오지 못했어요. 네트워크 연결을 확인하고 다시 시도해 주세요.")
     }
 
 }

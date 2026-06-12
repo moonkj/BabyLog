@@ -12,6 +12,7 @@ struct CrewGroupCreateSheet: View {
     @State private var ageRange = ""
     @State private var tagsText = ""
     @State private var saving = false
+    @State private var alertMessage: String?
 
     private let ageSuggestions = ["0–6개월", "6–12개월", "12–24개월", "24–36개월", "전체"]
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
@@ -89,23 +90,40 @@ struct CrewGroupCreateSheet: View {
             .navigationTitle("또래 그룹 만들기")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } } }
+            .alert("알림", isPresented: Binding(
+                get: { alertMessage != nil },
+                set: { if !$0 { alertMessage = nil } }
+            )) {
+                Button("확인", role: .cancel) { alertMessage = nil }
+            } message: {
+                Text(alertMessage ?? "")
+            }
         }
     }
 
     private func save() {
         guard canSave else { return }
-        saving = true
         let nm = name.trimmingCharacters(in: .whitespaces)
         let age = ageRange.isEmpty ? "전체" : ageRange
         let tags = parsedTags
         let hood = location.localityName ?? ""
-        Task {
+        // 위치 미확보 시 서버 생성이 실패하므로 시도하지 않고 안내.
+        guard !hood.isEmpty, hood != "우리 동네" else {
+            alertMessage = "위치를 확인하고 있어요. 잠시 후 다시 시도해 주세요."
+            return
+        }
+        saving = true
+        Task { @MainActor in
             let id = await CrewBackend.createGroup(
                 hood: hood, name: nm, ageRange: age, interestTags: tags, creatorName: nickname)
-            await MainActor.run {
-                if let id { store.toggleJoinGroup(id) }   // 개설자 가입 상태 반영
+            // 성공(비-nil id)을 확인한 뒤에만 닫는다.
+            if let id {
+                store.toggleJoinGroup(id)   // 개설자 가입 상태 반영
                 Haptics.success()
                 dismiss()
+            } else {
+                saving = false
+                alertMessage = "그룹을 만들지 못했어요. 잠시 후 다시 시도해 주세요."
             }
         }
     }

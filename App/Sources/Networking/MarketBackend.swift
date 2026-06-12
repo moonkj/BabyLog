@@ -66,7 +66,7 @@ enum MarketBackend {
                 hasRecall: d.has_recall ?? false,
                 isGraduate: d.is_graduate ?? false,
                 sellerName: d.seller_name ?? "이웃",
-                sellerTier: .warm,
+                sellerTier: .new,   // 서버 매물: 실제 판매자 티어 미산정 → '신규'로 정직 표기
                 distanceText: "내 동네",
                 favoriteCount: 0,
                 photoSeed: 0,

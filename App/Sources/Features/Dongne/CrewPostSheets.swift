@@ -17,6 +17,8 @@ struct CrewPostWriteSheet: View {
     @State private var category: CrewPostCategory = .info
     @State private var title = ""
     @State private var body_ = ""
+    @State private var submitting = false        // 서버 전송 중(중복 탭 방지)
+    @State private var alertMessage: String? = nil // 서버 전송 실패 안내
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -70,18 +72,35 @@ struct CrewPostWriteSheet: View {
                             .accessibilityLabel("내용 입력")
                     }
 
-                    LiquidButton(fill: canSave ? AppColors.primary : AppColors.ink3, action: {
-                        guard canSave else { return }
-                        store.addCrewPost(category: category, title: title, body: body_)   // 로컬 즉시 반영
-                        // 서버 공유(동네 이웃과 공유) — 구성 시
-                        let hood = location.localityName ?? ""
-                        let cat = category.rawValue, t = title, b = body_, nm = nickname
-                        Task { await CrewBackend.createPost(hood: hood, category: cat, title: t, body: b, authorName: nm) }
-                        Haptics.success()
-                        dismiss()
+                    LiquidButton(fill: (canSave && !submitting) ? AppColors.primary : AppColors.ink3, action: {
+                        guard canSave, !submitting else { return }
+                        if SupabaseConfig.isConfigured {
+                            // 서버 모드: 목록이 서버 기준이므로 성공을 확인한 뒤에만 닫는다(소리없는 실패 방지)
+                            submitting = true
+                            let hood = location.localityName ?? ""
+                            let cat = category.rawValue, t = title, b = body_, nm = nickname
+                            Task { @MainActor in
+                                let ok = await CrewBackend.createPost(hood: hood, category: cat, title: t, body: b, authorName: nm)
+                                submitting = false
+                                if ok {
+                                    store.addCrewPost(category: category, title: title, body: body_)   // 로컬 낙관적 반영
+                                    Haptics.success()
+                                    dismiss()
+                                } else {
+                                    Haptics.warning()
+                                    alertMessage = "게시하지 못했어요. 잠시 후 다시 시도해 주세요."   // 입력 내용은 유지
+                                }
+                            }
+                        } else {
+                            // 미구성: 로컬 즉시 반영(기존 동작 유지)
+                            store.addCrewPost(category: category, title: title, body: body_)
+                            Haptics.success()
+                            dismiss()
+                        }
                     }) {
                         Text("게시하기").frame(maxWidth: .infinity)
                     }
+                    .disabled(submitting)
                     .padding(.top, Spacing.s2)
                 }
                 .padding(Spacing.s4)
@@ -90,6 +109,14 @@ struct CrewPostWriteSheet: View {
             .navigationTitle("글쓰기")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } } }
+            .alert("게시 실패", isPresented: Binding(
+                get: { alertMessage != nil },
+                set: { if !$0 { alertMessage = nil } }
+            )) {
+                Button("확인", role: .cancel) { alertMessage = nil }
+            } message: {
+                Text(alertMessage ?? "")
+            }
         }
     }
 }
@@ -103,6 +130,7 @@ struct CrewPostDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var commentText = ""
+    @State private var commentError = false   // 댓글 전송 실패(서버) — 다시 입력하면 자동 해제
     @State private var showDeleteConfirm = false
     /// 서버 공유 댓글(미구성/미로드 시 nil → 로컬 폴백)
     @State private var serverComments: [String]? = nil
@@ -129,11 +157,19 @@ struct CrewPostDetailSheet: View {
         let text = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         commentText = ""
+        commentError = false
         Haptics.light()
         if SupabaseConfig.isConfigured {
-            Task {
-                await CrewBackend.addReply(postId: post.id, body: text, authorName: nickname)
-                if let r = await CrewBackend.fetchReplies(postId: post.id) { serverComments = r }
+            Task { @MainActor in
+                let ok = await CrewBackend.addReply(postId: post.id, body: text, authorName: nickname)
+                if ok {
+                    if let r = await CrewBackend.fetchReplies(postId: post.id) { serverComments = r }
+                } else {
+                    // 실패 — 입력 내용을 되돌려 다시 보낼 수 있게 한다(소리없는 실패 방지)
+                    commentText = text
+                    commentError = true
+                    Haptics.warning()
+                }
             }
         } else {
             store.addCrewPostComment(postId: post.id, text: text)
@@ -143,9 +179,12 @@ struct CrewPostDetailSheet: View {
     private func toggleLike() {
         Haptics.selection()
         let willLike = !isLiked
-        store.toggleCrewPostLike(post.id)
+        store.toggleCrewPostLike(post.id)   // 낙관적 반영
         if SupabaseConfig.isConfigured {
-            Task { await CrewBackend.setPostLike(postId: post.id, like: willLike) }
+            Task { @MainActor in
+                let ok = await CrewBackend.setPostLike(postId: post.id, like: willLike)
+                if !ok { store.toggleCrewPostLike(post.id) }   // 실패 시 롤백
+            }
         }
     }
 
@@ -340,26 +379,43 @@ struct CrewPostDetailSheet: View {
 
     // MARK: 입력 바
     private var inputBar: some View {
-        HStack(spacing: 10) {
-            TextField("댓글을 입력하세요", text: $commentText, axis: .vertical)
-                .font(.system(size: 14, weight: .regular))
-                .lineLimit(1...4)
-                .padding(.horizontal, 16).padding(.vertical, 11)
-                .frame(maxWidth: .infinity)
-                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
-                .accessibilityLabel("댓글 입력")
-
-            Button {
-                sendComment()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 38, weight: .regular))
-                    .foregroundStyle(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppColors.ink3 : AppColors.primary)
+        VStack(alignment: .leading, spacing: 6) {
+            if commentError {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.danger)
+                        .accessibilityHidden(true)
+                    Text("댓글을 보내지 못했어요. 다시 시도해 주세요.")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(AppColors.danger)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("댓글을 보내지 못했어요. 다시 시도해 주세요.")
             }
-            .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .frame(width: 44, height: 44)
-            .accessibilityLabel("댓글 등록")
+
+            HStack(spacing: 10) {
+                TextField("댓글을 입력하세요", text: $commentText, axis: .vertical)
+                    .font(.system(size: 14, weight: .regular))
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 16).padding(.vertical, 11)
+                    .frame(maxWidth: .infinity)
+                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(commentError ? AppColors.danger : AppColors.line, lineWidth: 1) }
+                    .onChange(of: commentText) { _ in if commentError { commentError = false } }   // 다시 입력하면 오류 해제
+                    .accessibilityLabel("댓글 입력")
+
+                Button {
+                    sendComment()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 38, weight: .regular))
+                        .foregroundStyle(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppColors.ink3 : AppColors.primary)
+                }
+                .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .frame(width: 44, height: 44)
+                .accessibilityLabel("댓글 등록")
+            }
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, 10)

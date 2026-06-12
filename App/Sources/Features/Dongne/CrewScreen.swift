@@ -383,7 +383,8 @@ private struct CrewActiveContent: View {
     private func syncGroupJoin(_ groupId: String, join: Bool) {
         guard SupabaseConfig.isConfigured, sharedGroups != nil else { return }
         Task {
-            await CrewBackend.setGroupMembership(groupId: groupId, join: join)
+            let ok = await CrewBackend.setGroupMembership(groupId: groupId, join: join)
+            if !ok { store.toggleJoinGroup(groupId); return }   // 실패 시 로컬 가입상태 롤백
             if let g = await CrewBackend.fetchGroups(hood: hood) {
                 sharedGroups = g.map { gr in
                     guard store.isJoinedGroup(gr.id) else { return gr }
@@ -738,7 +739,15 @@ private struct CrewPostRow: View {
 
                 Button {
                     Haptics.selection()
+                    let willLike = !isLiked
                     store.toggleCrewPostLike(post.id)
+                    // 목록에서도 좋아요를 서버에 반영(상세에서만 저장되던 버그 수정) + 실패 시 롤백
+                    if SupabaseConfig.isConfigured {
+                        Task {
+                            let ok = await CrewBackend.setPostLike(postId: post.id, like: willLike)
+                            if !ok { store.toggleCrewPostLike(post.id) }
+                        }
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
@@ -771,11 +780,11 @@ private struct CrewColdStartContent: View {
     private var target: Int { CrewBackend.openThreshold }
     private var progressPercent: Double {
         if let c = realCount { return min(1, Double(c) / Double(max(1, target))) }
-        return 0.78   // 목업
+        return SupabaseConfig.isConfigured ? 0 : 0.78   // 서버 연동 시 실제 로드 전엔 0(가짜 78% 금지), 미구성 데모만 목업
     }
     private var remainingCount: Int {
         if let c = realCount { return max(0, target - c) }
-        return 22     // 목업
+        return SupabaseConfig.isConfigured ? target : 22
     }
 
     /// 현재 GPS 동네(없으면 일반 표현)

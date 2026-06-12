@@ -14,16 +14,51 @@ struct MarketItemDetail: View {
     @EnvironmentObject private var store: AppStore
     @State private var showChatSheet = false
     @State private var showBuySheet = false
+    @State private var statusBusy = false       // 상태 변경 중복 탭 방지(서버 정합)
+    @State private var deleteBusy = false        // 삭제 중복 탭 방지
+    @State private var showDeleteFailAlert = false
     @Environment(\.dismiss) private var dismiss
 
     private var liveItem: MarketItem { store.marketItems.first(where: { $0.id == item.id }) ?? item }
 
-    /// 판매 상태 변경 — 로컬 갱신 + (구성 시) 서버 동기화.
+    /// 판매 상태 변경 — 로컬 우선 갱신 + (구성 시) 서버 동기화, 실패 시 롤백.
     private func changeStatus(_ newStatus: MarketStatus) {
-        store.setMarketStatus(id: item.id, newStatus)
-        if SupabaseConfig.isConfigured {
-            let id = item.id
-            Task { await MarketBackend.setStatus(id: id, status: newStatus) }
+        guard !statusBusy else { return }
+        let prev = liveItem.status
+        guard prev != newStatus else { return }
+        store.setMarketStatus(id: item.id, newStatus)   // 로컬 우선 반영
+        guard SupabaseConfig.isConfigured else { return }
+        let id = item.id
+        statusBusy = true
+        Task { @MainActor in
+            let ok = await MarketBackend.setStatus(id: id, status: newStatus)
+            if !ok { store.setMarketStatus(id: id, prev) }   // 실패 시 이전 상태로 롤백
+            statusBusy = false
+        }
+    }
+
+    /// 매물 삭제 — 로컬 우선 삭제 + (구성 시) 서버 동기화. 서버 실패 시 복원 후 안내, 화면 유지.
+    private func deleteItem() {
+        guard !deleteBusy else { return }
+        guard SupabaseConfig.isConfigured else {
+            store.deleteMarketItem(id: item.id)
+            dismiss()
+            return
+        }
+        let id = item.id
+        let urls = liveItem.photoURLs
+        let snapshot = liveItem            // 서버 실패 시 로컬 복원용
+        store.deleteMarketItem(id: id)     // 로컬 우선 삭제
+        deleteBusy = true
+        Task { @MainActor in
+            let ok = await MarketBackend.deleteItem(id: id, photoURLs: urls)
+            deleteBusy = false
+            if ok {
+                dismiss()
+            } else {
+                store.addMarketItem(snapshot)   // 실패 시 복원, 화면 유지
+                showDeleteFailAlert = true
+            }
         }
     }
 
@@ -60,14 +95,8 @@ struct MarketItemDetail: View {
                         Button("예약중으로") { changeStatus(.reserved) }
                         Button("판매완료로") { changeStatus(.sold) }
                         Divider()
-                        Button("매물 삭제", role: .destructive) {
-                            store.deleteMarketItem(id: item.id)
-                            if SupabaseConfig.isConfigured {
-                                let id = item.id, urls = liveItem.photoURLs
-                                Task { await MarketBackend.deleteItem(id: id, photoURLs: urls) }
-                            }
-                            dismiss()
-                        }
+                        Button("매물 삭제", role: .destructive) { deleteItem() }
+                            .disabled(deleteBusy)
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -84,6 +113,11 @@ struct MarketItemDetail: View {
             MarketBuySheet(item: liveItem, onChat: { showChatSheet = true })
                 .environmentObject(store)
                 .presentationDetents([.large])
+        }
+        .alert("삭제하지 못했어요", isPresented: $showDeleteFailAlert) {
+            Button("확인", role: .cancel) { }
+        } message: {
+            Text("네트워크 문제로 매물을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.")
         }
         .accessibilityElement(children: .contain)
     }

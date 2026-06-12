@@ -235,7 +235,7 @@ enum CrewBackend {
                 place: d.place ?? "모임",
                 when: d.when_text ?? "일정 협의",
                 hostName: d.host_name ?? "이웃",
-                hostTier: .warm,
+                hostTier: .new,   // 서버 모임: 실제 신뢰 티어 미산정 → '신규'로 정직 표기(가짜 '따뜻한 이웃' 금지)
                 joined: d.crew_meetup_join?.first?.count ?? 0,
                 capacity: d.capacity ?? 8,
                 meetupType: CrewMeetupType(rawValue: d.meetup_type ?? "park") ?? .park,

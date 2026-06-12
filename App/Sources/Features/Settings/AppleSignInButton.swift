@@ -34,7 +34,9 @@ struct AppleSignInButton: View {
                         idToken: idToken, nonce: nonce, fullName: name.isEmpty ? nil : name)
                     onResult(ok)
                 }
-            case .failure:
+            case .failure(let error):
+                // 사용자가 Apple 시트를 닫은 경우(취소)는 오류가 아니므로 조용히 무시.
+                if let e = error as? ASAuthorizationError, e.code == .canceled { return }
                 onResult(false)
             }
         }
