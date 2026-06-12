@@ -28,6 +28,18 @@ enum ProviderFactory {
         return MockHospitalInfoProvider()
     }
 
+    /// 응급용 — 병원 전체(진료과목 필터 없이). 종별(상급종합/종합병원/병원)로 대학병원급 식별.
+    static func hospitalAll(client: APIClient = APIClient()) -> HospitalInfoProviding {
+        if APIConfig.key(APIConfig.hiraKeyName) != nil {
+            return LiveHospitalInfoProvider(
+                client: client,
+                endpoint: LiveHospitalInfoProvider.hospitalEndpoint,
+                dgsbjtCd: nil
+            )
+        }
+        return MockHospitalInfoProvider()
+    }
+
     /// 약국(HIRA 약국 API) — 병원과 같은 키/구조, 진료과목코드 없이 조회.
     static func pharmacy(client: APIClient = APIClient()) -> HospitalInfoProviding {
         if APIConfig.key(APIConfig.hiraKeyName) != nil {

@@ -33,6 +33,8 @@ struct HospitalInfo: Identifiable, Sendable {
     /// 기관 위치 좌표 (지도 핀·거리계산용). 없으면 nil.
     let latitude: Double?
     let longitude: Double?
+    /// 종별 (HIRA clCdNm: "상급종합"·"종합병원"·"병원"·"의원"·"치과의원" 등). 응급 모드 정렬용.
+    let clCdNm: String?
 
     init(
         id: String,
@@ -45,7 +47,8 @@ struct HospitalInfo: Identifiable, Sendable {
         distanceM: Int,
         rating: Double,
         latitude: Double? = nil,
-        longitude: Double? = nil
+        longitude: Double? = nil,
+        clCdNm: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -58,6 +61,13 @@ struct HospitalInfo: Identifiable, Sendable {
         self.rating = rating
         self.latitude = latitude
         self.longitude = longitude
+        self.clCdNm = clCdNm
+    }
+
+    /// 대학병원급(상급종합·종합병원) 여부 — 응급실 운영 가능성 높음.
+    var isMajorHospital: Bool {
+        guard let c = clCdNm else { return false }
+        return c.contains("상급종합") || c.contains("종합병원") || c.contains("대학")
     }
 }
 

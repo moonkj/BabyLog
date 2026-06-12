@@ -151,7 +151,8 @@ enum HospitalResponseParser {
                 distanceM: dist,
                 rating: 0.0,                // HIRA API는 평점 미제공
                 latitude: lat,
-                longitude: lng
+                longitude: lng,
+                clCdNm: item.clCdNm         // 종별(상급종합/종합병원/병원/의원…) — 응급 정렬용
             )
         }
     }

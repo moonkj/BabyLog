@@ -48,20 +48,24 @@ struct EmergencyScreen: View {
         }
     }
 
-    /// 내 위치 기준 실제 소아과 — 주변 탭 캐시 재사용, 없으면 HIRA 조회. 현재 영업중·거리순.
+    /// 내 위치 기준 응급용 병원 — 병원급(상급종합·종합병원·병원)만, 대학병원급이 최상단.
+    /// 정렬: ① 가장 가까운 대학병원급 → ② 나머지 거리순.
     private func load() async {
-        // 주변 탭에서 이미 불러온 소아과가 있으면 즉시 사용(빠름)
-        if let cached = NearbyResultCache.shared.entries[.hospital], !cached.results.isEmpty {
-            hospitals = cached.results.filter { $0.isOpenNow }.sorted { $0.distanceM < $1.distanceM }
-            loading = false
-            return
-        }
         loading = true
         let coord = location.coordinate.map { Coordinate(lat: $0.latitude, lng: $0.longitude) }
         do {
-            let results = try await ProviderFactory.hospital().hospitals(near: coord, openNow: true)
-            let peds = results.filter { h in ["소아", "아동", "어린이", "키즈"].contains { h.name.contains($0) } }
-            hospitals = (peds.isEmpty ? results : peds).sorted { $0.distanceM < $1.distanceM }
+            let all = try await ProviderFactory.hospitalAll().hospitals(near: coord, openNow: false)
+            // 응급 관련 종별만(의원·치과·한의원·요양병원 제외)
+            let relevant = all.filter { h in
+                guard let c = h.clCdNm else { return false }
+                return c.contains("상급종합") || c.contains("종합병원") || c == "병원" || c.contains("대학")
+            }.sorted { $0.distanceM < $1.distanceM }
+            // 가장 가까운 대학병원급을 최상단으로, 나머지는 거리순
+            if let top = relevant.first(where: { $0.isMajorHospital }) {
+                hospitals = [top] + relevant.filter { $0.id != top.id }
+            } else {
+                hospitals = relevant
+            }
         } catch {
             hospitals = []
         }
@@ -93,7 +97,7 @@ struct EmergencyScreen: View {
                     .foregroundStyle(AppColors.ink)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("현재 영업중 · 거리순 · 마지막 확인 \(lastCheckedAt)")
+                Text("대학병원급 우선 · 가까운 순 · \(lastCheckedAt) 기준")
                     .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(AppColors.ink3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -157,7 +161,7 @@ struct EmergencyScreen: View {
             .accessibilityHidden(true)
 
             VStack(spacing: Spacing.s2) {
-                Text("지금 문 연 소아과가 없어요")
+                Text("주변에서 병원을 찾지 못했어요")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(AppColors.ink)
                     .multilineTextAlignment(.center)
@@ -173,7 +177,7 @@ struct EmergencyScreen: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.s7)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("지금 문 연 소아과가 없어요. 위급하면 119 구급 상담을 이용하세요.")
+        .accessibilityLabel("주변에서 병원을 찾지 못했어요. 위급하면 119 구급 상담을 이용하세요.")
     }
 
     // MARK: 119 Emergency Call Button
@@ -237,6 +241,7 @@ struct EmergencyScreen: View {
 
 private struct EmergencyPlaceCard: View {
     let hospital: HospitalInfo
+    /// 최상단(가장 가까운 대학병원급) 강조 카드 여부.
     let isNearest: Bool
 
     private var distanceText: String {
@@ -246,124 +251,93 @@ private struct EmergencyPlaceCard: View {
         let digits = hospital.phone.filter { $0.isNumber }
         return digits.isEmpty ? nil : URL(string: "tel://\(digits)")
     }
+    private var typeLabel: String { hospital.clCdNm ?? hospital.department }
+    private var highlight: Bool { isNearest && hospital.isMajorHospital }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // 상단: 이름·거리·종별
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(hospital.name)
-                        .font(.system(size: 21, weight: .heavy))
-                        .foregroundStyle(AppColors.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: Spacing.s3) {
-                        Label {
-                            Text(distanceText)
-                                .font(AppFont.num(15))
-                                .foregroundStyle(AppColors.ink2)
-                        } icon: {
-                            Image(systemName: "figure.walk")
-                                .font(.system(size: 13))
-                                .foregroundStyle(AppColors.ink3)
-                        }
-                        if !hospital.department.isEmpty {
-                            Text(hospital.department)
-                                .font(.system(size: 13.5, weight: .bold))
-                                .foregroundStyle(AppColors.ink3)
-                        }
-                    }
-
-                    // HIRA는 실시간 영업정보가 없음 → 전화 확인 안내
-                    HStack(spacing: 5) {
-                        Image(systemName: "phone.arrow.up.right")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("방문 전 전화로 영업 여부를 확인하세요")
-                            .font(.system(size: 12.5, weight: .medium))
-                    }
-                    .foregroundStyle(AppColors.ink2)
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: 26)
-                    .background(AppColors.surface2, in: Capsule())
-                }
-
-                Spacer()
-
-                if isNearest {
+        HStack(alignment: .center, spacing: Spacing.s3) {
+            // 정보
+            VStack(alignment: .leading, spacing: 5) {
+                // 대학병원급 강조 뱃지 (최상단 + 종합/상급)
+                if highlight {
                     HStack(spacing: 4) {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 9, weight: .bold))
-                        Text("가장 가까움")
+                        Image(systemName: "cross.case.fill").font(.system(size: 10, weight: .bold))
+                        Text("가장 가까운 대학병원급 · 응급실")
                             .font(.system(size: 11, weight: .heavy))
                     }
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9).padding(.vertical, 4)
                     .background(AppColors.danger, in: Capsule())
-                    .accessibilityLabel("가장 가까운 병원")
+                } else if hospital.isMajorHospital {
+                    Text("대학병원급")
+                        .font(.system(size: 10.5, weight: .heavy))
+                        .foregroundStyle(AppColors.danger)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(AppColors.dangerTint, in: Capsule())
+                }
+
+                Text(hospital.name)
+                    .font(.system(size: 17, weight: .heavy))
+                    .foregroundStyle(AppColors.ink)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 6) {
+                    Image(systemName: "figure.walk").font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                    Text(distanceText).font(AppFont.num(13.5)).foregroundStyle(AppColors.ink2)
+                    if !typeLabel.isEmpty {
+                        Text("·").foregroundStyle(AppColors.line2)
+                        Text(typeLabel).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(AppColors.ink3)
+                            .lineLimit(1)
+                    }
                 }
             }
-            .padding(.bottom, Spacing.s4)
 
-            // 하단: 전화 + 지도 버튼
-            HStack(spacing: 10) {
-                // 초대형 전화 LiquidButton (높이 64+)
-                LiquidButton(
-                    fill: AppColors.emergencyAction,
-                    cornerRadius: Radius.md,
-                    action: {
-                        if let url = telURL { UIApplication.shared.open(url) }
-                    }
-                ) {
-                    HStack(spacing: 10) {
-                        PhoneMotionIcon(color: .white, size: 24)
-                        Text("전화하기")
-                            .font(.system(size: 19, weight: .heavy))
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 64)
-                }
-                .opacity(telURL == nil ? 0.4 : 1)
-                .accessibilityLabel("\(hospital.name) 전화하기")
-                .accessibilityHint("탭하면 \(hospital.name)에 전화를 겁니다")
+            Spacer(minLength: 0)
 
-                // 지도 버튼 — Apple 지도 앱에서 장소명 검색
-                Button {
-                    let q = hospital.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                    if let url = URL(string: "http://maps.apple.com/?q=\(q)") {
-                        UIApplication.shared.open(url)
-                    }
-                } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                            .fill(MotionIconPalette.greenSoft)
-                            .frame(width: 64, height: 64)
-                        MapPinMotionIcon(color: MotionIconPalette.green, size: 26)
-                    }
+            // 액션 — 작은 전화 + 지도(각 48pt)
+            Button {
+                if let url = telURL { UIApplication.shared.open(url) }
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                        .fill(AppColors.emergencyAction)
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "phone.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
                 }
-                .buttonStyle(LiquidPressStyle(scale: 0.93))
-                .accessibilityLabel("지도로 길찾기")
-                .accessibilityHint("\(hospital.name) 위치를 지도 앱에서 열어봅니다")
+                .blShadow(.chip)
             }
+            .buttonStyle(LiquidPressStyle(scale: 0.93))
+            .opacity(telURL == nil ? 0.4 : 1)
+            .accessibilityLabel("\(hospital.name) 전화하기")
+
+            Button {
+                let q = hospital.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                if let url = URL(string: "http://maps.apple.com/?q=\(q)") { UIApplication.shared.open(url) }
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                        .fill(MotionIconPalette.greenSoft)
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "map.fill").font(.system(size: 17, weight: .semibold)).foregroundStyle(MotionIconPalette.green)
+                }
+                .blShadow(.chip)
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.93))
+            .accessibilityLabel("지도로 길찾기")
         }
-        .padding(18)
+        .padding(14)
         .background(
-            isNearest
-                ? AppColors.dangerTint
-                : AppColors.surface,
+            highlight ? AppColors.dangerTint : AppColors.surface,
             in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .stroke(
-                    isNearest
-                        ? AppColors.danger.opacity(0.45)
-                        : AppColors.line,
-                    lineWidth: isNearest ? 2 : 1
-                )
+                .stroke(highlight ? AppColors.danger.opacity(0.45) : AppColors.line, lineWidth: highlight ? 2 : 1)
         }
         .blShadow(.card)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(hospital.name), \(distanceText)\(isNearest ? ", 가장 가까운 병원" : "")")
+        .accessibilityLabel("\(hospital.name), \(typeLabel), \(distanceText)\(highlight ? ", 가장 가까운 대학병원급" : "")")
     }
 }
 
