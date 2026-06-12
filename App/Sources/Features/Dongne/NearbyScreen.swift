@@ -118,12 +118,60 @@ private func syntheticCoordinate(for index: Int, center: CLLocationCoordinate2D)
 
 // MARK: - NearbyScreen
 
+// MARK: - 현재 위치 제공 (CLLocationManager)
+
+/// 주변 검색용 사용자 현재 위치. 권한 허용 시 GPS 좌표 1회 요청.
+/// 거부/미확인이면 coordinate == nil → 화면에서 폴백 좌표 사용.
+final class NearbyLocationProvider: NSObject, ObservableObject, CLLocationManagerDelegate {
+    @Published var coordinate: CLLocationCoordinate2D?
+    private let manager = CLLocationManager()
+
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+    }
+
+    func start() {
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.requestLocation()
+        default:
+            break   // 거부 → 폴백 좌표 유지
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        if manager.authorizationStatus == .authorizedWhenInUse
+            || manager.authorizationStatus == .authorizedAlways {
+            manager.requestLocation()
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let c = locations.last?.coordinate { coordinate = c }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        // 위치 실패 → 폴백 좌표 유지(무시)
+    }
+}
+
 /// DongneTab의 "주변" 세그먼트에 임베드하는 메인 뷰.
 /// 리스트/지도 토글(실제 동작), ProviderFactory 배선, BLSkeleton·BLEmptyState·BLErrorState 포함.
 struct NearbyScreen: View {
 
-    // 망원동 기준 좌표
+    // 위치 권한 거부/미확인 시 폴백 좌표(서울 도심)
     private static let centerCoord = CLLocationCoordinate2D(latitude: 37.5563, longitude: 126.9101)
+
+    /// 실제 사용자 위치 — 허용 시 GPS 좌표로 검색
+    @StateObject private var locationProvider = NearbyLocationProvider()
+    /// 검색에 쓸 좌표(현재 위치 우선, 없으면 폴백)
+    private var searchCoord: CLLocationCoordinate2D {
+        locationProvider.coordinate ?? Self.centerCoord
+    }
 
     @State private var selectedCategory: PlaceCategory = .hospital
     @State private var activeFilters: Set<String> = ["현재 영업중"]
@@ -180,6 +228,17 @@ struct NearbyScreen: View {
         .task(id: activeFilters) {
             await loadHospitals()
         }
+        .onAppear { locationProvider.start() }
+        // 현재 위치가 잡히면 그 좌표로 다시 검색 + 지도 이동
+        .onChange(of: locationProvider.coordinate?.latitude) { _, lat in
+            guard lat != nil else { return }
+            withAnimation {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: searchCoord,
+                    span: MKCoordinateSpan(latitudeDelta: 0.025, longitudeDelta: 0.025)))
+            }
+            Task { await loadHospitals() }
+        }
     }
 
     // MARK: Load Hospitals
@@ -189,9 +248,10 @@ struct NearbyScreen: View {
         hospitalState = .loading
         let openNow = activeFilters.contains("현재 영업중")
         do {
+            let c = searchCoord
             let results = try await ProviderFactory.hospital()
                 .hospitals(
-                    near: Coordinate(lat: Self.centerCoord.latitude, lng: Self.centerCoord.longitude),
+                    near: Coordinate(lat: c.latitude, lng: c.longitude),
                     openNow: openNow
                 )
             hospitalState = results.isEmpty ? .empty : .loaded(results)
