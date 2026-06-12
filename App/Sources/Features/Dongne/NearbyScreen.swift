@@ -132,30 +132,49 @@ final class NearbyLocationProvider: NSObject, ObservableObject, CLLocationManage
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
     }
 
+    /// 권한 상태(거부 시 UI에서 안내용)
+    @Published var denied: Bool = false
+
     func start() {
         switch manager.authorizationStatus {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse, .authorizedAlways:
-            manager.requestLocation()
-        default:
-            break   // 거부 → 폴백 좌표 유지
+            beginUpdates()
+        case .denied, .restricted:
+            denied = true
+        @unknown default:
+            break
         }
     }
 
+    private func beginUpdates() {
+        denied = false
+        // 캐시된 마지막 위치가 있으면 즉시 사용(빠른 표시)
+        if let cached = manager.location?.coordinate { coordinate = cached }
+        // 연속 갱신으로 첫 양호 fix 확보(one-shot requestLocation은 실내·타임아웃에 자주 실패)
+        manager.startUpdatingLocation()
+    }
+
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorizedWhenInUse
-            || manager.authorizationStatus == .authorizedAlways {
-            manager.requestLocation()
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            beginUpdates()
+        case .denied, .restricted:
+            denied = true
+        default:
+            break
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        if let c = locations.last?.coordinate { coordinate = c }
+        guard let c = locations.last?.coordinate else { return }
+        coordinate = c
+        manager.stopUpdatingLocation()   // 첫 양호 fix 후 정지(배터리)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        // 위치 실패 → 폴백 좌표 유지(무시)
+        // 위치 실패 → 폴백 좌표 유지(무시), 갱신은 계속 시도됨
     }
 }
 
@@ -208,6 +227,7 @@ struct NearbyScreen: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
                         mapToggleBar
+                        locationHint
                         categoryChips
                         filterChips
                         listSection
@@ -262,6 +282,36 @@ struct NearbyScreen: View {
             hospitalState = finalResults.isEmpty ? .empty : .loaded(finalResults)
         } catch {
             hospitalState = .failed(error)
+        }
+    }
+
+    // MARK: 위치 권한 안내
+
+    @ViewBuilder
+    private var locationHint: some View {
+        if locationProvider.denied {
+            HStack(spacing: Spacing.s2) {
+                Image(systemName: "location.slash.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppColors.gold)
+                Text("위치 권한이 꺼져 있어 기본 지역을 보여드려요. 설정에서 위치를 켜면 내 주변으로 바뀌어요.")
+                    .font(AppFont.caption)
+                    .foregroundStyle(AppColors.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("설정") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .font(.system(size: 12.5, weight: .bold))
+                .foregroundStyle(AppColors.primary)
+            }
+            .padding(.horizontal, Spacing.s4)
+            .padding(.vertical, Spacing.s3)
+            .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .padding(.horizontal, Spacing.s5)
+            .padding(.top, Spacing.s2)
         }
     }
 
