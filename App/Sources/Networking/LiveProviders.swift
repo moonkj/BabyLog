@@ -113,14 +113,14 @@ enum HospitalResponseParser {
             return []
         }
         return items.map { item in
-            let lat = item.YPos
-            let lng = Double(item.XPos ?? "")
+            let lat = item.ypos
+            let lng = item.xpos
             // 거리: 사용자 좌표 + 기관 좌표가 있으면 직접 계산(API distance 비신뢰), 없으면 API distance 폴백
             let dist: Int
             if let uc = userCoord, let lat, let lng {
                 dist = Int(haversineMeters(lat1: uc.lat, lng1: uc.lng, lat2: lat, lng2: lng))
             } else {
-                dist = Int(Double(item.distance ?? "0") ?? 0)
+                dist = Int(item.distanceMeters ?? 0)
             }
             return HospitalInfo(
                 id: item.ykiho ?? UUID().uuidString,
@@ -204,9 +204,34 @@ struct HIRAHospitalItem: Decodable {
     let telno: String?      // 전화번호
     let dgsbjtCdNm: String? // 진료과목명
     let clCdNm: String?     // 종별 코드명 (의원/병원 등)
-    let distance: String?   // 거리(미터) — 문자열로 내려옴
-    let XPos: String?       // 경도(문자열)
-    let YPos: Double?       // 위도(숫자)
+    // ⚠️ HIRA는 distance/XPos/YPos를 레코드마다 문자열 또는 숫자로 섞어 보냄 → 둘 다 허용
+    let distanceMeters: Double?  // 거리(미터)
+    let xpos: Double?            // 경도
+    let ypos: Double?            // 위도
+
+    enum CodingKeys: String, CodingKey {
+        case ykiho, yadmNm, addr, telno, dgsbjtCdNm, clCdNm, distance, XPos, YPos
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ykiho = try c.decodeIfPresent(String.self, forKey: .ykiho)
+        yadmNm = try c.decodeIfPresent(String.self, forKey: .yadmNm)
+        addr = try c.decodeIfPresent(String.self, forKey: .addr)
+        telno = try c.decodeIfPresent(String.self, forKey: .telno)
+        dgsbjtCdNm = try c.decodeIfPresent(String.self, forKey: .dgsbjtCdNm)
+        clCdNm = try c.decodeIfPresent(String.self, forKey: .clCdNm)
+        distanceMeters = HIRAHospitalItem.flexDouble(c, .distance)
+        xpos = HIRAHospitalItem.flexDouble(c, .XPos)
+        ypos = HIRAHospitalItem.flexDouble(c, .YPos)
+    }
+
+    /// 문자열·숫자 어느 쪽이든 Double로 안전 변환.
+    private static func flexDouble(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Double? {
+        if let d = try? c.decodeIfPresent(Double.self, forKey: key) { return d }
+        if let s = try? c.decodeIfPresent(String.self, forKey: key) { return Double(s) }
+        return nil
+    }
 }
 
 // ============================================================
