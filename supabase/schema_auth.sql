@@ -1,12 +1,10 @@
--- BabyLog · 인증(익명→Apple 로그인) 마이그레이션
--- schema_crew.sql 적용 후 실행. Apple 로그인 활성화 전에 미리 둬도 무해(호출 전엔 무영향).
+-- BabyLog · 인증(익명→Apple 로그인) 마이그레이션 — v2
+-- v1 대비 변경: ① 마켓 테이블(market_item·market_chat_message) 포함 — 로그인 후 기존 매물
+--   관리 불가/1매물 제한 우회 버그 수정 ② 좋아요/참가/멤버십 충돌을 행 단위로 병합
+--   (v1은 PK 충돌 1건에 테이블 전체 마이그레이션이 롤백되던 버그).
+-- ⚠️ 이미 v1을 실행했어도 그대로 다시 실행하면 됨(create or replace).
 -- 자세한 배경: docs/AUTH_SETUP.md
 
--- ───────────────────────────────────────────────
--- claim_device: 첫 로그인 시 익명 기기 UUID로 만든 콘텐츠를 내 auth.uid()로 귀속
---   security definer 라 RLS 우회 일괄 UPDATE. 함수 안에서 auth.uid()로만 귀속하므로 안전.
---   auth.uid() 가 null(비로그인)이면 아무것도 하지 않음(소유자 NULL화 방지).
--- ───────────────────────────────────────────────
 create or replace function public.claim_device(p_device text)
 returns void
 language plpgsql
@@ -18,22 +16,36 @@ begin
     return;
   end if;
 
-  -- 글/모임/그룹: owner = author/host/creator
+  -- 글/모임/그룹/매물: owner 컬럼 단순 귀속(충돌 없음 — PK가 id)
   update public.crew_post           set author    = auth.uid()::text where author    = p_device;
   update public.crew_post_reply     set author    = auth.uid()::text where author    = p_device;
   update public.crew_meetup         set host      = auth.uid()::text where host      = p_device;
   update public.crew_group          set creator   = auth.uid()::text where creator   = p_device;
-
-  -- 좋아요/참가/멤버십/메시지: owner = device_id (PK 충돌 시 해당 행은 건너뜀)
-  begin update public.crew_post_like      set device_id = auth.uid()::text where device_id = p_device; exception when unique_violation then null; end;
-  begin update public.crew_meetup_join    set device_id = auth.uid()::text where device_id = p_device; exception when unique_violation then null; end;
-  begin update public.crew_group_member   set device_id = auth.uid()::text where device_id = p_device; exception when unique_violation then null; end;
   update public.crew_meetup_message set device_id = auth.uid()::text where device_id = p_device;
+  update public.market_item         set seller    = auth.uid()::text where seller    = p_device;
+  update public.market_chat_message set device_id = auth.uid()::text where device_id = p_device;
+
+  -- 좋아요/참가/멤버십: (대상, device_id) 복합 PK → 두 신원 모두 행이 있으면 병합(중복은 버림).
+  -- v1처럼 UPDATE+exception 방식은 충돌 1건에 테이블 전체가 스킵되므로 insert-select+delete로 행 단위 처리.
+  insert into public.crew_post_like (post_id, device_id)
+    select post_id, auth.uid()::text from public.crew_post_like where device_id = p_device
+    on conflict (post_id, device_id) do nothing;
+  delete from public.crew_post_like where device_id = p_device;
+
+  insert into public.crew_meetup_join (meetup_id, device_id, joined_at)
+    select meetup_id, auth.uid()::text, joined_at from public.crew_meetup_join where device_id = p_device
+    on conflict (meetup_id, device_id) do nothing;
+  delete from public.crew_meetup_join where device_id = p_device;
+
+  insert into public.crew_group_member (group_id, device_id, joined_at)
+    select group_id, auth.uid()::text, joined_at from public.crew_group_member where device_id = p_device
+    on conflict (group_id, device_id) do nothing;
+  delete from public.crew_group_member where device_id = p_device;
 end $$;
 
 grant execute on function public.claim_device(text) to authenticated;
 
 -- ───────────────────────────────────────────────
--- 소유자 기반 RLS는 claim_device로 기존 데이터 정리 후 적용(supabase/schema_crew_rls.sql).
--- 순서가 중요: RLS 먼저 잠그면 옛 익명 행을 본인이 못 고침. docs/AUTH_SETUP.md §7 참고.
+-- 소유자 기반 RLS는 schema_crew_rls.sql 참고(이미 적용됨).
+-- 이 함수는 로그인 직후 앱(AuthStore.claimDevice)이 1회 호출한다.
 -- ───────────────────────────────────────────────

@@ -16,6 +16,8 @@ struct CrewMeetupDetail: View {
     @State private var showChat = false
     @State private var showDeleteConfirm = false
     @State private var joinBusy = false   // 참가 토글 중복 탭 방지(서버 정합)
+    @State private var deleteBusy = false   // 삭제 요청 중(중복 탭 방지)
+    @State private var deleteFailed = false // 서버 삭제 실패 안내
     @Environment(\.dismiss) private var dismiss
 
     private var isJoined: Bool { store.isJoinedCrew(meetup.id) }
@@ -67,13 +69,35 @@ struct CrewMeetupDetail: View {
         }
         .confirmationDialog("이 모임을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("삭제", role: .destructive) {
+                guard !deleteBusy else { return }
                 Haptics.warning()
-                store.deleteCrew(id: meetup.id)
-                dismiss()
+                if SupabaseConfig.isConfigured {
+                    // 서버가 원본: 실제 삭제를 확인한 뒤에만 로컬 삭제·닫기(재조회 시 부활 방지)
+                    deleteBusy = true
+                    Task { @MainActor in
+                        let ok = await CrewBackend.deleteMeetup(meetupId: meetup.id)
+                        deleteBusy = false
+                        if ok {
+                            store.deleteCrew(id: meetup.id)
+                            dismiss()
+                        } else {
+                            deleteFailed = true
+                        }
+                    }
+                } else {
+                    // 미구성(로컬 데모): 기존 동작 유지
+                    store.deleteCrew(id: meetup.id)
+                    dismiss()
+                }
             }
             Button("취소", role: .cancel) { }
         } message: {
             Text("삭제하면 되돌릴 수 없어요.")
+        }
+        .alert("삭제 실패", isPresented: $deleteFailed) {
+            Button("확인", role: .cancel) { }
+        } message: {
+            Text("모임을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.")
         }
         .accessibilityElement(children: .contain)
     }

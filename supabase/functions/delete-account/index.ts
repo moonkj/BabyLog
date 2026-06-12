@@ -30,7 +30,14 @@ Deno.serve(async (req) => {
   }
   const userId = userData.user.id;
 
-  // 2) 본인 콘텐츠는 보존(소유 uuid 고아화 = 익명). 식별만 해제하기 위해 auth 사용자 삭제.
+  // 2) 활성 매물은 판매완료 처리 — 삭제 후 아무도 관리할 수 없는 '유령 매물'이
+  //    최대 30일간 동네에 노출되는 것을 방지(콘텐츠 자체는 보존).
+  await admin.from("market_item")
+    .update({ status: "판매완료" })
+    .eq("seller", userId)
+    .in("status", ["판매중", "예약중"]);
+
+  // 3) 본인 콘텐츠는 보존(소유 uuid 고아화 = 익명). 식별만 해제하기 위해 auth 사용자 삭제.
   const { error: delErr } = await admin.auth.admin.deleteUser(userId);
   if (delErr) {
     return new Response(JSON.stringify({ error: delErr.message }), {

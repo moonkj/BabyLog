@@ -332,12 +332,14 @@ final class AppStore: ObservableObject {
     func isMarketSaved(_ id: String) -> Bool { savedMarketIds.contains(id) }
 
     func toggleMarketSaved(_ id: String) {
+        // 찜 토글은 서버 매물(marketItems에 없음)에도 항상 동작해야 한다.
+        let wasSaved = savedMarketIds.contains(id)
+        if wasSaved { savedMarketIds.remove(id) } else { savedMarketIds.insert(id) }
+        // 찜 수 증감은 로컬 매물에만 반영 (서버 매물 카운트는 서버가 관리)
         guard let idx = marketItems.firstIndex(where: { $0.id == id }) else { return }
-        if savedMarketIds.contains(id) {
-            savedMarketIds.remove(id)
+        if wasSaved {
             marketItems[idx].favoriteCount = max(0, marketItems[idx].favoriteCount - 1)
         } else {
-            savedMarketIds.insert(id)
             marketItems[idx].favoriteCount += 1
         }
     }

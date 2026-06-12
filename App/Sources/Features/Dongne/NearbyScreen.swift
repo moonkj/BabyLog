@@ -241,6 +241,11 @@ struct NearbyScreen: View {
     // 키즈카페·놀이터(카카오 로컬) 로드 상태 — 카카오 키 연동 후 실데이터
     @State private var places: [Place] = []
     @State private var placesLoading = false
+    /// 키즈카페·놀이터 조회 실패 — 빈 결과와 구분해 재시도 UI를 보여준다.
+    @State private var placesFailed = false
+
+    /// 위치 획득 타임아웃(권한은 있으나 GPS가 느림) — 권한 거부(denied)와 구분.
+    @State private var locationSlow = false
 
     // 선택된 카드 id — 그 카드의 아이콘만 연속 애니메이션(한 번에 1개라 렉 없음).
     @State private var selectedNearbyID: String? = nil
@@ -300,17 +305,19 @@ struct NearbyScreen: View {
         .onChange(of: selectedCategory) { _, _ in
             Task { await reloadCurrent() }
         }
-        // 위치 획득 타임아웃(8초) — 끝내 못 잡으면(위치서비스 꺼짐 등) 폴백 지역으로라도 검색 + 안내
+        // 위치 획득 타임아웃(8초) — 권한은 있는데 GPS가 느린 경우. denied로 위장하지 않고
+        // locationSlow로 구분해 폴백 지역으로 검색 + "위치를 찾는 중" 안내(설정 CTA 미노출).
         .task {
             try? await Task.sleep(nanoseconds: 8_000_000_000)
             if locationProvider.coordinate == nil && !locationProvider.denied {
-                locationProvider.denied = true
+                locationSlow = true
                 await reloadCurrent()
             }
         }
         // 현재 위치가 잡히면 그 좌표로 다시 검색 + 지도 이동
         .onChange(of: locationProvider.coordinate?.latitude) { _, lat in
             guard lat != nil else { return }
+            locationSlow = false
             withAnimation {
                 cameraPosition = .region(MKCoordinateRegion(
                     center: searchCoord,
@@ -739,7 +746,8 @@ struct NearbyScreen: View {
                 message: "잠시 후 다시 확인하거나, 위치를 바꿔 검색해 보세요.",
                 actionTitle: "다시 불러오기",
                 action: {
-                    Task { await loadHospitals() }
+                    // force:true — 빈 결과도 캐시에 남아 있어, 캐시를 무시해야 실제 재조회가 된다.
+                    Task { await loadHospitals(force: true) }
                 }
             )
 
@@ -747,7 +755,7 @@ struct NearbyScreen: View {
             BLErrorState(
                 message: "주변 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
                 retry: {
-                    Task { await loadHospitals() }
+                    Task { await loadHospitals(force: true) }
                 }
             )
         }

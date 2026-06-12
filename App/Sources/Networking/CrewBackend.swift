@@ -209,6 +209,19 @@ enum CrewBackend {
         return true
     }
 
+    /// 게시글 삭제(소유자 RLS — 본인 글만). return=representation + 비어있지 않은 배열이어야 성공.
+    @discardableResult
+    static func deletePost(postId: String) async -> Bool {
+        guard SupabaseConfig.isConfigured,
+              let p = postId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              var req = await request("/rest/v1/crew_post?id=eq.\(p)", method: "DELETE") else { return false }
+        req.setValue("return=representation", forHTTPHeaderField: "Prefer")  // RLS 0행 매칭(가짜 성공) 감지용
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        guard let rows = (try? JSONSerialization.jsonObject(with: data)) as? [Any], !rows.isEmpty else { return false }
+        return true
+    }
+
     // MARK: - 모임(동네 공유)
 
     private struct CrewMeetupDTO: Decodable {
@@ -275,6 +288,20 @@ enum CrewBackend {
               let id = rows.first?.id else { return nil }
         await joinMeetup(meetupId: id)   // 주최자 자동 참가
         return id
+    }
+
+    /// 모임 삭제(소유자 RLS — 본인 모임만). PostgREST는 RLS 0행 매칭도 2xx이므로
+    /// return=representation으로 실제 삭제된 행을 확인해야 성공(MarketBackend.setStatus와 동일 패턴).
+    @discardableResult
+    static func deleteMeetup(meetupId: String) async -> Bool {
+        guard SupabaseConfig.isConfigured,
+              let m = meetupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              var req = await request("/rest/v1/crew_meetup?id=eq.\(m)", method: "DELETE") else { return false }
+        req.setValue("return=representation", forHTTPHeaderField: "Prefer")  // RLS 0행 매칭(가짜 성공) 감지용
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        guard let rows = (try? JSONSerialization.jsonObject(with: data)) as? [Any], !rows.isEmpty else { return false }
+        return true
     }
 
     /// 모임 참가(crew_meetup_join upsert).

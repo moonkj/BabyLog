@@ -237,6 +237,8 @@ private struct CrewActiveContent: View {
     @State private var showCreateGroup = false
     /// 동네별 첫 로드 완료 여부(서버 연동 시 가짜 시드 플래시 방지)
     @State private var didLoad = false
+    /// 세 요청(게시글·모임·그룹)이 모두 실패 — 네트워크 실패를 빈 동네와 구분
+    @State private var loadFailed = false
     /// 부모(CrewScreen)에서 모임 생성 후 증가 → 재로드 트리거
     var refreshTick: Int = 0
 
@@ -249,36 +251,44 @@ private struct CrewActiveContent: View {
 
     private func loadCrew() async {
         guard SupabaseConfig.isConfigured else { return }
-        if let p = await CrewBackend.fetchPosts(hood: hood) {
+        let p = await CrewBackend.fetchPosts(hood: hood)
+        if let p {
             sharedPosts = p.map { po in
                 guard store.isCrewPostLiked(po.id) else { return po }
                 var x = po; x.likeCount = max(0, po.likeCount - 1); return x
             }
         }
         // 서버 카운트는 본인을 포함 → "나 제외" 규약 유지를 위해 내가 참여/가입한 항목은 1 차감.
-        if let m = await CrewBackend.fetchMeetups(hood: hood) {
+        let m = await CrewBackend.fetchMeetups(hood: hood)
+        if let m {
             sharedMeetups = m.map { mt in
                 guard store.isJoinedCrew(mt.id) else { return mt }
                 var x = mt; x.joined = max(0, mt.joined - 1); return x
             }
         }
-        if let g = await CrewBackend.fetchGroups(hood: hood) {
+        let g = await CrewBackend.fetchGroups(hood: hood)
+        if let g {
             sharedGroups = g.map { gr in
                 guard store.isJoinedGroup(gr.id) else { return gr }
                 return CrewGroup(id: gr.id, name: gr.name, memberCount: max(0, gr.memberCount - 1),
                                  distanceText: gr.distanceText, ageRange: gr.ageRange, interestTags: gr.interestTags)
             }
         }
+        // 셋 다 nil이면 네트워크 실패 — 빈 동네와 구분해 재시도 UI를 띄운다.
+        loadFailed = (p == nil && m == nil && g == nil)
         didLoad = true
     }
 
-    private var isLoading: Bool { SupabaseConfig.isConfigured && !didLoad }
+    /// 동네(시도)가 아직 안 잡혔으면 빈/실패 화면 대신 로딩을 유지한다.
+    private var isLoading: Bool { SupabaseConfig.isConfigured && (!didLoad || location.localityName == nil) }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 if isLoading {
                     loadingView
+                } else if loadFailed && posts.isEmpty && meetups.isEmpty && groups.isEmpty {
+                    crewLoadFailedView
                 } else {
                     meetupSection
                         .padding(.top, Spacing.s5)
@@ -309,7 +319,7 @@ private struct CrewActiveContent: View {
         .sheet(isPresented: $showAllPosts) {
             CrewPostListScreen(posts: posts).environmentObject(store)
         }
-        .task(id: hood) { didLoad = false; await loadCrew() }
+        .task(id: hood) { didLoad = false; loadFailed = false; await loadCrew() }
         .onChange(of: showWrite) { _, open in if !open { Task { await loadCrew() } } }
         .onChange(of: selectedPost) { _, sel in if sel == nil { Task { await loadCrew() } } }
         .onChange(of: refreshTick) { _, _ in Task { await loadCrew() } }
@@ -417,6 +427,48 @@ private struct CrewActiveContent: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 120)
         .accessibilityLabel("우리 동네 크루를 불러오는 중")
+    }
+
+    // MARK: 불러오기 실패 (네트워크) — 빈 동네와 구분
+    private var crewLoadFailedView: some View {
+        VStack(spacing: Spacing.s3) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 34, weight: .regular))
+                .foregroundStyle(AppColors.ink3)
+                .accessibilityHidden(true)
+            Text("크루 소식을 불러오지 못했어요")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppColors.ink)
+            Text("네트워크 연결을 확인하고 다시 시도해 주세요.")
+                .font(AppFont.caption)
+                .foregroundStyle(AppColors.ink3)
+                .multilineTextAlignment(.center)
+
+            Button {
+                Haptics.light()
+                Task { await loadCrew() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("다시 시도")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(AppColors.ink)
+                .padding(.horizontal, 18)
+                .frame(height: 44)
+                .background(AppColors.surface, in: Capsule())
+                .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.96))
+            .padding(.top, Spacing.s1)
+            .accessibilityLabel("다시 시도")
+            .accessibilityHint("우리 동네 크루 소식을 다시 불러옵니다")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("크루 소식을 불러오지 못했어요. 네트워크 연결을 확인하고 다시 시도해 주세요.")
     }
 
     /// 그룹 가입 토글을 서버에도 반영(서버 그룹만; 미구성/목업은 setGroupMembership가 무시).
@@ -642,7 +694,17 @@ private struct CrewMeetupCard: View {
                 // 참가 버튼 (토글 / 마감)
                 Button {
                     Haptics.selection()
-                    store.toggleJoinCrew(meetup.id)
+                    let willJoin = !isJoined
+                    store.toggleJoinCrew(meetup.id)   // 낙관적 토글
+                    // 상세 화면과 동일하게 서버에도 반영 — 카드에서만 누르면 이웃에게 안 보이던 버그 수정
+                    if SupabaseConfig.isConfigured {
+                        Task {
+                            let ok = willJoin
+                                ? await CrewBackend.joinMeetup(meetupId: meetup.id)
+                                : await CrewBackend.leaveMeetup(meetupId: meetup.id)
+                            if !ok { store.toggleJoinCrew(meetup.id) }   // 실패 시 롤백
+                        }
+                    }
                 } label: {
                     Text(isFull ? "마감" : (isJoined ? "참가중" : "참가"))
                         .font(.system(size: 13.5, weight: .bold))
@@ -659,7 +721,7 @@ private struct CrewMeetupCard: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(meetup.place), \(meetup.when), \(joinedCount)명 중 \(meetup.capacity)명 정원, 주최자 \(meetup.hostName)")
+        .accessibilityLabel("\(meetup.place), \(meetup.when), 정원 \(meetup.capacity)명 중 \(joinedCount)명 참가, 주최자 \(meetup.hostName)")
     }
 }
 

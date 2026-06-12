@@ -74,6 +74,12 @@ struct CrewCreateSheet: View {
                             .padding(.horizontal, Spacing.s4).padding(.vertical, 12)
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                             .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        if SupabaseConfig.isConfigured {
+                            // 정직 고지: 서버 crew_meetup에 소개 컬럼이 아직 없어 이웃에게 전송되지 않음
+                            Text("소개는 아직 이웃에게 공유되지 않아요")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(AppColors.ink3)
+                        }
                     }
 
                     LiquidButton(fill: canSave ? AppColors.primary : AppColors.ink3, action: save) {

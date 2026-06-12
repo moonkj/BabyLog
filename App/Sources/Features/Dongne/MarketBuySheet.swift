@@ -1,8 +1,9 @@
 // MarketBuySheet.swift
-// BabyLog · Features/Dongne — 마켓 구매 플로우 (로컬 거래 확정)
+// BabyLog · Features/Dongne — 마켓 구매 플로우
 //
-// 당근마켓식 구매 진행: 매물 확인 → 거래 방식·안심거래 안내 → 거래 확정.
-// 확정 시 매물이 판매완료로 바뀌고 채팅에 거래 메시지가 남는다. (실시간 결제·에스크로는 백엔드 단계)
+// 당근마켓식 구매 진행: 매물 확인 → 거래 방식·안심거래 안내.
+// 로컬(미구성) 모드: 거래 확정 시 매물이 판매완료로 바뀌고 채팅에 거래 메시지가 남는다.
+// 서버 모드: 앱이 상태를 대신 바꿀 수 없으므로 채팅으로 거래를 약속하도록 정직하게 안내한다.
 
 import SwiftUI
 
@@ -14,6 +15,16 @@ struct MarketBuySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var method: TradeMethod = .direct
     @State private var done = false
+
+    /// 서버 모드 — 매물 상태는 판매자만 바꿀 수 있다. 가짜 '거래 확정'을 보여주지 않는다.
+    private var serverMode: Bool { SupabaseConfig.isConfigured }
+
+    /// 시트를 닫은 뒤 채팅을 연다. dismiss 직후 바로 다른 시트를 띄우면
+    /// 시트 교체 레이스로 채팅이 안 뜰 수 있어 살짝 기다린다.
+    private func goToChat() {
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { onChat() }
+    }
 
     enum TradeMethod: String, CaseIterable {
         case direct = "직거래"
@@ -30,6 +41,7 @@ struct MarketBuySheet: View {
                         itemSummary
                         methodPicker
                         safeTradeCard
+                        if serverMode { chatPromiseCard }
                         Spacer(minLength: Spacing.s2)
                     }
                     .padding(Spacing.s4)
@@ -50,15 +62,10 @@ struct MarketBuySheet: View {
     private var itemSummary: some View {
         BLCard(padding: 12, flat: true) {
             HStack(spacing: 12) {
-                Group {
-                    if let img = PhotoStore.image(item.photoRefs.first) {
-                        Image(uiImage: img).resizable().scaledToFill()
-                    } else {
-                        PhotoPlaceholder(seed: item.photoSeed, cornerRadius: 0)
-                    }
-                }
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs,
+                                seed: item.photoSeed, index: 0, cornerRadius: 0)
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title).font(.system(size: 15, weight: .bold))
@@ -121,9 +128,35 @@ struct MarketBuySheet: View {
         .accessibilityLabel("안심 거래 안내. 주민센터·공공도서관 앞 등 공공장소에서 만나면 더 안전해요.")
     }
 
+    /// 서버 모드 안내 — 거래는 채팅으로 약속하고, 상태 변경은 판매자가 한다.
+    private var chatPromiseCard: some View {
+        BLCard(padding: 13, flat: true) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.primary)
+                Text("거래는 채팅으로 약속해요. 판매자가 예약중·판매완료로 바꾸면 목록에 반영돼요.")
+                    .font(AppFont.caption).foregroundStyle(AppColors.ink2).lineSpacing(3)
+            }
+        }
+        .background(AppColors.primaryTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("거래는 채팅으로 약속해요. 판매자가 예약중 또는 판매완료로 바꾸면 목록에 반영돼요.")
+    }
+
+    /// 모드별 주 버튼 라벨 — 접근성 라벨도 이 텍스트를 그대로 쓴다.
+    private var primaryTitle: String {
+        if serverMode { return "채팅으로 거래 약속하기" }
+        return item.isFree ? "나눔 받기" : "거래 확정하기"
+    }
+
     private var bottomBar: some View {
         HStack(spacing: 12) {
-            Button { dismiss(); onChat() } label: {
+            Button { goToChat() } label: {
                 Image(systemName: "bubble.left.and.bubble.right.fill")
                     .font(.system(size: 20, weight: .semibold)).foregroundStyle(AppColors.ink2)
                     .frame(width: 52, height: 52)
@@ -133,15 +166,21 @@ struct MarketBuySheet: View {
             .accessibilityLabel("판매자와 채팅")
 
             LiquidButton(action: {
-                store.purchaseMarketItem(id: item.id)
-                Haptics.success()
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) { done = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { dismiss() }
+                if serverMode {
+                    // 서버 매물은 앱이 확정할 수 없다 — 가짜 확정 대신 채팅으로 약속.
+                    Haptics.light()
+                    goToChat()
+                } else {
+                    store.purchaseMarketItem(id: item.id)
+                    Haptics.success()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) { done = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { dismiss() }
+                }
             }) {
-                Text(item.isFree ? "나눔 받기" : "거래 확정하기")
+                Text(primaryTitle)
                     .frame(maxWidth: .infinity).frame(height: 52)
             }
-            .accessibilityLabel("거래 확정하기")
+            .accessibilityLabel(primaryTitle)
         }
         .padding(.horizontal, Spacing.s4).padding(.top, 12).padding(.bottom, 26)
         .background(AppColors.surface)

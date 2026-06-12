@@ -131,7 +131,10 @@ struct CrewPostDetailSheet: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var commentText = ""
     @State private var commentError = false   // 댓글 전송 실패(서버) — 다시 입력하면 자동 해제
+    @State private var lastFailedComment = "" // 실패 시 복원된 본문 — onChange가 오류를 즉시 지우는 것 방지
     @State private var showDeleteConfirm = false
+    @State private var deleteBusy = false     // 삭제 요청 중(중복 탭 방지)
+    @State private var deleteFailed = false   // 서버 삭제 실패 안내
     /// 서버 공유 댓글(미구성/미로드 시 nil → 로컬 폴백)
     @State private var serverComments: [String]? = nil
     @AppStorage("bl_nickname") private var nickname: String = "양육자님"
@@ -166,6 +169,8 @@ struct CrewPostDetailSheet: View {
                     if let r = await CrewBackend.fetchReplies(postId: post.id) { serverComments = r }
                 } else {
                     // 실패 — 입력 내용을 되돌려 다시 보낼 수 있게 한다(소리없는 실패 방지)
+                    // 복원 자체가 onChange를 발화시켜 오류 표시를 바로 지우므로, 복원값을 기억해 onChange에서 구분한다.
+                    lastFailedComment = text
                     commentText = text
                     commentError = true
                     Haptics.warning()
@@ -221,13 +226,37 @@ struct CrewPostDetailSheet: View {
         .task(id: post.id) { await pollReplies() }
         .confirmationDialog("이 글을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("삭제", role: .destructive) {
-                store.deleteCrewPost(id: post.id)
-                Haptics.success()
-                dismiss()
+                guard !deleteBusy else { return }
+                if SupabaseConfig.isConfigured {
+                    // 서버가 원본: 실제 삭제를 확인한 뒤에만 로컬 삭제·닫기(재조회 시 부활 방지)
+                    deleteBusy = true
+                    Task { @MainActor in
+                        let ok = await CrewBackend.deletePost(postId: post.id)
+                        deleteBusy = false
+                        if ok {
+                            store.deleteCrewPost(id: post.id)
+                            Haptics.success()
+                            dismiss()
+                        } else {
+                            Haptics.warning()
+                            deleteFailed = true
+                        }
+                    }
+                } else {
+                    // 미구성(로컬 데모): 기존 동작 유지
+                    store.deleteCrewPost(id: post.id)
+                    Haptics.success()
+                    dismiss()
+                }
             }
             Button("취소", role: .cancel) { }
         } message: {
             Text("삭제한 글은 복구할 수 없어요.")
+        }
+        .alert("삭제 실패", isPresented: $deleteFailed) {
+            Button("확인", role: .cancel) { }
+        } message: {
+            Text("글을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.")
         }
     }
 
@@ -402,7 +431,10 @@ struct CrewPostDetailSheet: View {
                     .frame(maxWidth: .infinity)
                     .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(commentError ? AppColors.danger : AppColors.line, lineWidth: 1) }
-                    .onChange(of: commentText) { _ in if commentError { commentError = false } }   // 다시 입력하면 오류 해제
+                    .onChange(of: commentText) { newValue in
+                        // 다시 입력하면 오류 해제 — 단, 실패 직후 복원된 값과 같으면 유지(오류 깜빡임 방지)
+                        if commentError && newValue != lastFailedComment { commentError = false }
+                    }
                     .accessibilityLabel("댓글 입력")
 
                 Button {
