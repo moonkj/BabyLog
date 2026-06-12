@@ -49,6 +49,9 @@ struct SettingsScreen: View {
     @AppStorage("bl_nickname")         private var nickname: String        = "양육자님"
     @AppStorage("bl_cloud_sync")       private var cloudSync: Bool         = false
     @State private var showOpenSource = false
+    @ObservedObject private var auth = AuthStore.shared
+    @State private var showDeleteAccount = false
+    @State private var authAlert: String? = nil
     @State private var cloudStatus: String? = nil
     @State private var cloudBusy = false
 
@@ -75,6 +78,7 @@ struct SettingsScreen: View {
                 displaySection
                 quickRecordSection
                 caregiverSection
+                accountSection
                 notificationSection
                 backupSection
                 iCloudSection
@@ -128,6 +132,78 @@ struct SettingsScreen: View {
             Button("확인", role: .cancel) {}
         } message: {
             Text("데이터를 준비하는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.")
+        }
+        .confirmationDialog("계정을 삭제할까요?", isPresented: $showDeleteAccount, titleVisibility: .visible) {
+            Button("계정 삭제", role: .destructive) {
+                Task {
+                    let ok = await auth.deleteAccount()
+                    authAlert = ok
+                        ? "계정을 삭제했어요. 작성한 글은 익명으로 남고 본인 식별만 해제됩니다."
+                        : "계정 삭제를 처리하지 못했어요. 잠시 후 다시 시도해 주세요."
+                }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("로그인 식별이 해제됩니다. 다른 기기에서 내 글로 다시 연결되지 않아요.")
+        }
+        .alert("계정", isPresented: Binding(get: { authAlert != nil }, set: { if !$0 { authAlert = nil } })) {
+            Button("확인", role: .cancel) {}
+        } message: { Text(authAlert ?? "") }
+    }
+
+    // MARK: - 계정 섹션 (Apple 로그인 — Supabase 연동 시에만 노출)
+
+    @ViewBuilder
+    private var accountSection: some View {
+        if SupabaseConfig.isConfigured {
+            settingsSection(eyebrow: "계정", title: "로그인") {
+                if auth.isLoggedIn {
+                    settingsRow(icon: "checkmark.seal.fill",
+                                iconBg: Color(hex: 0xDCEFE6), iconFg: Color(hex: 0x2E7A5C)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Apple로 로그인됨")
+                                .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                            Text("기기를 바꿔도 내 글·모임이 유지돼요")
+                                .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                        }
+                    }
+                    .accessibilityLabel("Apple로 로그인됨")
+
+                    Divider().overlay(AppColors.line).padding(.leading, 62)
+
+                    Button { Task { await auth.signOut() } } label: {
+                        settingsRow(icon: "rectangle.portrait.and.arrow.right",
+                                    iconBg: Color(hex: 0xEFF1F4), iconFg: AppColors.ink3, showChevron: true) {
+                            Text("로그아웃")
+                                .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider().overlay(AppColors.line).padding(.leading, 62)
+
+                    Button { showDeleteAccount = true } label: {
+                        settingsRow(icon: "trash",
+                                    iconBg: Color(hex: 0xFBE9E7), iconFg: AppColors.danger, showChevron: true) {
+                            Text("계정 삭제")
+                                .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.danger)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("계정 삭제")
+                } else {
+                    VStack(alignment: .leading, spacing: Spacing.s3) {
+                        Text("로그인하면 기기를 바꿔도 내 글·모임이 유지되고, 본인 글만 수정·삭제할 수 있어요. 크루는 로그인 없이도 익명으로 참여할 수 있어요.")
+                            .font(.system(size: 12.5)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        AppleSignInButton { ok in
+                            authAlert = ok ? "로그인했어요 🤍" : "로그인에 실패했어요. 잠시 후 다시 시도해 주세요."
+                        }
+                    }
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.vertical, Spacing.s3)
+                }
+            }
         }
     }
 

@@ -19,6 +19,7 @@ struct OnboardingView: View {
 
     // 현재 단계 (0 스플래시 → 4 프리퍼미션)
     @State private var step: Int = 0
+    @State private var showLogin = false
 
     // 2단계: 기록 밀도
     @State private var density: RecordDensity? = nil
@@ -168,7 +169,7 @@ struct OnboardingView: View {
                 }
 
                 Button {
-                    onComplete()
+                    if SupabaseConfig.isConfigured { showLogin = true } else { onComplete() }
                 } label: {
                     Text("이미 계정이 있어요")
                         .font(AppFont.subhead)
@@ -177,6 +178,10 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.97))
                 .accessibilityLabel("이미 계정이 있어요 — 로그인")
+                .sheet(isPresented: $showLogin) {
+                    OnboardingLoginSheet(onDone: { onComplete() })
+                        .presentationDetents([.height(320)])
+                }
             }
             .padding(.bottom, Spacing.s8)
         }

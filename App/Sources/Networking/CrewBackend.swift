@@ -30,17 +30,23 @@ enum CrewBackend {
     /// 크루 자동 오픈 목표 인원(동네별).
     static let openThreshold = 30
 
-    private static func request(_ path: String, method: String) -> URLRequest? {
+    private static func request(_ path: String, method: String) async -> URLRequest? {
         guard let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let url = URL(string: "\(base)\(path)") else { return nil }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(SupabaseConfig.deviceID, forHTTPHeaderField: "x-device-id")
         return req
+    }
+
+    /// PostgREST Authorization Bearer — 로그인 세션이 있으면 user access token, 없으면 anon key.
+    private static func authBearer() async -> String {
+        if let t = await AuthStore.shared.validAccessToken() { return t }
+        return SupabaseConfig.anonKey ?? ""
     }
 
     // 서버 전송 전 길이 상한(스팸·대용량 페이로드 방어). 무료 RLS(using true) 보강용.
@@ -50,7 +56,7 @@ enum CrewBackend {
     /// 동네 대기 신청(중복은 병합). 성공 true.
     @discardableResult
     static func joinWaitlist(hood: String) async -> Bool {
-        guard SupabaseConfig.isConfigured, var req = request("/rest/v1/crew_waitlist", method: "POST") else { return false }
+        guard SupabaseConfig.isConfigured, var req = await request("/rest/v1/crew_waitlist", method: "POST") else { return false }
         req.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "device_id": SupabaseConfig.deviceID,
@@ -96,7 +102,7 @@ enum CrewBackend {
         req.httpMethod = "POST"
         req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["hood": hood])
         _ = try? await URLSession.shared.data(for: req)
@@ -105,7 +111,7 @@ enum CrewBackend {
     /// APNs 푸시 토큰 등록/갱신(기기당 1행 upsert). 실시간 오픈 푸시용.
     static func uploadPushToken(_ apnsToken: String, hood: String?) async {
         guard SupabaseConfig.isConfigured, !apnsToken.isEmpty,
-              var req = request("/rest/v1/crew_push_token?on_conflict=device_id", method: "POST") else { return }
+              var req = await request("/rest/v1/crew_push_token?on_conflict=device_id", method: "POST") else { return }
         req.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
         var body: [String: Any] = [
             "device_id": SupabaseConfig.deviceID,
@@ -119,7 +125,7 @@ enum CrewBackend {
 
     /// 동네별 신청 수(RPC). 실패/미구성 시 nil.
     static func waitlistCount(hood: String) async -> Int? {
-        guard SupabaseConfig.isConfigured, var req = request("/rest/v1/rpc/crew_waitlist_count", method: "POST") else { return nil }
+        guard SupabaseConfig.isConfigured, var req = await request("/rest/v1/rpc/crew_waitlist_count", method: "POST") else { return nil }
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_hood": hood])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
@@ -154,7 +160,7 @@ enum CrewBackend {
         var req = URLRequest(url: url)
         req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([CrewPostDTO].self, from: data) else { return nil }
@@ -178,7 +184,7 @@ enum CrewBackend {
     @discardableResult
     static func createPost(hood: String, category: String, title: String, body: String, authorName: String) async -> Bool {
         guard SupabaseConfig.isConfigured, !hood.isEmpty, hood != "우리 동네",
-              var req = request("/rest/v1/crew_post", method: "POST") else { return false }
+              var req = await request("/rest/v1/crew_post", method: "POST") else { return false }
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "category": category, "author": SupabaseConfig.deviceID,
@@ -211,7 +217,7 @@ enum CrewBackend {
         guard let url = URL(string: "\(base)/rest/v1/crew_meetup?hood=eq.\(h)&select=\(select)&order=created_at.desc&limit=50") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([CrewMeetupDTO].self, from: data) else { return nil }
@@ -236,7 +242,7 @@ enum CrewBackend {
     static func createMeetup(hood: String, place: String, when: String, capacity: Int,
                              meetupType: String, hostName: String) async -> String? {
         guard SupabaseConfig.isConfigured, !hood.isEmpty, hood != "우리 동네",
-              var req = request("/rest/v1/crew_meetup", method: "POST") else { return nil }
+              var req = await request("/rest/v1/crew_meetup", method: "POST") else { return nil }
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "title": cap(place, Cap.place), "place": cap(place, Cap.place), "when_text": cap(when, Cap.place),
@@ -255,7 +261,7 @@ enum CrewBackend {
     @discardableResult
     static func joinMeetup(meetupId: String) async -> Bool {
         guard SupabaseConfig.isConfigured,
-              var req = request("/rest/v1/crew_meetup_join?on_conflict=meetup_id,device_id", method: "POST") else { return false }
+              var req = await request("/rest/v1/crew_meetup_join?on_conflict=meetup_id,device_id", method: "POST") else { return false }
         req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "meetup_id": meetupId, "device_id": SupabaseConfig.deviceID,
@@ -284,7 +290,7 @@ enum CrewBackend {
         guard let url = URL(string: "\(base)/rest/v1/crew_group?hood=eq.\(h)&select=\(select)&order=created_at.desc&limit=50") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([CrewGroupDTO].self, from: data) else { return nil }
@@ -305,7 +311,7 @@ enum CrewBackend {
     static func createGroup(hood: String, name: String, ageRange: String,
                             interestTags: [String], creatorName: String) async -> String? {
         guard SupabaseConfig.isConfigured, !hood.isEmpty, hood != "우리 동네",
-              var req = request("/rest/v1/crew_group", method: "POST") else { return nil }
+              var req = await request("/rest/v1/crew_group", method: "POST") else { return nil }
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "name": cap(name, Cap.title), "age_range": cap(ageRange, Cap.tag),
@@ -325,7 +331,7 @@ enum CrewBackend {
     static func setGroupMembership(groupId: String, join: Bool) async -> Bool {
         guard SupabaseConfig.isConfigured else { return false }
         if join {
-            guard var req = request("/rest/v1/crew_group_member?on_conflict=group_id,device_id", method: "POST") else { return false }
+            guard var req = await request("/rest/v1/crew_group_member?on_conflict=group_id,device_id", method: "POST") else { return false }
             req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
             req.httpBody = try? JSONSerialization.data(withJSONObject: [
                 "group_id": groupId, "device_id": SupabaseConfig.deviceID,
@@ -337,7 +343,7 @@ enum CrewBackend {
             let dev = SupabaseConfig.deviceID
             guard let d = dev.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
                   let g = groupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
-                  var req = request("/rest/v1/crew_group_member?group_id=eq.\(g)&device_id=eq.\(d)", method: "DELETE") else { return false }
+                  var req = await request("/rest/v1/crew_group_member?group_id=eq.\(g)&device_id=eq.\(d)", method: "DELETE") else { return false }
             req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
             guard let (_, resp) = try? await URLSession.shared.data(for: req),
                   let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
@@ -362,7 +368,7 @@ enum CrewBackend {
         guard let url = URL(string: "\(base)/rest/v1/crew_meetup_message?meetup_id=eq.\(m)&select=\(select)&order=created_at.asc&limit=300") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([CrewMessageDTO].self, from: data) else { return nil }
@@ -384,7 +390,7 @@ enum CrewBackend {
     static func sendMessage(meetupId: String, body: String, authorName: String) async -> Bool {
         let t = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard SupabaseConfig.isConfigured, !t.isEmpty,
-              var req = request("/rest/v1/crew_meetup_message", method: "POST") else { return false }
+              var req = await request("/rest/v1/crew_meetup_message", method: "POST") else { return false }
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "meetup_id": meetupId, "device_id": SupabaseConfig.deviceID,
@@ -406,7 +412,7 @@ enum CrewBackend {
         guard let url = URL(string: "\(base)/rest/v1/crew_post_reply?post_id=eq.\(p)&select=id,body&order=created_at.asc&limit=300") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
-        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let dtos = try? JSONDecoder().decode([CrewReplyDTO].self, from: data) else { return nil }
@@ -418,7 +424,7 @@ enum CrewBackend {
     static func addReply(postId: String, body: String, authorName: String) async -> Bool {
         let t = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard SupabaseConfig.isConfigured, !t.isEmpty,
-              var req = request("/rest/v1/crew_post_reply", method: "POST") else { return false }
+              var req = await request("/rest/v1/crew_post_reply", method: "POST") else { return false }
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "post_id": postId, "author": SupabaseConfig.deviceID,
@@ -434,7 +440,7 @@ enum CrewBackend {
     static func setPostLike(postId: String, like: Bool) async -> Bool {
         guard SupabaseConfig.isConfigured else { return false }
         if like {
-            guard var req = request("/rest/v1/crew_post_like?on_conflict=post_id,device_id", method: "POST") else { return false }
+            guard var req = await request("/rest/v1/crew_post_like?on_conflict=post_id,device_id", method: "POST") else { return false }
             req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
             req.httpBody = try? JSONSerialization.data(withJSONObject: [
                 "post_id": postId, "device_id": SupabaseConfig.deviceID,
@@ -446,7 +452,7 @@ enum CrewBackend {
             let dev = SupabaseConfig.deviceID
             guard let d = dev.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
                   let p = postId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
-                  var req = request("/rest/v1/crew_post_like?post_id=eq.\(p)&device_id=eq.\(d)", method: "DELETE") else { return false }
+                  var req = await request("/rest/v1/crew_post_like?post_id=eq.\(p)&device_id=eq.\(d)", method: "DELETE") else { return false }
             req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
             guard let (_, resp) = try? await URLSession.shared.data(for: req),
                   let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
@@ -461,7 +467,7 @@ enum CrewBackend {
         guard SupabaseConfig.isConfigured,
               let d = dev.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
               let m = meetupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
-              var req = request("/rest/v1/crew_meetup_join?meetup_id=eq.\(m)&device_id=eq.\(d)", method: "DELETE") else { return false }
+              var req = await request("/rest/v1/crew_meetup_join?meetup_id=eq.\(m)&device_id=eq.\(d)", method: "DELETE") else { return false }
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
