@@ -42,12 +42,14 @@ enum PriorityEngine {
     ///    항목이 있으면, 가장 가까운 것 → `.vaccine` (dDay = 남은 일수, 당일=0).
     /// 2. (1 없음) `subsidies`가 비어있지 않으면 첫 항목 → `.subsidy` (dDay = nil).
     /// 3. (2 없음) `hasRecentRecord`가 false이면 → `.recordNudge`.
-    /// 4. 그 외 → `.memory` ("1년 전 오늘").
+    /// 4. (실제 1년 전 기록이 있을 때만) → `.memory` ("1년 전 오늘"). 없으면 거짓 추억 대신 격려.
     ///
     /// - Parameters:
     ///   - vaccines: 아이의 전체 예방접종 레코드 목록.
     ///   - subsidies: 해당 아이 연령에 적용 가능한 정부지원금 목록.
     ///   - hasRecentRecord: 최근 기록 존재 여부 (호출 측에서 판단 기준 정의).
+    ///   - yearAgoMemoryId: 약 1년 전(±며칠) 실제 기록의 id. 있으면 그 기록으로 '추억' 카드를
+    ///     띄운다. nil이면 "1년 전 오늘"을 거짓으로 내세우지 않고 중립 격려 카드로 대체.
     ///   - now: 현재 시각 (테스트 주입 가능).
     ///   - calendar: 날짜 계산에 사용할 Calendar (기본 `.current`).
     /// - Returns: 선정된 `PriorityItem`, 또는 nil (반환될 수 없으나 시그니처 유연성 보존).
@@ -55,6 +57,7 @@ enum PriorityEngine {
         vaccines: [VaccineRecord],
         subsidies: [SubsidyInfo],
         hasRecentRecord: Bool,
+        yearAgoMemoryId: String? = nil,
         now: Date,
         calendar: Calendar = .current
     ) -> PriorityItem? {
@@ -91,11 +94,22 @@ enum PriorityEngine {
             )
         }
 
-        // ── 규칙 4: 추억 (else) ───────────────────────────────────────────────
+        // ── 규칙 4: 추억 — 실제 1년 전 기록이 있을 때만 ───────────────────────
+        if let memId = yearAgoMemoryId {
+            return PriorityItem(
+                kind: .memory,
+                title: "1년 전 오늘을 기억하세요?",
+                subtitle: "그날의 순간을 다시 만나보세요",
+                dDay: nil,
+                referenceId: memId
+            )
+        }
+
+        // ── 규칙 5: 그 외 — 거짓 '추억' 대신 따뜻한 격려(기록 유도) ─────────────
         return PriorityItem(
-            kind: .memory,
-            title: "1년 전 오늘을 기억하세요?",
-            subtitle: "소중한 순간이 기다리고 있어요",
+            kind: .recordNudge,
+            title: "오늘도 기록을 이어가요",
+            subtitle: "작은 순간도 쌓이면 1년 뒤 소중한 추억이 돼요",
             dDay: nil
         )
     }

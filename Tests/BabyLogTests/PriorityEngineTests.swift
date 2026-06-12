@@ -240,19 +240,39 @@ final class PriorityEngineTests: XCTestCase {
 
     // MARK: - 전부 충족(최근 기록 있음) → .memory [주의 §4]
 
-    func test_noVaccine_noSubsidy_hasRecentRecord_returnsMemory() {
+    func test_noVaccine_noSubsidy_hasRecentRecord_withYearAgoMemory_returnsMemory() {
         let now = d("2026-06-10")
 
         let result = PriorityEngine.topPriority(
             vaccines: [],
             subsidies: [],
             hasRecentRecord: true,
+            yearAgoMemoryId: "diary-123",
             now: now,
             calendar: seoulCalendar
         )
 
         XCTAssertEqual(result?.kind, .memory,
-            "접종·지원금 없고 최근 기록이 있으면 .memory를 반환해야 한다")
+            "접종·지원금 없고 1년 전 실제 기록이 있으면 .memory를 반환해야 한다")
+        XCTAssertEqual(result?.referenceId, "diary-123",
+            ".memory 카드는 해당 기록 id를 참조로 가져야 한다")
+    }
+
+    /// 1년 전 실제 기록이 없으면 거짓 '추억' 대신 격려(.recordNudge)로 대체한다.
+    func test_noVaccine_noSubsidy_hasRecentRecord_noYearAgoMemory_returnsNudge() {
+        let now = d("2026-06-10")
+
+        let result = PriorityEngine.topPriority(
+            vaccines: [],
+            subsidies: [],
+            hasRecentRecord: true,
+            yearAgoMemoryId: nil,
+            now: now,
+            calendar: seoulCalendar
+        )
+
+        XCTAssertEqual(result?.kind, .recordNudge,
+            "1년 전 실제 기록이 없으면 거짓 .memory 대신 .recordNudge를 반환해야 한다")
     }
 
     // MARK: - 우선순위: vaccine > subsidy

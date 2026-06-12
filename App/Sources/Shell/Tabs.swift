@@ -276,14 +276,26 @@ struct HomeTab: View {
     }
 
     private var priorityItem: PriorityItem? {
+        let cid = selectedChild?.id
         let hasToday: Bool = {
-            guard let cid = selectedChild?.id else { return false }
+            guard let cid else { return false }
             return store.diaryEntries(for: cid).contains { Calendar.current.isDateInToday($0.date) }
+        }()
+        // 약 1년 전(±3일) 실제 기록이 있을 때만 '추억' 카드 — 없으면 거짓 추억을 띄우지 않는다.
+        let yearAgoId: String? = {
+            guard let cid else { return nil }
+            let cal = Calendar.current
+            guard let target = cal.date(byAdding: .year, value: -1, to: Date()) else { return nil }
+            return store.diaryEntries(for: cid)
+                .filter { abs(cal.dateComponents([.day], from: $0.date, to: target).day ?? 999) <= 3 }
+                .min { abs($0.date.timeIntervalSince(target)) < abs($1.date.timeIntervalSince(target)) }?
+                .id.uuidString
         }()
         return PriorityEngine.topPriority(
             vaccines: upcomingVaccines,
             subsidies: [],
             hasRecentRecord: hasToday,
+            yearAgoMemoryId: yearAgoId,
             now: Date()
         )
     }
