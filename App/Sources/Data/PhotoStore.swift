@@ -71,7 +71,21 @@ enum PhotoStore {
     /// 사진 디렉토리(공개 — 백업 서비스용).
     static var photosDirectory: URL { directory }
 
-    /// photos 디렉토리의 모든 파일을 파일명→원본 데이터로 반환(전체 백업용).
+    /// photos 디렉토리의 모든 파일 URL(데이터 미로딩 — 스트리밍 백업용).
+    /// 안전한 단순 파일명만 포함.
+    static func allPhotoFileURLs() -> [URL] {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: directory.path) else { return [] }
+        return names.filter { isSafeFilename($0) }.map { directory.appendingPathComponent($0) }
+    }
+
+    /// 복원 시 사진을 쓸 안전한 대상 URL(경로 탈출 차단). 안전하지 않은 이름은 nil.
+    static func safeRestoreURL(for name: String) -> URL? {
+        guard isSafeFilename(name) else { return nil }
+        return directory.appendingPathComponent(name)
+    }
+
+    /// photos 디렉토리의 모든 파일을 파일명→원본 데이터로 반환(레거시 백업 포맷 폴백용).
     static func allPhotoData() -> [String: Data] {
         let fm = FileManager.default
         guard let names = try? fm.contentsOfDirectory(atPath: directory.path) else { return [:] }

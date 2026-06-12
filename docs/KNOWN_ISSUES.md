@@ -15,7 +15,7 @@
 
 ## B. 제품 결정/대규모 작업 필요
 7. ✅ **(해결, 2026-06-13)** 마켓 1:1 채팅 공개방 문제 — `(item_id, buyer)` 스레드 + 참가자 전용 RLS(해당 구매자/그 매물 판매자만)로 재설계 완료. 판매자 문의 스레드 목록(MarketThreadListSheet) UI 추가. 메시지 사용자 삭제 불가(증거 보존), 운영자 service_role 전체 열람(→ `docs/OPERATOR_LEGAL.md`). **⚠️ `schema_market.sql` 재실행 필요**(buyer 컬럼+새 RLS) — 미배포 시 라이브 마켓 채팅 깨짐.
-8. **BackupService 메모리** — 전체 사진/영상을 메인스레드에서 RAM으로 로드 후 plist 인코딩 → 사진 많은 사용자(수 GB)에서 워치독 킬. 스트리밍 zip(파일 복사 후 압축)으로 전환 필요.
+8. ✅ **(해결, 2026-06-13)** BackupService 메모리 — 전체 사진을 RAM에 올려 plist 인코딩하던 것을 **FileHandle 청크 스트리밍(파일→파일, 피크 ~1MB)** 으로 교체. 백업/복원 모두 백그라운드 Task로 오프로드(메인스레드 워치독도 방지). 자체 프레임 포맷(magic "BLBK"), 구포맷(plist)은 자동 감지 폴백. 라운드트립·손상파일·레거시 테스트 통과.
 9. **App Group 미활성** — 위젯↔앱 데이터 공유 entitlement 주석 처리(`project.yml`) + 그룹ID가 레거시 `group.com.babylog.app`. 유료 계정에서 켜고 그룹ID 확정 필요(켜기 전엔 위젯이 정직한 빈 상태 — 이미 처리됨).
 10. **Dynamic Type 전면 미지원** — `AppFont`가 모두 고정 size. 접근성 원칙상 text style/relativeTo 마이그레이션 필요(점진).
 

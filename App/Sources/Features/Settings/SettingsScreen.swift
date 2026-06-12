@@ -117,7 +117,7 @@ struct SettingsScreen: View {
                     // 어떤 경로(성공·실패·예외)에서도 버튼이 영구 비활성화되지 않도록 항상 리셋
                     defer { backupBusy = false }
                     await Task.yield()   // SwiftUI가 backupBusy=true 상태를 먼저 렌더
-                    let ok = BackupService.restore(from: url, into: store)
+                    let ok = await BackupService.restore(from: url, into: store)
                     backupAlert = ok ? "백업에서 복원했어요. 사진과 기록이 돌아왔습니다 🤍" : "이 파일을 복원하지 못했어요. 올바른 백업 파일인지 확인해 주세요."
                 }
             case .failure:
@@ -576,14 +576,15 @@ struct SettingsScreen: View {
 
     private func handleBackupExport() {
         backupBusy = true
-        if let url = BackupService.makeArchive(store) {
-            exportURL = url
-            lastBackupAt = Date().timeIntervalSince1970
-            backupBusy = false
-            showShareSheet = true
-        } else {
-            backupBusy = false
-            showExportError = true
+        Task { @MainActor in
+            defer { backupBusy = false }
+            if let url = await BackupService.makeArchive(store) {
+                exportURL = url
+                lastBackupAt = Date().timeIntervalSince1970
+                showShareSheet = true
+            } else {
+                showExportError = true
+            }
         }
     }
 
