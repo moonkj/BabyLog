@@ -262,6 +262,86 @@ enum CrewBackend {
         return true
     }
 
+    // MARK: - 그룹(동네 공유)
+
+    private struct CrewGroupDTO: Decodable {
+        let id: String
+        let name: String?
+        let age_range: String?
+        let interest_tags: [String]?
+        let crew_group_member: [CrewPostDTO.CountRow]?
+    }
+
+    /// 동네 그룹 최신순 조회. 미구성/실패 시 nil(→ 로컬 폴백).
+    static func fetchGroups(hood: String) async -> [CrewGroup]? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              !hood.isEmpty, hood != "우리 동네",
+              let h = hood.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let select = "id,name,age_range,interest_tags,crew_group_member(count)"
+        guard let url = URL(string: "\(base)/rest/v1/crew_group?hood=eq.\(h)&select=\(select)&order=created_at.desc&limit=50") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dtos = try? JSONDecoder().decode([CrewGroupDTO].self, from: data) else { return nil }
+        return dtos.map { d in
+            CrewGroup(
+                id: d.id,
+                name: d.name ?? "이웃 그룹",
+                memberCount: d.crew_group_member?.first?.count ?? 0,
+                distanceText: "우리 동네",
+                ageRange: (d.age_range?.isEmpty == false ? d.age_range! : "전체"),
+                interestTags: d.interest_tags ?? []
+            )
+        }
+    }
+
+    /// 동네 그룹 생성(+개설자 자동 가입). 새 그룹 id 반환(실패 시 nil).
+    @discardableResult
+    static func createGroup(hood: String, name: String, ageRange: String,
+                            interestTags: [String], creatorName: String) async -> String? {
+        guard SupabaseConfig.isConfigured, !hood.isEmpty, hood != "우리 동네",
+              var req = request("/rest/v1/crew_group", method: "POST") else { return nil }
+        req.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "hood": hood, "name": name, "age_range": ageRange,
+            "interest_tags": interestTags, "creator": SupabaseConfig.deviceID,
+            "creator_name": creatorName,
+        ])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([CrewGroupDTO].self, from: data),
+              let id = rows.first?.id else { return nil }
+        await setGroupMembership(groupId: id, join: true)
+        return id
+    }
+
+    /// 그룹 가입/탈퇴(crew_group_member). 성공 true.
+    @discardableResult
+    static func setGroupMembership(groupId: String, join: Bool) async -> Bool {
+        guard SupabaseConfig.isConfigured else { return false }
+        if join {
+            guard var req = request("/rest/v1/crew_group_member?on_conflict=group_id,device_id", method: "POST") else { return false }
+            req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: [
+                "group_id": groupId, "device_id": SupabaseConfig.deviceID,
+            ])
+            guard let (_, resp) = try? await URLSession.shared.data(for: req),
+                  let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+            return true
+        } else {
+            let dev = SupabaseConfig.deviceID
+            guard let d = dev.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+                  let g = groupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+                  var req = request("/rest/v1/crew_group_member?group_id=eq.\(g)&device_id=eq.\(d)", method: "DELETE") else { return false }
+            req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+            guard let (_, resp) = try? await URLSession.shared.data(for: req),
+                  let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+            return true
+        }
+    }
+
     private static func relativeTime(_ iso: String?) -> String {
         guard let iso else { return "방금" }
         let f = ISO8601DateFormatter()

@@ -193,6 +193,8 @@ private struct CrewActiveContent: View {
     /// 서버 공유(미구성/미로드 시 nil → 로컬 폴백)
     @State private var sharedPosts: [CrewPost]? = nil
     @State private var sharedMeetups: [CrewMeetup]? = nil
+    @State private var sharedGroups: [CrewGroup]? = nil
+    @State private var showCreateGroup = false
     /// 부모(CrewScreen)에서 모임 생성 후 증가 → 재로드 트리거
     var refreshTick: Int = 0
 
@@ -200,11 +202,13 @@ private struct CrewActiveContent: View {
     private var hood: String { location.localityName ?? "우리 동네" }
     private var posts: [CrewPost] { sharedPosts ?? store.crewPosts }
     private var meetups: [CrewMeetup] { sharedMeetups ?? store.crews }
+    private var groups: [CrewGroup] { sharedGroups ?? crewGroups }
 
     private func loadCrew() async {
         guard SupabaseConfig.isConfigured else { return }
         if let p = await CrewBackend.fetchPosts(hood: hood) { sharedPosts = p }
         if let m = await CrewBackend.fetchMeetups(hood: hood) { sharedMeetups = m }
+        if let g = await CrewBackend.fetchGroups(hood: hood) { sharedGroups = g }
     }
 
     var body: some View {
@@ -231,7 +235,8 @@ private struct CrewActiveContent: View {
             CrewMeetupListScreen(meetups: meetups).environmentObject(store)
         }
         .sheet(isPresented: $showAllGroups) {
-            CrewGroupListScreen().environmentObject(store)
+            CrewGroupListScreen(groups: groups, onToggle: { id, join in syncGroupJoin(id, join: join) })
+                .environmentObject(store)
         }
         .sheet(isPresented: $showAllPosts) {
             CrewPostListScreen(posts: posts).environmentObject(store)
@@ -270,19 +275,62 @@ private struct CrewActiveContent: View {
     private var crewSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             BLSectionHead(
-                eyebrow: "반경 1km",
+                eyebrow: sharedGroups != nil ? "우리 동네" : "반경 1km",
                 title: "비슷한 또래 크루",
-                action: crewGroups.count > sectionLimit ? "전체보기" : nil,
-                onAction: crewGroups.count > sectionLimit ? { Haptics.light(); showAllGroups = true } : nil
+                action: groups.count > sectionLimit ? "전체보기" : nil,
+                onAction: groups.count > sectionLimit ? { Haptics.light(); showAllGroups = true } : nil
             )
             .padding(.horizontal, Spacing.s5)
 
-            ForEach(crewGroups.prefix(sectionLimit)) { group in
-                CrewGroupCard(group: group)
-                    .padding(.horizontal, Spacing.s5)
+            if groups.isEmpty {
+                emptyGroupNotice
+            } else {
+                ForEach(groups.prefix(sectionLimit)) { group in
+                    CrewGroupCard(group: group, onToggle: { join in syncGroupJoin(group.id, join: join) })
+                        .padding(.horizontal, Spacing.s5)
+                }
+            }
+
+            // 그룹 개설 (서버 연동 시에만 — 로컬 목업 모드에선 숨김)
+            if SupabaseConfig.isConfigured {
+                Button { Haptics.light(); showCreateGroup = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill").font(.system(size: 15, weight: .semibold))
+                        Text("우리 또래 그룹 만들기").font(.system(size: 14, weight: .bold))
+                    }
+                    .foregroundStyle(AppColors.primary)
+                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .background(AppColors.primarySoft, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.98))
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, 2)
             }
         }
         .padding(.bottom, Spacing.s6)
+        .sheet(isPresented: $showCreateGroup) {
+            CrewGroupCreateSheet().presentationDetents([.large])
+        }
+        .onChange(of: showCreateGroup) { _, open in if !open { Task { await loadCrew() } } }
+    }
+
+    private var emptyGroupNotice: some View {
+        Text("아직 우리 동네 또래 그룹이 없어요.\n첫 그룹을 만들어 이웃과 이어보세요.")
+            .font(AppFont.caption)
+            .foregroundStyle(AppColors.ink3)
+            .lineSpacing(3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Spacing.s5)
+            .padding(.vertical, Spacing.s2)
+    }
+
+    /// 그룹 가입 토글을 서버에도 반영(서버 그룹만; 미구성/목업은 setGroupMembership가 무시).
+    private func syncGroupJoin(_ groupId: String, join: Bool) {
+        guard SupabaseConfig.isConfigured, sharedGroups != nil else { return }
+        Task {
+            await CrewBackend.setGroupMembership(groupId: groupId, join: join)
+            if let g = await CrewBackend.fetchGroups(hood: hood) { sharedGroups = g }
+        }
     }
 
     // MARK: 동네 게시판
@@ -372,12 +420,15 @@ private struct CrewMeetupListScreen: View {
 private struct CrewGroupListScreen: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    var groups: [CrewGroup]
+    var onToggle: (String, Bool) -> Void = { _, _ in }
     var body: some View {
         NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: Spacing.s3) {
-                    ForEach(crewGroups) { group in
-                        CrewGroupCard(group: group).padding(.horizontal, Spacing.s5)
+                    ForEach(groups) { group in
+                        CrewGroupCard(group: group, onToggle: { join in onToggle(group.id, join) })
+                            .padding(.horizontal, Spacing.s5)
                     }
                 }
                 .padding(.vertical, Spacing.s4)
@@ -511,8 +562,10 @@ private struct CrewMeetupCard: View {
 private struct CrewGroupCard: View {
     @EnvironmentObject private var store: AppStore
     let group: CrewGroup
+    var onToggle: (Bool) -> Void = { _ in }
     private var isJoined: Bool { store.isJoinedGroup(group.id) }
-    private var memberCount: Int { group.memberCount + (isJoined ? 1 : 0) }
+    // 서버 그룹: 멤버 수는 서버 카운트가 단일 출처(가입 시 재조회로 갱신). 중복 +1 금지.
+    private var memberCount: Int { max(group.memberCount, isJoined ? 1 : 0) }
 
     var body: some View {
         BLCard(padding: 14, flat: true) {
@@ -557,7 +610,9 @@ private struct CrewGroupCard: View {
                 // 가입 토글
                 Button {
                     Haptics.selection()
+                    let willJoin = !isJoined
                     store.toggleJoinGroup(group.id)
+                    onToggle(willJoin)
                 } label: {
                     Text(isJoined ? "가입중" : "가입")
                         .font(.system(size: 13, weight: .bold))
