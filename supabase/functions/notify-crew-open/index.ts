@@ -6,7 +6,7 @@
 //   APNS_KEY       : .p8 파일 내용(-----BEGIN PRIVATE KEY----- ... 전체)
 //   APNS_KEY_ID    : APNs 키 ID (10자)
 //   APNS_TEAM_ID   : Apple 팀 ID (예: QN975MTM7H)
-//   APNS_TOPIC     : 앱 번들ID (예: com.babylog.app)
+//   APNS_TOPIC     : 앱 번들ID (예: com.vibelab.babylog)
 //   APNS_HOST      : api.sandbox.push.apple.com (개발) | api.push.apple.com (배포)
 //   (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 는 자동 제공)
 

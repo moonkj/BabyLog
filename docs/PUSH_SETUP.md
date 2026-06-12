@@ -10,7 +10,7 @@
 1. developer.apple.com → Certificates, Identifiers & Profiles → **Keys** → **+**
 2. 이름 입력 + **Apple Push Notifications service (APNs)** 체크 → Continue → Register
 3. **.p8 파일 다운로드**(한 번만!) + **Key ID**(10자) 메모. **Team ID** = `QN975MTM7H`
-4. **Identifiers → `com.babylog.app`** → **Push Notifications** 체크 → Save
+4. **Identifiers → `com.vibelab.babylog`** → **Push Notifications** 체크 → Save
 
 ## 2. 앱 Push 역량 켜기
 - `App/Resources/BabyLog.entitlements` 에 `aps-environment` 있음(생성됨).
@@ -24,7 +24,7 @@
 1. SQL Editor에 `supabase/schema_push.sql` 실행(crew_push_token / crew_hood_status).
 2. **Edge Functions → notify-crew-open** 배포:
    - `supabase functions deploy notify-crew-open` (Supabase CLI) 또는 대시보드에서 함수 생성 후 `supabase/functions/notify-crew-open/index.ts` 붙여넣기.
-   - **Secrets** 설정: `APNS_KEY`(.p8 내용 전체), `APNS_KEY_ID`, `APNS_TEAM_ID=QN975MTM7H`, `APNS_TOPIC=com.babylog.app`, `APNS_HOST=api.sandbox.push.apple.com`(개발) 또는 `api.push.apple.com`(배포)
+   - **Secrets** 설정: `APNS_KEY`(.p8 내용 전체), `APNS_KEY_ID`, `APNS_TEAM_ID=QN975MTM7H`, `APNS_TOPIC=com.vibelab.babylog`, `APNS_HOST=api.sandbox.push.apple.com`(개발) 또는 `api.push.apple.com`(배포)
 3. **Database → Webhooks → Create**:
    - Table: `crew_waitlist`, Events: **Insert**
    - Type: **Supabase Edge Functions** → `notify-crew-open`

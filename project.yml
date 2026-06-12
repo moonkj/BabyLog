@@ -1,6 +1,6 @@
 name: BabyLog
 options:
-  bundleIdPrefix: com.babylog
+  bundleIdPrefix: com.vibelab
   createIntermediateGroups: true
   deploymentTarget:
     iOS: "17.0"
@@ -29,13 +29,13 @@ targets:
         embed: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.babylog.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.vibelab.babylog
         INFOPLIST_FILE: App/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # 실시간 크루 오픈 푸시(APNs) — Xcode에서 Push Notifications 역량 한 번 켜고(프로파일 생성) 아래 주석 해제:
-        # CODE_SIGN_ENTITLEMENTS: App/Resources/BabyLog.push.entitlements
+        # 실시간 크루 오픈 푸시(APNs) — 고유 번들ID(com.vibelab.babylog) + 유료 계정으로 자동 프로비저닝
+        CODE_SIGN_ENTITLEMENTS: App/Resources/BabyLog.push.entitlements
         # ── 유료 계정 연동 시 활성화 ───────────────────────────────────────
         # App Group(위젯 실데이터) / iCloud·CloudKit(가족 백업)은 유료 개발자 계정 +
         # 포털 Capability 등록(App Group: group.com.babylog.app, iCloud 컨테이너: iCloud.com.babylog.app) 필요.
@@ -52,7 +52,7 @@ targets:
       - Widget
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.babylog.app.widget
+        PRODUCT_BUNDLE_IDENTIFIER: com.vibelab.babylog.widget
         INFOPLIST_FILE: Widget/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         # App Group 활성화 시 주석 해제 (App 타겟과 동일 그룹)
@@ -67,7 +67,7 @@ targets:
       - target: BabyLog
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.babylog.app.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.vibelab.babylog.tests
         GENERATE_INFOPLIST_FILE: YES
 schemes:
   BabyLog:
