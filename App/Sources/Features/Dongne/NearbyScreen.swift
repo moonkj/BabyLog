@@ -170,6 +170,7 @@ final class NearbyLocationProvider: NSObject, ObservableObject, CLLocationManage
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let c = locations.last?.coordinate else { return }
         coordinate = c
+        denied = false
         manager.stopUpdatingLocation()   // 첫 양호 fix 후 정지(배터리)
     }
 
@@ -249,6 +250,14 @@ struct NearbyScreen: View {
             await loadHospitals()
         }
         .onAppear { locationProvider.start() }
+        // 위치 획득 타임아웃(8초) — 끝내 못 잡으면(위치서비스 꺼짐 등) 폴백 지역으로라도 검색 + 안내
+        .task {
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            if locationProvider.coordinate == nil && !locationProvider.denied {
+                locationProvider.denied = true
+                await loadHospitals()
+            }
+        }
         // 현재 위치가 잡히면 그 좌표로 다시 검색 + 지도 이동
         .onChange(of: locationProvider.coordinate?.latitude) { _, lat in
             guard lat != nil else { return }
@@ -265,6 +274,12 @@ struct NearbyScreen: View {
 
     private func loadHospitals() async {
         guard selectedCategory == .hospital else { return }
+        // 현재 위치 확보 전(권한 거부도 아님)이면 폴백(서울)으로 잘못 검색하지 않고 대기.
+        // GPS가 도착하면 onChange가 이 함수를 다시 호출 → 그때 실제 내 위치로 검색.
+        if locationProvider.coordinate == nil && !locationProvider.denied {
+            hospitalState = .loading
+            return
+        }
         hospitalState = .loading
         let openNow = activeFilters.contains("현재 영업중")
         do {
