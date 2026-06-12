@@ -4,7 +4,7 @@
 
 enum AppFeatures {
     /// 마켓(중고거래) 노출 여부.
-    /// 출시 빌드에선 false(숨김) — 코드는 완성돼 있으나 로그인·소유자 RLS·Storage 배포가
-    /// 준비된 뒤 true로 켜서 점진 개방한다. 무료 정책: 1인 1매물·30일 자동만료.
-    static let market = false
+    /// ON — schema_market.sql(테이블·RLS·Storage 버킷) 배포 후 개방. 익명(기기ID) 거래 가능,
+    /// 로그인 시 소유권이 계정으로 승계. 무료 정책: 1인 1매물·30일 자동만료.
+    static let market = true
 }
