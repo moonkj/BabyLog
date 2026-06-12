@@ -1,7 +1,20 @@
 import SwiftUI
+import UIKit
+
+// MARK: - AppDelegate (원격 푸시 토큰 — 실시간 크루 오픈 알림)
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ app: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+        Task { await CrewBackend.uploadPushToken(hex, hood: NearbyLocationProvider.shared.localityName) }
+    }
+    func application(_ app: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        // 푸시 미설정(개발 중 등) — 앱 흐름 영향 없음
+    }
+}
 
 @main
 struct BabyLogApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = AppStore(persistence: .appGroup())
 
     /// 상실 이벤트 → 임신 알림 자동 차단 구독 (민감영역, 앱 생존 동안 유지)
@@ -26,6 +39,8 @@ struct BabyLogApp: App {
     private func setupNotifications() async {
         let scheduler = UNPendingScheduler()
         guard await scheduler.requestAuthorization() else { return }
+        // 원격 푸시 등록(실시간 크루 오픈 알림). Push 역량 없으면 didFail로 조용히 무시.
+        await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
         let cal = Calendar.current
         guard let soon = cal.date(byAdding: .day, value: 7, to: Date()) else { return }
         let vax = VaccineRecord(id: UUID(), childId: UUID(), vaccineId: "DTaP 4차",

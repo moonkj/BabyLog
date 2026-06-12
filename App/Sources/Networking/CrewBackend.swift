@@ -93,6 +93,21 @@ enum CrewBackend {
         return count
     }
 
+    /// APNs 푸시 토큰 등록/갱신(기기당 1행 upsert). 실시간 오픈 푸시용.
+    static func uploadPushToken(_ apnsToken: String, hood: String?) async {
+        guard SupabaseConfig.isConfigured, !apnsToken.isEmpty,
+              var req = request("/rest/v1/crew_push_token?on_conflict=device_id", method: "POST") else { return }
+        req.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+        var body: [String: Any] = [
+            "device_id": SupabaseConfig.deviceID,
+            "apns_token": apnsToken,
+            "updated_at": ISO8601DateFormatter().string(from: Date()),
+        ]
+        if let hood, !hood.isEmpty, hood != "우리 동네" { body["hood"] = hood }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        _ = try? await URLSession.shared.data(for: req)
+    }
+
     /// 동네별 신청 수(RPC). 실패/미구성 시 nil.
     static func waitlistCount(hood: String) async -> Int? {
         guard SupabaseConfig.isConfigured, var req = request("/rest/v1/rpc/crew_waitlist_count", method: "POST") else { return nil }
