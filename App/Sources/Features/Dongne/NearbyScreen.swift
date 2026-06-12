@@ -96,6 +96,9 @@ private enum HospitalLoadState {
     case failed(Error)
 }
 
+/// 병원 카드 영업 상태 — 실제 상세조회 결과 기반.
+enum HospitalOpenState { case open, closed, checking, unknown }
+
 // MARK: - Synthetic Coordinate Helper
 // ⚠️ HospitalInfo에 실제 좌표 필드가 없으므로, 망원동 중심 좌표에서
 //    인덱스 기반으로 소량 오프셋을 합성해 지도 Marker를 배치합니다.
@@ -237,6 +240,9 @@ struct NearbyScreen: View {
 
     // 병원 로드 상태
     @State private var hospitalState: HospitalLoadState = .idle
+    // 병원별 실제 영업 여부(상세 영업시간 조회 결과). ykiho→영업중. 조회 완료한 ykiho는 openChecked에.
+    @State private var openStatus: [String: Bool] = [:]
+    @State private var openChecked: Set<String> = []
 
     // 키즈카페·놀이터(카카오 로컬) 로드 상태 — 카카오 키 연동 후 실데이터
     @State private var places: [Place] = []
@@ -428,9 +434,14 @@ struct NearbyScreen: View {
            Self.metersBetween(cached.coord, c) < 400,
            Date().timeIntervalSince(cached.at) < 600 {
             hospitalState = cached.results.isEmpty ? .empty : .loaded(cached.results)
+            // 탭 전환 등으로 @State가 비었으면 영업상태를 다시 조회(캐시 결과여도 "확인 중" 고착 방지)
+            if category == .hospital, !cached.results.isEmpty, openChecked.isEmpty {
+                await fetchOpenStatus(cached.results, category: category)
+            }
             return
         }
         hospitalState = .loading
+        openStatus = [:]; openChecked = []   // 새 검색 — 이전 영업상태 초기화(스테일 방지)
         let openNow = activeFilters.contains("현재 영업중")
         do {
             let provider = category == .pharmacy ? ProviderFactory.pharmacy() : ProviderFactory.hospital()
@@ -452,10 +463,37 @@ struct NearbyScreen: View {
             guard category == selectedCategory else { return }
             NearbyResultCache.shared.entries[category] = .init(coord: c, results: finalResults, at: Date())
             hospitalState = finalResults.isEmpty ? .empty : .loaded(finalResults)
+            // 병원은 가까운 곳들의 실제 영업 여부를 상세조회로 확인(미확인 방치 X).
+            if category == .hospital, !finalResults.isEmpty {
+                await fetchOpenStatus(finalResults, category: category)
+            }
         } catch {
             guard category == selectedCategory else { return }
             hospitalState = .failed(error)
         }
+    }
+
+    /// 가까운 순 상위 N곳의 실제 영업 여부를 상세 영업시간으로 동시 조회(쿼터·속도 고려 N=24).
+    /// 결과가 도착하는 대로 카드 뱃지가 미확인→영업중/영업종료로 갱신된다. 불명은 미확인 유지.
+    private func fetchOpenStatus(_ hospitals: [HospitalInfo], category: PlaceCategory) async {
+        let targets = Array(hospitals.prefix(24))
+        await withTaskGroup(of: (String, Bool?).self) { group in
+            for h in targets {
+                group.addTask { (h.id, await HospitalDetailService.isOpenNow(ykiho: h.id)) }
+            }
+            for await (id, open) in group {
+                guard selectedCategory == category else { return }   // 카테고리 바뀌면 중단
+                openChecked.insert(id)
+                if let open { openStatus[id] = open }
+            }
+        }
+    }
+
+    /// 카드에 넘길 영업 상태 — 실제 조회 결과 우선, 미조회는 확인중, 조회실패는 미확인.
+    private func openState(for h: HospitalInfo) -> HospitalOpenState {
+        if let s = openStatus[h.id] { return s ? .open : .closed }
+        if openChecked.contains(h.id) { return .unknown }
+        return selectedCategory == .hospital ? .checking : .unknown
     }
 
     /// 두 좌표 간 직선거리(미터) — 캐시 무효화 판단용.
@@ -796,17 +834,19 @@ struct NearbyScreen: View {
 
         case .loaded(let hospitals):
             // 영업시간 데이터가 있는 곳이 하나라도 있으면 영업중 카운트, 아니면(기본 목록) 총 개수만 정직 표기.
-            let hoursKnownAny = hospitals.contains(where: \.hoursKnown)
-            let openCount = hospitals.filter { $0.hoursKnown && $0.isOpenNow }.count
+            // 병원은 실제 영업조회 결과로 카운트, 약국 등은 미확인이라 총 개수만.
+            let checksOpen = selectedCategory == .hospital
+            let openCount = hospitals.filter { openState(for: $0) == .open }.count
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 if ProviderFactory.isMock(APIConfig.hiraKeyName) {
                     BLSampleNote(message: "지금은 샘플 병원 정보예요. 공공데이터 키를 연결하면 실제 우리 동네 병원으로 채워져요.")
                 }
-                resultCountRow(open: openCount, total: hospitals.count, hoursKnown: hoursKnownAny)
+                resultCountRow(open: openCount, total: hospitals.count, hoursKnown: checksOpen)
                 ForEach(hospitals) { hospital in
                     HospitalCard(
                         hospital: hospital,
                         category: selectedCategory,
+                        openState: openState(for: hospital),
                         isSelected: selectedNearbyID == hospital.id,
                         onTap: { selectedNearbyID = (selectedNearbyID == hospital.id) ? nil : hospital.id }
                     )
@@ -1032,6 +1072,8 @@ private struct HospitalCard: View {
     let hospital: HospitalInfo
     /// 약국/소아과 구분 — 아이콘·톤 분기용 (데이터엔 카테고리 필드가 없어 화면 선택값 전달)
     var category: PlaceCategory = .hospital
+    /// 실제 영업 상태(상세 영업시간 조회 결과). 미조회=확인중, 조회실패=미확인.
+    var openState: HospitalOpenState = .unknown
     /// 선택됨 — 전화·지도·공유 아이콘 연속 애니메이션.
     var isSelected: Bool = false
     /// 카드 탭 콜백(선택 토글).
@@ -1075,18 +1117,17 @@ private struct HospitalCard: View {
                         .lineSpacing(1)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    // 영업상태 뱃지(안 잘리게 고정) + 거리·종별 한 줄
+                    // 영업상태 뱃지(안 잘리게 고정) — 실제 상세조회 결과 기반
                     HStack(spacing: Spacing.s2) {
-                        if !hospital.hoursKnown {
-                            // 기본 목록은 영업시간 미제공 → 거짓 "영업중" 대신 정직하게 미확인 표기
-                            BLBadge(tone: .grey, text: "영업시간 미확인", systemIcon: nil, dot: false)
-                                .fixedSize()
-                        } else if hospital.isOpenNow {
-                            BLBadge(tone: .mint, text: "영업중", systemIcon: nil, dot: true)
-                                .fixedSize()
-                        } else {
-                            BLBadge(tone: .grey, text: "영업종료", systemIcon: nil, dot: false)
-                                .fixedSize()
+                        switch openState {
+                        case .open:
+                            BLBadge(tone: .mint, text: "영업중", systemIcon: nil, dot: true).fixedSize()
+                        case .closed:
+                            BLBadge(tone: .grey, text: "영업종료", systemIcon: nil, dot: false).fixedSize()
+                        case .checking:
+                            BLBadge(tone: .grey, text: "영업시간 확인 중…", systemIcon: nil, dot: false).fixedSize()
+                        case .unknown:
+                            BLBadge(tone: .grey, text: "영업시간 미확인", systemIcon: nil, dot: false).fixedSize()
                         }
 
                         Text("\(Self.distanceText(hospital.distanceM)) · \(hospital.department)")
@@ -1179,7 +1220,13 @@ private struct HospitalCard: View {
     }
 
     private var accessibilityDescription: String {
-        let status = hospital.hoursKnown ? (hospital.isOpenNow ? "영업중" : "영업종료") : "영업시간 미확인"
+        let status: String
+        switch openState {
+        case .open: status = "영업중"
+        case .closed: status = "영업종료"
+        case .checking: status = "영업시간 확인 중"
+        case .unknown: status = "영업시간 미확인"
+        }
         return "\(hospital.name), \(status), \(hospital.distanceM)미터, \(hospital.department)"
     }
 }
