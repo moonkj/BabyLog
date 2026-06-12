@@ -235,11 +235,20 @@ struct HIRAItems: Decodable {
     /// 단일 결과는 객체, 복수는 배열로 오는 공공 API 특성 대응
     let item: [HIRAHospitalItem]?
 
+    /// 한 건이 깨져도 전체가 날아가지 않도록 요소 단위로 관대하게 디코딩하는 래퍼.
+    /// (HIRA가 한 레코드의 필드 타입을 예외적으로 다르게 보내도 그 한 건만 버린다.)
+    private struct Failable: Decodable {
+        let value: HIRAHospitalItem?
+        init(from decoder: Decoder) throws { value = try? HIRAHospitalItem(from: decoder) }
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // 배열 시도 → 실패 시 단일 객체를 배열로 래핑
-        if let array = try? container.decode([HIRAHospitalItem].self, forKey: .item) {
-            item = array
+        // 배열: 요소 단위 관대 디코딩 → 깨진 한 건만 제외하고 나머지는 모두 보존
+        // (기존 all-or-nothing 디코딩은 충북 약국 745건 중 한 건만 타입이 어긋나도
+        //  한 페이지 전체가 사라져 '가까운 약국이 누락'되는 버그가 있었다.)
+        if let array = try? container.decode([Failable].self, forKey: .item) {
+            item = array.compactMap(\.value)
         } else if let single = try? container.decode(HIRAHospitalItem.self, forKey: .item) {
             item = [single]
         } else {
@@ -269,12 +278,13 @@ struct HIRAHospitalItem: Decodable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        ykiho = try c.decodeIfPresent(String.self, forKey: .ykiho)
-        yadmNm = try c.decodeIfPresent(String.self, forKey: .yadmNm)
-        addr = try c.decodeIfPresent(String.self, forKey: .addr)
-        telno = try c.decodeIfPresent(String.self, forKey: .telno)
-        dgsbjtCdNm = try c.decodeIfPresent(String.self, forKey: .dgsbjtCdNm)
-        clCdNm = try c.decodeIfPresent(String.self, forKey: .clCdNm)
+        // 문자열 필드도 flexString으로 — HIRA가 telno 등을 숫자로 보내도 그 한 건을 버리지 않는다.
+        ykiho = HIRAHospitalItem.flexString(c, .ykiho)
+        yadmNm = HIRAHospitalItem.flexString(c, .yadmNm)
+        addr = HIRAHospitalItem.flexString(c, .addr)
+        telno = HIRAHospitalItem.flexString(c, .telno)
+        dgsbjtCdNm = HIRAHospitalItem.flexString(c, .dgsbjtCdNm)
+        clCdNm = HIRAHospitalItem.flexString(c, .clCdNm)
         distanceMeters = HIRAHospitalItem.flexDouble(c, .distance)
         xpos = HIRAHospitalItem.flexDouble(c, .XPos)
         ypos = HIRAHospitalItem.flexDouble(c, .YPos)
@@ -288,10 +298,14 @@ struct HIRAHospitalItem: Decodable {
         return nil
     }
 
-    /// 문자열·정수 어느 쪽이든 String으로 안전 변환(코드값).
+    /// 문자열·정수·실수 어느 쪽이든 String으로 안전 변환(코드값·전화번호 등).
     private static func flexString(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> String? {
         if let s = try? c.decodeIfPresent(String.self, forKey: key) { return s }
         if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return String(i) }
+        if let d = try? c.decodeIfPresent(Double.self, forKey: key) {
+            // 정수형 실수는 소수점 없이(예: 전화번호가 숫자로 온 경우)
+            return d == d.rounded() ? String(Int(d)) : String(d)
+        }
         return nil
     }
 }
