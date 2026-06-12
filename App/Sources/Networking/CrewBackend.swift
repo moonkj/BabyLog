@@ -227,12 +227,12 @@ enum CrewBackend {
         }
     }
 
-    /// 동네 모임 생성(+주최자 자동 참가). 성공 true.
+    /// 동네 모임 생성(+주최자 자동 참가). 새 모임 id 반환(실패 시 nil).
     @discardableResult
     static func createMeetup(hood: String, place: String, when: String, capacity: Int,
-                             meetupType: String, hostName: String) async -> Bool {
+                             meetupType: String, hostName: String) async -> String? {
         guard SupabaseConfig.isConfigured, !hood.isEmpty, hood != "우리 동네",
-              var req = request("/rest/v1/crew_meetup", method: "POST") else { return false }
+              var req = request("/rest/v1/crew_meetup", method: "POST") else { return nil }
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "title": place, "place": place, "when_text": when,
@@ -240,12 +240,11 @@ enum CrewBackend {
             "host": SupabaseConfig.deviceID, "host_name": hostName,
         ])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
-        // 주최자 자동 참가
-        if let rows = try? JSONDecoder().decode([CrewMeetupDTO].self, from: data), let id = rows.first?.id {
-            await joinMeetup(meetupId: id)
-        }
-        return true
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([CrewMeetupDTO].self, from: data),
+              let id = rows.first?.id else { return nil }
+        await joinMeetup(meetupId: id)   // 주최자 자동 참가
+        return id
     }
 
     /// 모임 참가(crew_meetup_join upsert).

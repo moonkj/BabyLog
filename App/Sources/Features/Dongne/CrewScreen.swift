@@ -195,14 +195,17 @@ private struct CrewActiveContent: View {
     @State private var sharedMeetups: [CrewMeetup]? = nil
     @State private var sharedGroups: [CrewGroup]? = nil
     @State private var showCreateGroup = false
+    /// 동네별 첫 로드 완료 여부(서버 연동 시 가짜 시드 플래시 방지)
+    @State private var didLoad = false
     /// 부모(CrewScreen)에서 모임 생성 후 증가 → 재로드 트리거
     var refreshTick: Int = 0
 
     private let sectionLimit = 5
     private var hood: String { location.localityName ?? "우리 동네" }
-    private var posts: [CrewPost] { sharedPosts ?? store.crewPosts }
-    private var meetups: [CrewMeetup] { sharedMeetups ?? store.crews }
-    private var groups: [CrewGroup] { sharedGroups ?? crewGroups }
+    // 서버 연동 시엔 서버 데이터만(시드 폴백 금지 — 정직 원칙). 미구성 시에만 로컬/목업.
+    private var posts: [CrewPost] { SupabaseConfig.isConfigured ? (sharedPosts ?? []) : store.crewPosts }
+    private var meetups: [CrewMeetup] { SupabaseConfig.isConfigured ? (sharedMeetups ?? []) : store.crews }
+    private var groups: [CrewGroup] { SupabaseConfig.isConfigured ? (sharedGroups ?? []) : crewGroups }
 
     private func loadCrew() async {
         guard SupabaseConfig.isConfigured else { return }
@@ -226,18 +229,26 @@ private struct CrewActiveContent: View {
                                  distanceText: gr.distanceText, ageRange: gr.ageRange, interestTags: gr.interestTags)
             }
         }
+        didLoad = true
     }
+
+    private var isLoading: Bool { SupabaseConfig.isConfigured && !didLoad }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                meetupSection
-                    .padding(.top, Spacing.s5)
-                crewSection
-                boardSection
-                    .padding(.bottom, 100)
+                if isLoading {
+                    loadingView
+                } else {
+                    meetupSection
+                        .padding(.top, Spacing.s5)
+                    crewSection
+                    boardSection
+                        .padding(.bottom, 100)
+                }
             }
         }
+        .refreshable { await loadCrew() }
         .sheet(isPresented: $showWrite) {
             CrewPostWriteSheet()
                 .environmentObject(store)
@@ -258,7 +269,7 @@ private struct CrewActiveContent: View {
         .sheet(isPresented: $showAllPosts) {
             CrewPostListScreen(posts: posts).environmentObject(store)
         }
-        .task(id: hood) { await loadCrew() }
+        .task(id: hood) { didLoad = false; await loadCrew() }
         .onChange(of: showWrite) { _, open in if !open { Task { await loadCrew() } } }
         .onChange(of: selectedPost) { _, sel in if sel == nil { Task { await loadCrew() } } }
         .onChange(of: refreshTick) { _, _ in Task { await loadCrew() } }
@@ -275,12 +286,16 @@ private struct CrewActiveContent: View {
             )
             .padding(.horizontal, Spacing.s5)
 
-            ForEach(Array(meetups.prefix(sectionLimit))) { meetup in
-                NavigationLink(value: meetup) {
-                    CrewMeetupCard(meetup: meetup)
-                        .padding(.horizontal, Spacing.s5)
+            if meetups.isEmpty {
+                sectionEmptyNotice("아직 우리 동네 모임이 없어요.\n우상단 + 버튼으로 첫 모임을 열어보세요.")
+            } else {
+                ForEach(Array(meetups.prefix(sectionLimit))) { meetup in
+                    NavigationLink(value: meetup) {
+                        CrewMeetupCard(meetup: meetup)
+                            .padding(.horizontal, Spacing.s5)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(.bottom, Spacing.s6)
@@ -342,6 +357,28 @@ private struct CrewActiveContent: View {
             .padding(.vertical, Spacing.s2)
     }
 
+    private func sectionEmptyNotice(_ text: String) -> some View {
+        Text(text)
+            .font(AppFont.caption)
+            .foregroundStyle(AppColors.ink3)
+            .lineSpacing(3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Spacing.s5)
+            .padding(.vertical, Spacing.s2)
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: Spacing.s3) {
+            ProgressView()
+            Text("우리 동네 크루를 불러오는 중…")
+                .font(AppFont.caption)
+                .foregroundStyle(AppColors.ink3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 120)
+        .accessibilityLabel("우리 동네 크루를 불러오는 중")
+    }
+
     /// 그룹 가입 토글을 서버에도 반영(서버 그룹만; 미구성/목업은 setGroupMembership가 무시).
     private func syncGroupJoin(_ groupId: String, join: Bool) {
         guard SupabaseConfig.isConfigured, sharedGroups != nil else { return }
@@ -385,30 +422,34 @@ private struct CrewActiveContent: View {
             }
             .padding(.horizontal, Spacing.s5)
 
-            BLCard(padding: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(posts.prefix(sectionLimit).enumerated()), id: \.element.id) { idx, post in
-                        Button {
-                            Haptics.light()
-                            selectedPost = post
-                        } label: {
-                            CrewPostRow(post: post)
-                                .padding(.horizontal, Spacing.s4)
-                                .padding(.vertical, 14)
-                                .overlay(alignment: .top) {
-                                    if idx > 0 {
-                                        Rectangle()
-                                            .fill(AppColors.line)
-                                            .frame(height: 1)
-                                            .padding(.horizontal, Spacing.s4)
+            if posts.isEmpty {
+                sectionEmptyNotice("아직 동네 게시글이 없어요.\n첫 글을 남겨 이웃과 이야기를 시작해보세요.")
+            } else {
+                BLCard(padding: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(posts.prefix(sectionLimit).enumerated()), id: \.element.id) { idx, post in
+                            Button {
+                                Haptics.light()
+                                selectedPost = post
+                            } label: {
+                                CrewPostRow(post: post)
+                                    .padding(.horizontal, Spacing.s4)
+                                    .padding(.vertical, 14)
+                                    .overlay(alignment: .top) {
+                                        if idx > 0 {
+                                            Rectangle()
+                                                .fill(AppColors.line)
+                                                .frame(height: 1)
+                                                .padding(.horizontal, Spacing.s4)
+                                        }
                                     }
-                                }
+                            }
+                            .buttonStyle(LiquidPressStyle(scale: 0.985))
                         }
-                        .buttonStyle(LiquidPressStyle(scale: 0.985))
                     }
                 }
+                .padding(.horizontal, Spacing.s5)
             }
-            .padding(.horizontal, Spacing.s5)
         }
     }
 }
@@ -577,7 +618,7 @@ private struct CrewMeetupCard: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(meetup.place), \(meetup.when), \(meetup.joined)명 중 \(meetup.capacity)명 정원, 주최자 \(meetup.hostName)")
+        .accessibilityLabel("\(meetup.place), \(meetup.when), \(joinedCount)명 중 \(meetup.capacity)명 정원, 주최자 \(meetup.hostName)")
     }
 }
 
@@ -660,7 +701,8 @@ private struct CrewPostRow: View {
     let post: CrewPost
     private var isLiked: Bool { store.isCrewPostLiked(post.id) }
     private var likeCount: Int { post.likeCount + (isLiked ? 1 : 0) }
-    private var replyCount: Int { store.crewPostReplyCount(post) }
+    // 서버 연동 시 댓글 수는 서버 카운트(post.replyCount)만 사용 — 로컬 댓글 중복 가산 금지.
+    private var replyCount: Int { SupabaseConfig.isConfigured ? post.replyCount : store.crewPostReplyCount(post) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {

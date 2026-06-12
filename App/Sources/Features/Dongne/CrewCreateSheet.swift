@@ -79,18 +79,24 @@ struct CrewCreateSheet: View {
                         let cap = max(2, Int(capacityText.filter(\.isNumber)) ?? 6)
                         let placeText = place.trimmingCharacters(in: .whitespaces)
                         let whenText = when.isEmpty ? "일정 협의" : when
-                        let meetup = CrewMeetup(
-                            place: placeText, when: whenText,
-                            hostName: nickname, hostTier: .new, joined: 0,
-                            capacity: cap, meetupType: type, description: desc, mine: true
-                        )
-                        store.addCrew(meetup)   // 로컬 즉시 반영
-                        // 동네 공유 서버에도 생성(+주최자 자동 참가). 미구성/실패 시 로컬만 유지.
                         let hood = location.localityName ?? ""
-                        Task {
-                            await CrewBackend.createMeetup(
-                                hood: hood, place: placeText, when: whenText,
-                                capacity: cap, meetupType: type.rawValue, hostName: nickname)
+                        if SupabaseConfig.isConfigured {
+                            // 서버가 원본: 서버 id로 생성 후 그 id로 주최자 참가 상태 표시(로컬 목 미삽입).
+                            Task {
+                                if let id = await CrewBackend.createMeetup(
+                                    hood: hood, place: placeText, when: whenText,
+                                    capacity: cap, meetupType: type.rawValue, hostName: nickname) {
+                                    store.markCrewJoined(id)
+                                }
+                            }
+                        } else {
+                            // 미구성(로컬 데모): 로컬에만 추가(주최자 자동 참여).
+                            let meetup = CrewMeetup(
+                                place: placeText, when: whenText,
+                                hostName: nickname, hostTier: .new, joined: 0,
+                                capacity: cap, meetupType: type, description: desc, mine: true
+                            )
+                            store.addCrew(meetup)
                         }
                         Haptics.success()
                         dismiss()

@@ -101,6 +101,7 @@ struct CrewPostDetailSheet: View {
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var commentText = ""
     @State private var showDeleteConfirm = false
     /// 서버 공유 댓글(미구성/미로드 시 nil → 로컬 폴백)
@@ -110,13 +111,16 @@ struct CrewPostDetailSheet: View {
     private var isLiked: Bool { store.isCrewPostLiked(post.id) }
     private var likeCount: Int { post.likeCount + (isLiked ? 1 : 0) }
     private var comments: [String] { serverComments ?? store.crewPostCommentList(postId: post.id) }
-    private var replyCount: Int { serverComments?.count ?? store.crewPostReplyCount(post) }
+    private var replyCount: Int {
+        serverComments?.count ?? (SupabaseConfig.isConfigured ? post.replyCount : store.crewPostReplyCount(post))
+    }
 
-    /// 댓글 폴링(상세 열려 있는 동안 3초 주기, 닫히면 task 취소).
+    /// 댓글 폴링(상세 열려 있는 동안 3초 주기, 닫히면 task 취소, 백그라운드면 건너뜀).
     private func pollReplies() async {
         guard SupabaseConfig.isConfigured else { return }
         while !Task.isCancelled {
-            if let r = await CrewBackend.fetchReplies(postId: post.id) { serverComments = r }
+            if scenePhase == .active,
+               let r = await CrewBackend.fetchReplies(postId: post.id) { serverComments = r }
             try? await Task.sleep(nanoseconds: 3_000_000_000)
         }
     }

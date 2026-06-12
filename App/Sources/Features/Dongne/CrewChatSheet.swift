@@ -16,19 +16,20 @@ struct CrewChatSheet: View {
 
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var messageText = ""
-    @State private var memberTyping = false
     /// 서버 공유 메시지(미구성/미로드 시 nil → 로컬 폴백)
     @State private var serverMessages: [ChatMessage]? = nil
 
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
     private var messages: [ChatMessage] { serverMessages ?? store.crewChat(meetupId: meetup.id) }
 
-    /// 채팅 열려 있는 동안 3초 주기 폴링(시트 닫히면 task 취소).
+    /// 채팅 열려 있는 동안 3초 주기 폴링(시트 닫히면 task 취소, 백그라운드면 건너뜀).
     private func pollLoop() async {
         guard SupabaseConfig.isConfigured else { return }
         while !Task.isCancelled {
-            if let msgs = await CrewBackend.fetchMessages(meetupId: meetup.id) { serverMessages = msgs }
+            if scenePhase == .active,
+               let msgs = await CrewBackend.fetchMessages(meetupId: meetup.id) { serverMessages = msgs }
             try? await Task.sleep(nanoseconds: 3_000_000_000)
         }
     }
@@ -71,16 +72,6 @@ struct CrewChatSheet: View {
                             CrewChatBubble(text: msg.text, isMe: msg.mine)
                         }
 
-                        // 다른 참가자 입력 중 (데모)
-                        if memberTyping {
-                            HStack {
-                                TypingDotsView(tint: AppColors.ink3)
-                                    .padding(.horizontal, 14).padding(.vertical, 12)
-                                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                Spacer()
-                            }
-                        }
-
                         // 안전 안내 뱃지
                         HStack {
                             Spacer()
@@ -106,9 +97,6 @@ struct CrewChatSheet: View {
                     .padding(.bottom, 16)
                 }
                 .onChange(of: messages.count) { _ in
-                    withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) }
-                }
-                .onChange(of: memberTyping) { _ in
                     withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) }
                 }
                 .onAppear {

@@ -15,6 +15,7 @@ struct CrewMeetupDetail: View {
     @State private var showGroupChatGuide = false
     @State private var showChat = false
     @State private var showDeleteConfirm = false
+    @State private var joinBusy = false   // 참가 토글 중복 탭 방지(서버 정합)
     @Environment(\.dismiss) private var dismiss
 
     private var isJoined: Bool { store.isJoinedCrew(meetup.id) }
@@ -376,14 +377,18 @@ struct CrewMeetupDetail: View {
                 LiquidButton(
                     fill: isFull ? AppColors.surface3 : (isJoined ? AppColors.ink3 : AppColors.primary),
                     action: {
+                        guard !joinBusy else { return }
                         Haptics.selection()
                         let willJoin = !isJoined
                         store.toggleJoinCrew(meetup.id)
                         if SupabaseConfig.isConfigured {
+                            joinBusy = true
                             Task {
-                                _ = willJoin
+                                let ok = willJoin
                                     ? await CrewBackend.joinMeetup(meetupId: meetup.id)
                                     : await CrewBackend.leaveMeetup(meetupId: meetup.id)
+                                if !ok { store.toggleJoinCrew(meetup.id) }   // 실패 시 롤백
+                                joinBusy = false
                             }
                         }
                     }
@@ -399,7 +404,7 @@ struct CrewMeetupDetail: View {
                     .frame(height: 52)
                 }
                 .frame(maxWidth: 180)
-                .disabled(isFull)
+                .disabled(isFull || joinBusy)
                 .padding(.trailing, Spacing.s5)
                 .accessibilityLabel(isFull ? "정원 마감" : (isJoined ? "참가 신청됨. 취소하려면 탭하세요." : "참가 신청하기"))
                 .accessibilityHint(isFull ? "정원이 가득 찼습니다" : (isJoined ? "" : "모임에 참가합니다. 남은 자리 \(spotsLeft)자리."))
