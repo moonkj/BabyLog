@@ -230,7 +230,7 @@ struct CrewPostDetailSheet: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(AppColors.ink3)
                     }
-                    .padding(.horizontal, 12).frame(height: 36)
+                    .padding(.horizontal, Spacing.s3).frame(height: 44)
                     .background(AppColors.surface2, in: Capsule())
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.94))
@@ -244,6 +244,8 @@ struct CrewPostDetailSheet: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppColors.ink3)
                 }
+                .padding(.horizontal, Spacing.s3).frame(height: 44)
+                .background(AppColors.surface2, in: Capsule())
                 .accessibilityLabel("댓글 \(replyCount)개")
 
                 Spacer(minLength: 0)

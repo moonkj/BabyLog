@@ -237,10 +237,15 @@ struct QuickRecordSheet: View {
                     .font(.system(size: 34, weight: .medium))
                     .foregroundStyle(.white.opacity(0.95))
                     .accessibilityHidden(true)
-                Text("사진·동영상 (최대 5장)")
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                VStack(spacing: 3) {
+                    Text(photoPrompt)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("사진·동영상 (최대 5장)")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
             }
         }
     }

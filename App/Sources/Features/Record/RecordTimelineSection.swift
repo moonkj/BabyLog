@@ -95,13 +95,19 @@ private struct DateGroupHeader: View {
     var label: String
     var body: some View {
         HStack(spacing: Spacing.s2) {
+            // 날짜 마커 점(시각적 타임라인 앵커)
+            Circle()
+                .fill(AppColors.primary.opacity(0.5))
+                .frame(width: 5, height: 5)
+                .accessibilityHidden(true)
             Text(label)
                 .font(.system(size: 13, weight: .heavy))
                 .foregroundStyle(AppColors.ink2)
             Rectangle()
-                .fill(AppColors.line2)
-                .frame(height: 1.5)
+                .fill(AppColors.line)
+                .frame(height: 1)
         }
+        .padding(.top, Spacing.s1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
     }

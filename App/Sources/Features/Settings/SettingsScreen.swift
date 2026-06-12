@@ -141,22 +141,20 @@ struct SettingsScreen: View {
                 iconBg: Color(hex: 0x1A1A2E).opacity(0.12),
                 iconFg: Color(hex: 0x5B5BA8)
             ) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("야간 초저휘도 모드")
-                                .font(.system(size: 14.5, weight: .semibold))
-                                .foregroundStyle(AppColors.ink)
-                            Text("22시~06시 자동 적용 — 새벽 수유 시 아이를 깨우지 않아요")
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(AppColors.ink3)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $nightDim)
-                            .labelsHidden()
-                            .tint(AppColors.primary)
+                HStack(spacing: Spacing.s3) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("야간 초저휘도 모드")
+                            .font(.system(size: 14.5, weight: .semibold))
+                            .foregroundStyle(AppColors.ink)
+                        Text("22시~06시 자동 적용 — 새벽 수유 시 아이를 깨우지 않아요")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    Spacer(minLength: 0)
+                    Toggle("", isOn: $nightDim)
+                        .labelsHidden()
+                        .tint(AppColors.primary)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -251,7 +249,7 @@ struct SettingsScreen: View {
                             .accessibilityLabel("프로필 이름 입력")
                     }
 
-                    Divider().background(AppColors.line)
+                    Divider().overlay(AppColors.line)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("나를 부르는 호칭")
@@ -309,9 +307,9 @@ struct SettingsScreen: View {
                 // 자동 백업 토글
                 settingsRow(icon: "icloud.fill", iconBg: Color(hex: 0xE6F1FB), iconFg: Color(hex: 0x3B6FA8)) {
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
+                        HStack(spacing: Spacing.s3) {
                             Text("iCloud 자동 백업").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                            Spacer()
+                            Spacer(minLength: 0)
                             Toggle("", isOn: $cloudSync).labelsHidden().tint(AppColors.primary)
                         }
                         Text("가족(조부모)이 같은 iCloud 계정에서 사진·영상·기록을 함께 봐요")

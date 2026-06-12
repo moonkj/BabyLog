@@ -20,6 +20,12 @@ struct CrewCreateSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
+                    Text("이웃과 함께할 모임을 열어보세요. 장소만 적어도 만들 수 있어요.")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink3)
+                        .lineSpacing(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
                     field(title: "장소", placeholder: "예: 망원한강공원 잔디밭", text: $place)
                     field(title: "일시", placeholder: "예: 토요일 오후 3시", text: $when)
 
@@ -34,11 +40,12 @@ struct CrewCreateSheet: View {
                                         Text(t.label).font(.system(size: 14, weight: .semibold))
                                     }
                                     .foregroundStyle(type == t ? .white : AppColors.ink2)
-                                    .frame(maxWidth: .infinity).frame(height: 46)
+                                    .frame(maxWidth: .infinity).frame(height: 52)
                                     .background(type == t ? AppColors.ink : AppColors.surface2,
-                                                in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                                                in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                                 }
                                 .buttonStyle(LiquidPressStyle(scale: 0.96))
+                                .accessibilityAddTraits(type == t ? .isSelected : [])
                             }
                         }
                     }

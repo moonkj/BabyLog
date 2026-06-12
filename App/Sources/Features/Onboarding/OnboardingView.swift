@@ -72,15 +72,16 @@ struct OnboardingView: View {
     // MARK: - 진행바
 
     private var progressBar: some View {
-        HStack(spacing: 5) {
-            // 스텝 1·2·3 — 총 3구간
+        HStack(spacing: 6) {
+            // 스텝 1·2·3 — 총 3구간 (현재 단계는 약간 굵게 강조)
             ForEach(1..<4, id: \.self) { i in
                 Capsule()
                     .fill(i <= step ? AppColors.primary : AppColors.surface3)
-                    .frame(height: 4)
+                    .frame(height: i == step ? 5 : 4)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: step)
             }
         }
+        .frame(height: 5)
         .accessibilityElement()
         .accessibilityLabel("온보딩 \(min(step, 3))단계 / 3단계 완료")
     }
@@ -151,7 +152,7 @@ struct OnboardingView: View {
                     .accessibilityLabel("BabyLog")
 
                     Text("우리 동네 육아의\n모든 것")
-                        .font(AppFont.h2)
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(AppColors.ink2)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)

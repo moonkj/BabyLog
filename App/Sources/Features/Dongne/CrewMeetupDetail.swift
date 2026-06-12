@@ -149,18 +149,20 @@ struct CrewMeetupDetail: View {
                     label: "일시",
                     value: meetup.when
                 )
-                Divider()
+                Rectangle()
+                    .fill(AppColors.line)
+                    .frame(height: 1)
                     .padding(.vertical, 10)
-                    .padding(.horizontal, -4)
                 CrewInfoRow(
                     icon: "mappin.circle.fill",
                     iconColor: Color(hex: 0xB5478A),
                     label: "장소",
                     value: meetup.place
                 )
-                Divider()
+                Rectangle()
+                    .fill(AppColors.line)
+                    .frame(height: 1)
                     .padding(.vertical, 10)
-                    .padding(.horizontal, -4)
                 CrewInfoRow(
                     icon: "person.2.fill",
                     iconColor: Color(hex: 0x3B6FA8),
@@ -183,6 +185,13 @@ struct CrewMeetupDetail: View {
                 Text("참가자 \(joinedCount)명")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(AppColors.ink)
+            }
+
+            if joinedCount == 0 {
+                Text("아직 참가자가 없어요. 첫 참가자가 되어보세요.")
+                    .font(AppFont.caption)
+                    .foregroundStyle(AppColors.ink3)
+                    .padding(.vertical, Spacing.s1)
             }
 
             // 아바타 그리드

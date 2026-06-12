@@ -54,14 +54,21 @@ struct QuickRecordFAB: View {
                 .frame(width: 60, height: 60)
                 .background(FABGlassCircle())
                 .clipShape(Circle())
+                // 열림 상태 시 은은한 링 어포던스(탭=메뉴 열림 명료화)
+                .overlay {
+                    Circle()
+                        .strokeBorder(.white.opacity(open ? 0.5 : 0.25), lineWidth: 1)
+                        .animation(.easeInOut(duration: 0.2), value: open)
+                }
                 .rotationEffect(.degrees(open ? 45 : 0))
-                .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)
+                .blShadow(.fab)
                 .contentShape(Circle())
                 .onTapGesture {
                     if suppressTap { return }
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { open.toggle() }
                 }
                 .accessibilityLabel("빠른 기록")
+                .accessibilityHint("탭하면 빠른 메뉴, 길게 눌러 위치 이동")
                 .accessibilityAddTraits(.isButton)
         }
     }

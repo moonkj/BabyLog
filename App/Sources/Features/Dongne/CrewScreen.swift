@@ -284,7 +284,7 @@ private struct CrewActiveContent: View {
                         Text("글쓰기").font(.system(size: 13.5, weight: .bold))
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 12).frame(height: 36)
+                    .padding(.horizontal, Spacing.s3).frame(height: 44)
                     .background(AppColors.primary, in: Capsule())
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.95))
@@ -329,7 +329,7 @@ private struct CrewMeetupListScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 11) {
+                VStack(spacing: Spacing.s3) {
                     ForEach(store.crews) { meetup in
                         NavigationLink(value: meetup) {
                             CrewMeetupCard(meetup: meetup).padding(.horizontal, Spacing.s5)
@@ -354,7 +354,7 @@ private struct CrewGroupListScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 11) {
+                VStack(spacing: Spacing.s3) {
                     ForEach(crewGroups) { group in
                         CrewGroupCard(group: group).padding(.horizontal, Spacing.s5)
                     }
@@ -381,9 +381,12 @@ private struct CrewPostListScreen: View {
                         ForEach(Array(store.crewPosts.enumerated()), id: \.element.id) { idx, post in
                             Button { Haptics.light(); selectedPost = post } label: {
                                 CrewPostRow(post: post)
-                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                    .padding(.horizontal, Spacing.s4).padding(.vertical, 14)
                                     .overlay(alignment: .top) {
-                                        if idx > 0 { Rectangle().fill(AppColors.line).frame(height: 1) }
+                                        if idx > 0 {
+                                            Rectangle().fill(AppColors.line).frame(height: 1)
+                                                .padding(.horizontal, Spacing.s4)
+                                        }
                                     }
                             }
                             .buttonStyle(LiquidPressStyle(scale: 0.985))
@@ -465,10 +468,10 @@ private struct CrewMeetupCard: View {
                     Text(isFull ? "마감" : (isJoined ? "참가중" : "참가"))
                         .font(.system(size: 13.5, weight: .bold))
                         .foregroundStyle(isFull ? AppColors.ink3 : (isJoined ? AppColors.ink2 : Color.white))
-                        .padding(.horizontal, 16)
-                        .frame(height: 38)
+                        .padding(.horizontal, Spacing.s4)
+                        .frame(height: 44)
                         .background(isFull ? AppColors.surface3 : (isJoined ? AppColors.surface2 : AppColors.ink),
-                                    in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                                    in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.94))
                 .disabled(isFull)
@@ -537,9 +540,9 @@ private struct CrewGroupCard: View {
                     Text(isJoined ? "가입중" : "가입")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(isJoined ? AppColors.ink2 : Color.white)
-                        .padding(.horizontal, 14).frame(height: 40)
+                        .padding(.horizontal, Spacing.s4).frame(height: 44)
                         .background(isJoined ? AppColors.surface2 : AppColors.primary,
-                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.94))
                 .accessibilityLabel(isJoined ? "\(group.name) 가입 취소" : "\(group.name) 가입")

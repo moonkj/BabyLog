@@ -40,8 +40,10 @@ struct AddExpenseSheet: View {
                             .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                                    .strokeBorder(focusedField == .title ? AppColors.primary : .clear, lineWidth: 1.5)
+                                    .strokeBorder(focusedField == .title ? AppColors.primary : AppColors.line,
+                                                  lineWidth: focusedField == .title ? 1.5 : 1)
                             }
+                            .animation(.easeInOut(duration: 0.18), value: focusedField)
                             .submitLabel(.done)
                             .blShake(titleShake)
                             .accessibilityLabel("지출 제목 입력")
@@ -64,8 +66,10 @@ struct AddExpenseSheet: View {
                         .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                                .strokeBorder(focusedField == .amount ? AppColors.primary : .clear, lineWidth: 1.5)
+                                .strokeBorder(focusedField == .amount ? AppColors.primary : AppColors.line,
+                                              lineWidth: focusedField == .amount ? 1.5 : 1)
                         }
+                        .animation(.easeInOut(duration: 0.18), value: focusedField)
                         .blShake(amountShake)
                     }
 
@@ -83,9 +87,20 @@ struct AddExpenseSheet: View {
                     // 날짜
                     VStack(alignment: .leading, spacing: Spacing.s2) {
                         Text("날짜").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
-                        DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
-                            .datePickerStyle(.compact)
-                            .labelsHidden()
+                        HStack {
+                            DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
+                                .datePickerStyle(.compact)
+                                .tint(AppColors.primary)
+                                .labelsHidden()
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, Spacing.s4)
+                        .frame(height: 52)
+                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                                .stroke(AppColors.line, lineWidth: 1)
+                        }
                     }
 
                     Spacer(minLength: Spacing.s4)

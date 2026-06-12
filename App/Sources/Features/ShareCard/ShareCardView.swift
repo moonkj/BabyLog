@@ -178,13 +178,16 @@ struct ShareCardView: View {
     private var previewSection: some View {
         let h = previewWidth / vm.aspect.ratio
         return VStack(spacing: Spacing.s4) {
-            // 카드 미리보기
-            ZStack {
-                ShareCardCanvas(vm: vm)
-                    .frame(width: previewWidth, height: h)
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-                    .blShadow(.card)
-            }
+            // 카드 미리보기 (편집 캔버스 — 얇은 테두리로 영역 명확화)
+            ShareCardCanvas(vm: vm)
+                .frame(width: previewWidth, height: h)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                        .strokeBorder(AppColors.line, lineWidth: 1)
+                }
+                .blShadow(.card)
+                .animation(.easeInOut(duration: 0.2), value: vm.aspect)
 
             // 배경 사진 변경 버튼 (PhotoPickerButton 연결)
             PhotoPickerButton(image: backgroundPhotoBinding) {
@@ -280,7 +283,7 @@ struct ShareCardView: View {
             )
 
             Divider()
-                .background(AppColors.line)
+                .overlay(AppColors.line)
                 .padding(.horizontal, Spacing.s4)
 
             // 워터마크: 자유 토글(전면 무료). 기본 ON은 자연 바이럴용.
@@ -295,7 +298,10 @@ struct ShareCardView: View {
             )
         }
         .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-        .padding(.top, Spacing.s2)
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                .stroke(AppColors.line, lineWidth: 1)
+        }
     }
 
     private var shareButton: some View {

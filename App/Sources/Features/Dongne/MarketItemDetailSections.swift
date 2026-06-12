@@ -288,7 +288,7 @@ struct MarketDetailSafeTradeGuide: View {
             HStack(alignment: .top, spacing: 11) {
                 Image(systemName: "shield.checkered")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color(hex: 0x3B6FA8))
+                    .foregroundStyle(BadgeTone.blue.ink)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -304,7 +304,7 @@ struct MarketDetailSafeTradeGuide: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Color(hex: 0xE6F1FB), in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .background(BadgeTone.blue.bg, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
                 .stroke(AppColors.line, lineWidth: 1)

@@ -302,26 +302,26 @@ struct GrowthChartSection: View {
         }
         .chartXAxis {
             AxisMarks(values: [0, 4, 8, 12, 16]) { val in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 3]))
                     .foregroundStyle(AppColors.line)
                 AxisValueLabel {
                     if let m = val.as(Int.self) {
                         Text("\(m)m")
                             .font(AppFont.num(10))
-                            .foregroundStyle(AppColors.ink2)
+                            .foregroundStyle(AppColors.ink3)
                     }
                 }
             }
         }
         .chartYAxis {
             AxisMarks(position: .leading) { val in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 3]))
                     .foregroundStyle(AppColors.line)
                 AxisValueLabel {
                     if let v = val.as(Double.self) {
                         Text(String(format: "%.0f", v))
                             .font(AppFont.num(10))
-                            .foregroundStyle(AppColors.ink2)
+                            .foregroundStyle(AppColors.ink3)
                     }
                 }
             }

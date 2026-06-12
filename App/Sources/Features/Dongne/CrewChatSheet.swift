@@ -231,13 +231,19 @@ private struct CrewChatBubble: View {
             Text(text)
                 .font(.system(size: 14.5, weight: .regular))
                 .foregroundStyle(isMe ? Color.white : AppColors.ink)
+                .lineSpacing(2)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(
                     isMe ? AppColors.primary : AppColors.surface,
                     in: RoundedRectangle(cornerRadius: 18, style: .continuous)
                 )
-                .shadow(radius: isMe ? 0 : 1, y: isMe ? 0 : 1)
+                .overlay {
+                    if !isMe {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(AppColors.line, lineWidth: 1)
+                    }
+                }
 
             if !isMe { Spacer(minLength: 48) }
         }

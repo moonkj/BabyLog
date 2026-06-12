@@ -100,10 +100,10 @@ struct PregnancyHomeView: View {
                     // 태아 히어로 카드
                     heroCard
                         .padding(.horizontal, Spacing.s5)
-                        .padding(.bottom, Spacing.s3)
+                        .padding(.bottom, Spacing.s4)
 
                     // 본문 모듈 스택
-                    VStack(spacing: Spacing.s3) {
+                    VStack(spacing: Spacing.s4) {
                         checkupPriorityCard
                         weeklyDevelopmentCard
                         neighborhoodCard
@@ -455,7 +455,14 @@ struct PregnancyHomeView: View {
                         .foregroundStyle(AppColors.ink3)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.ink3)
+                    .accessibilityHidden(true)
             }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(LiquidPressStyle(scale: 0.97))
         .accessibilityLabel("\(title), \(subtitle), \(emojiAccessibility)")

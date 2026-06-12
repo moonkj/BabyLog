@@ -37,9 +37,18 @@ struct MarketChatSheet: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 10) {
                         if messages.isEmpty {
-                            Text("첫 메시지를 보내 거래를 시작해보세요.")
-                                .font(AppFont.caption).foregroundStyle(AppColors.ink3)
-                                .frame(maxWidth: .infinity).padding(.vertical, Spacing.s4)
+                            VStack(spacing: Spacing.s2) {
+                                Image(systemName: "bubble.left.and.bubble.right")
+                                    .font(.system(size: 26, weight: .regular))
+                                    .foregroundStyle(AppColors.ink3)
+                                    .accessibilityHidden(true)
+                                Text("첫 메시지를 보내 거래를 시작해보세요.")
+                                    .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity).padding(.vertical, Spacing.s6)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("첫 메시지를 보내 거래를 시작해보세요.")
                         }
                         ForEach(messages) { msg in
                             MkChatBubble(text: msg.text, isMe: msg.mine)
@@ -229,15 +238,19 @@ private struct MkChatBubble: View {
             Text(text)
                 .font(.system(size: 14.5, weight: .regular))
                 .foregroundStyle(isMe ? Color.white : AppColors.ink)
+                .lineSpacing(2)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(
                     isMe ? AppColors.primary : AppColors.surface,
-                    in: isMe
-                        ? RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        : RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
                 )
-                .shadow(radius: isMe ? 0 : 1, y: isMe ? 0 : 1)
+                .overlay {
+                    if !isMe {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(AppColors.line, lineWidth: 1)
+                    }
+                }
 
             if !isMe { Spacer(minLength: 48) }
         }

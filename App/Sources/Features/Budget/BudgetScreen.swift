@@ -338,12 +338,27 @@ struct BudgetScreen: View {
                     .frame(maxWidth: .infinity)
                 }
 
-                // 구분선 + 요약 통계
+                // 구분선 + 합계 강조 헤더
                 Divider().background(AppColors.line)
 
+                // 총 지출 — 카드 위계의 정점 (가장 큰 숫자)
+                VStack(spacing: 2) {
+                    Text("\(monthTitle) 총 지출")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(AppColors.ink3)
+                    Text(amountFull(monthlyTotal))
+                        .font(AppFont.num(26, weight: .heavy))
+                        .foregroundStyle(AppColors.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .contentTransition(.numericText())
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(monthTitle) 총 지출 \(amountFull(monthlyTotal))")
+
+                // 보조 통계 (전월 대비 · 기록 건수)
                 HStack(spacing: 0) {
-                    miniStat(value: amountFull(monthlyTotal), label: "\(monthTitle) 총 지출")
-                    Divider().frame(height: 30).background(AppColors.line)
                     if let pct = monthOverMonthPct {
                         miniStat(value: "\(pct > 0 ? "+" : "")\(pct)%",
                                  label: "전월 대비",
@@ -354,10 +369,11 @@ struct BudgetScreen: View {
                     Divider().frame(height: 30).background(AppColors.line)
                     miniStat(value: "\(currentMonthExpenses.count)건", label: "\(monthTitle) 기록")
                 }
+                .padding(.top, 2)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(monthTitle) 총 지출 \(amountFull(monthlyTotal))"
-                    + (monthOverMonthPct.map { ", 전월 대비 \($0)%" } ?? "")
-                    + ", \(currentMonthExpenses.count)건 기록")
+                .accessibilityLabel(
+                    (monthOverMonthPct.map { "전월 대비 \($0)%, " } ?? "")
+                    + "\(currentMonthExpenses.count)건 기록")
             }
         }
     }
@@ -430,49 +446,54 @@ struct BudgetScreen: View {
                                 .padding(.horizontal, Spacing.s4)
                         }
 
-                        HStack(spacing: Spacing.s3) {
-                            // 아이콘 뱃지 (색+아이콘 2중)
-                            ZStack {
-                                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                    .fill(item.category.badgeTone.bg)
-                                    .frame(width: 40, height: 40)
-                                Image(systemName: item.category.systemIcon)
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(item.category.badgeTone.ink)
-                            }
-                            .accessibilityHidden(true)
+                        let pct = monthlyTotal > 0
+                            ? Int(Double(item.amount) / Double(monthlyTotal) * 100)
+                            : 0
 
-                            // 레이블 (3중 인코딩 중 텍스트)
-                            Text(item.category.displayName)
-                                .font(AppFont.subhead)
-                                .foregroundStyle(AppColors.ink)
+                        VStack(spacing: Spacing.s2) {
+                            HStack(spacing: Spacing.s3) {
+                                // 아이콘 뱃지 (색+아이콘 2중)
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                        .fill(item.category.badgeTone.bg)
+                                        .frame(width: 40, height: 40)
+                                    Image(systemName: item.category.systemIcon)
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundStyle(item.category.badgeTone.ink)
+                                }
+                                .accessibilityHidden(true)
 
-                            Spacer()
+                                // 레이블 + 비율 (3중 인코딩 중 텍스트)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.category.displayName)
+                                        .font(AppFont.subhead)
+                                        .foregroundStyle(AppColors.ink)
+                                    Text("\(pct)%")
+                                        .font(AppFont.micro)
+                                        .foregroundStyle(AppColors.ink3)
+                                }
 
-                            let pct = monthlyTotal > 0
-                                ? Int(Double(item.amount) / Double(monthlyTotal) * 100)
-                                : 0
+                                Spacer()
 
-                            // 금액 + 비율
-                            VStack(alignment: .trailing, spacing: 2) {
+                                // 금액 강조 (행 위계의 정점)
                                 Text(amountFull(item.amount))
-                                    .font(AppFont.num(14, weight: .bold))
+                                    .font(AppFont.num(15, weight: .heavy))
                                     .foregroundStyle(AppColors.ink)
-
-                                Text("\(pct)%")
-                                    .font(AppFont.micro)
-                                    .foregroundStyle(AppColors.ink3)
                             }
 
-                            // 비율 바 (색+길이 시각 보조)
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(AppColors.surface3)
-                                    .frame(width: 24, height: 3)
-                                Capsule()
-                                    .fill(item.category.badgeTone.ink)
-                                    .frame(width: 24 * CGFloat(pct) / 100, height: 3)
+                            // 전폭 비율 바 (색+길이 시각 보조)
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule()
+                                        .fill(AppColors.surface3)
+                                        .frame(height: 4)
+                                    Capsule()
+                                        .fill(item.category.badgeTone.ink)
+                                        .frame(width: max(4, geo.size.width * CGFloat(pct) / 100), height: 4)
+                                }
                             }
+                            .frame(height: 4)
+                            .padding(.leading, 40 + Spacing.s3)
                             .accessibilityHidden(true)
                         }
                         .padding(.horizontal, Spacing.s4)
@@ -480,7 +501,7 @@ struct BudgetScreen: View {
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("\(item.category.accessibilityLabel) \(amountFull(item.amount))")
+                        .accessibilityLabel("\(item.category.accessibilityLabel) \(amountFull(item.amount)), \(pct)퍼센트")
                     }
                 }
             }
@@ -657,13 +678,11 @@ private struct SubsidyCard: View {
                             }
                         }
 
-                        HStack(spacing: 4) {
+                        HStack(spacing: Spacing.s2) {
                             Text(amountStr(info.amountKRW))
-                                .font(AppFont.num(13, weight: .bold))
+                                .font(AppFont.num(14, weight: .heavy))
                                 .foregroundStyle(isUrgent ? AppColors.gold : AppColors.primary)
-                            Text("·")
-                                .font(AppFont.caption)
-                                .foregroundStyle(AppColors.ink3)
+                                .lineLimit(1)
                             Text(info.eligibility)
                                 .font(AppFont.caption)
                                 .foregroundStyle(AppColors.ink2)

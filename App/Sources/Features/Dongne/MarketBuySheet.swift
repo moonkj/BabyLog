@@ -48,7 +48,7 @@ struct MarketBuySheet: View {
     }
 
     private var itemSummary: some View {
-        BLCard(padding: 12) {
+        BLCard(padding: 12, flat: true) {
             HStack(spacing: 12) {
                 Group {
                     if let img = PhotoStore.image(item.photoRefs.first) {
@@ -107,16 +107,18 @@ struct MarketBuySheet: View {
         BLCard(padding: 13, flat: true) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "shield.checkered").font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color(hex: 0x3B6FA8))
+                    .foregroundStyle(BadgeTone.blue.ink)
                 Text("주민센터·공공도서관 앞 등 공공장소에서 만나면 더 안전해요. BabyLog는 거래에 직접 개입하지 않습니다.")
                     .font(AppFont.caption).foregroundStyle(AppColors.ink2).lineSpacing(3)
             }
         }
-        .background(Color(hex: 0xE6F1FB), in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .background(BadgeTone.blue.bg, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
                 .stroke(AppColors.line, lineWidth: 1)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("안심 거래 안내. 주민센터·공공도서관 앞 등 공공장소에서 만나면 더 안전해요.")
     }
 
     private var bottomBar: some View {

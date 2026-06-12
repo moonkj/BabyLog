@@ -212,9 +212,11 @@ struct ProfileScreen: View {
                     .accessibilityLabel("프로필 편집")
                 }
 
-                // 보조 뱃지 줄 (최대 3개 — SPEC 7.4)
-                auxiliaryBadges
-                    .padding(.top, Spacing.s4)
+                // 보조 뱃지 줄 (최대 3개 — SPEC 7.4) · 획득 뱃지가 있을 때만 노출
+                if !resolvedCatalog.filter(\.isEarned).isEmpty {
+                    auxiliaryBadges
+                        .padding(.top, Spacing.s4)
+                }
 
                 Divider()
                     .overlay(AppColors.line)
@@ -289,14 +291,18 @@ struct ProfileScreen: View {
         BLCard {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 // 헤더
-                HStack {
+                HStack(spacing: Spacing.s2) {
+                    Image(systemName: currentTier == .golden ? "crown.fill" : "arrow.up.right.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(currentTier == .golden ? AppColors.gold : AppColors.ink2)
+                        .accessibilityHidden(true)
                     if let nextTier = currentTier.next {
                         Text("\(nextTier.displayName)까지")
-                            .font(AppFont.subhead)
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(AppColors.ink)
                     } else {
                         Text("최상위 티어 달성!")
-                            .font(AppFont.subhead)
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(AppColors.gold)
                     }
                     Spacer()
@@ -378,14 +384,36 @@ struct ProfileScreen: View {
                 .padding(.vertical, 4)
             }
 
-            // 3열 그리드
-            let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 3)
-            LazyVGrid(columns: columns, spacing: Spacing.s2) {
-                ForEach(filteredBadges) { badge in
-                    BadgeTileView(badge: badge) { detailBadge = badge }
+            // 3열 그리드 (필터 결과 없으면 빈 상태 안내)
+            if filteredBadges.isEmpty {
+                badgeEmptyState
+            } else {
+                let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 3)
+                LazyVGrid(columns: columns, spacing: Spacing.s2) {
+                    ForEach(filteredBadges) { badge in
+                        BadgeTileView(badge: badge) { detailBadge = badge }
+                    }
                 }
             }
         }
+    }
+
+    // 카테고리 필터 결과가 없을 때의 빈 상태 (잔잔한 톤)
+    private var badgeEmptyState: some View {
+        VStack(spacing: Spacing.s2) {
+            Image(systemName: "rosette")
+                .font(.system(size: 24, weight: .regular))
+                .foregroundStyle(AppColors.ink3)
+            Text("이 카테고리의 뱃지가 아직 없어요")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.ink3)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.s7)
+        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("이 카테고리의 뱃지가 아직 없어요")
     }
 
     // MARK: - Privacy Section
