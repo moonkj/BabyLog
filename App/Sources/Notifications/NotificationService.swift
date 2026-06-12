@@ -59,7 +59,10 @@ final class NotificationService {
         bus.events
             .sink { [weak self] event in
                 guard let self else { return }
+                // 상실·기록 멈춤(일시중단) 모두 해당 임신의 모든 알림을 즉시 취소
                 if case .pregnancyEndedInLoss(let pregnancyId) = event {
+                    self.scheduler.cancelPregnancyNotifications(pregnancyId: pregnancyId)
+                } else if case .pregnancyPaused(let pregnancyId) = event {
                     self.scheduler.cancelPregnancyNotifications(pregnancyId: pregnancyId)
                 }
             }

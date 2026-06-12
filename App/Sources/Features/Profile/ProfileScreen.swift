@@ -455,9 +455,11 @@ struct ProfileScreen: View {
                         showDivider: true,
                         onTap: {
                             let state = store.snapshot()
-                            if let url = try? DataExporter.exportToTemporaryFile(state) {
-                                exportURL = url
+                            do {
+                                exportURL = try DataExporter.exportToTemporaryFile(state)
                                 showShareSheet = true
+                            } catch {
+                                infoAlert = "데이터를 내보내지 못했어요. 잠시 후 다시 시도해 주세요."
                             }
                         }
                     )

@@ -538,6 +538,9 @@ final class AppStore: ObservableObject {
         pregnancies[idx] = updated
         if status == .loss {
             bus.publish(.pregnancyEndedInLoss(pregnancyId: pregnancyId))
+        } else if status == .paused {
+            // 기록 멈춤 — 상실은 아니지만 주차 알림·태아 가이드·권유 알림을 즉시 중단
+            bus.publish(.pregnancyPaused(pregnancyId: pregnancyId))
         }
     }
 

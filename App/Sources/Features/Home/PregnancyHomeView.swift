@@ -65,6 +65,11 @@ struct PregnancyHomeView: View {
         store.pregnancies.first(where: { $0.status == .active })
     }
 
+    // 일시중단/상실 상태의 임신 (민감영역 — 등록 권유 대신 따뜻한 안내)
+    private var pausedOrLossPregnancy: Pregnancy? {
+        store.pregnancies.first(where: { $0.status == .paused || $0.status == .loss })
+    }
+
     // 계산된 주수: activePregnancy 우선, 없으면 목업 폴백
     private var pregnancyWeek: (weeks: Int, days: Int) {
         if let p = activePregnancy {
@@ -87,7 +92,12 @@ struct PregnancyHomeView: View {
     var body: some View {
         ScrollView {
             if activePregnancy == nil {
-                pregnancyEmptyState
+                // 민감영역: 일시중단/상실 임신이 있으면 등록 권유 대신 따뜻한 안내
+                if pausedOrLossPregnancy != nil {
+                    pregnancyPausedCard
+                } else {
+                    pregnancyEmptyState
+                }
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     // 상단 헤더 (태명 탭 → 수정)
@@ -106,7 +116,6 @@ struct PregnancyHomeView: View {
                     VStack(spacing: Spacing.s4) {
                         checkupPriorityCard
                         weeklyDevelopmentCard
-                        neighborhoodCard
                         budgetCard
                     }
                     .padding(.horizontal, Spacing.s5)
@@ -148,6 +157,47 @@ struct PregnancyHomeView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Spacing.s5)
         .padding(.bottom, Spacing.s9)
+    }
+
+    // 일시중단/상실 상태 — 등록 권유 없이 따뜻한 안내 (민감영역)
+    // PregnancyRecordScreen.pausedOrLossCard의 컴팩트 버전. 등록 CTA 없음.
+    private var pregnancyPausedCard: some View {
+        VStack(spacing: Spacing.s5) {
+            ZStack {
+                Circle()
+                    .fill(Color(hex: 0xFBEAF0))
+                    .frame(width: 96, height: 96)
+                Circle()
+                    .stroke(AppColors.pregnancyPink.opacity(0.12), lineWidth: 1)
+                    .frame(width: 96, height: 96)
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 36, weight: .light))
+                    .foregroundStyle(AppColors.pregnancyPink.opacity(0.7))
+            }
+            .padding(.top, Spacing.s9)
+            .accessibilityHidden(true)
+
+            VStack(spacing: Spacing.s2) {
+                Text("언제든 돌아오세요")
+                    .font(.system(size: 20, weight: .heavy))
+                    .foregroundStyle(AppColors.ink)
+                Text("기록은 안전히 보관돼요.\n준비가 될 때 언제든 다시 시작할 수 있어요.")
+                    .font(AppFont.callout)
+                    .foregroundStyle(AppColors.ink3)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+            }
+
+            Text("기존에 남긴 기록은 모두 그대로 있어요.")
+                .font(AppFont.micro)
+                .foregroundStyle(AppColors.ink3)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, Spacing.s5)
+        .padding(.bottom, Spacing.s9)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("언제든 돌아오세요. 기록은 안전히 보관돼요. 준비가 될 때 언제든 다시 시작할 수 있어요.")
     }
 
     // MARK: - 헤더
@@ -250,8 +300,34 @@ struct PregnancyHomeView: View {
 
     // MARK: - 검진 우선순위 카드
 
+    // 현재 주차에 맞는 권장 검사 (실 주차 기반). 만들어낸 D-day는 쓰지 않는다.
+    private struct CheckupSuggestion {
+        let title: String
+        let detail: String
+    }
+
+    private func suggestedCheckup(week: Int) -> CheckupSuggestion {
+        switch week {
+        case 0..<11:
+            return CheckupSuggestion(title: "초기 산전 검사", detail: "10주 전후 · 첫 진료 권장")
+        case 11..<14:
+            return CheckupSuggestion(title: "초기 정밀 초음파·기형아 1차 검사", detail: "11~13주 권장")
+        case 14..<20:
+            return CheckupSuggestion(title: "기형아 2차 검사", detail: "16~20주 권장")
+        case 20..<24:
+            return CheckupSuggestion(title: "정밀 초음파", detail: "20~24주 권장")
+        case 24..<28:
+            return CheckupSuggestion(title: "임신성 당뇨 검사", detail: "24~28주 · 공복 검사 권장")
+        case 28..<35:
+            return CheckupSuggestion(title: "빈혈·소변 검사", detail: "28주 전후 권장")
+        default:
+            return CheckupSuggestion(title: "GBS 검사", detail: "35~37주 권장")
+        }
+    }
+
     private var checkupPriorityCard: some View {
-        Button {
+        let suggestion = suggestedCheckup(week: pregnancyWeek.weeks)
+        return Button {
             onNavigate(.record)
         } label: {
             ZStack(alignment: .topTrailing) {
@@ -274,26 +350,20 @@ struct PregnancyHomeView: View {
 
                 VStack(alignment: .leading, spacing: 0) {
                     // 뱃지
-                    BLBadge(tone: .pink, text: "지금 가장 중요해요", systemIcon: "cross.case.fill")
+                    BLBadge(tone: .pink, text: "이 시기 권장 검사", systemIcon: "cross.case.fill")
 
                     HStack(alignment: .bottom) {
                         VStack(alignment: .leading, spacing: Spacing.s1) {
-                            Text("임신성 당뇨 검사")
+                            Text(suggestion.title)
                                 .font(.system(size: 21, weight: .heavy))
                                 .foregroundStyle(AppColors.ink)
 
-                            Text("24~28주 · 공복 검사 권장")
+                            Text(suggestion.detail)
                                 .font(AppFont.callout)
                                 .foregroundStyle(Color(hex: 0xA8537E))
                         }
 
                         Spacer()
-
-                        // D-day 숫자
-                        Text("D-3")
-                            .font(AppFont.num(30, weight: .heavy))
-                            .foregroundStyle(AppColors.pregnancyPink)
-                            .accessibilityHidden(true)
                     }
                     .padding(.top, Spacing.s3)
 
@@ -333,7 +403,7 @@ struct PregnancyHomeView: View {
             .frame(minHeight: 44)
         }
         .buttonStyle(LiquidPressStyle(scale: 0.98))
-        .accessibilityLabel("검진 우선 카드: 임신성 당뇨 검사, D-3, 24~28주 공복 검사 권장")
+        .accessibilityLabel("이 시기 권장 검사: \(suggestion.title), \(suggestion.detail)")
         .accessibilityHint("탭하면 검진 상세로 이동")
     }
 
@@ -398,75 +468,6 @@ struct PregnancyHomeView: View {
         .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(value)")
-    }
-
-    // MARK: - 동네 소식 요약
-
-    private var neighborhoodCard: some View {
-        BLCard {
-            VStack(alignment: .leading, spacing: Spacing.s3) {
-                BLSectionHead(
-                    eyebrow: "지역",
-                    title: "우리 동네 소식",
-                    action: "더보기",
-                    onAction: { onNavigate(.dongne) }
-                )
-
-                VStack(spacing: Spacing.s3) {
-                    neighborhoodRow(
-                        emoji: "🍼",
-                        emojiAccessibility: "아기 용품",
-                        title: "뉴본 스와들 3종 나눔",
-                        subtitle: "120m · 나눔 · 0~3개월",
-                        seed: 0
-                    )
-                    neighborhoodRow(
-                        emoji: "🧸",
-                        emojiAccessibility: "장난감",
-                        title: "에르고 힙시트 카리어",
-                        subtitle: "350m · 5만원 · 6~36개월",
-                        seed: 2
-                    )
-                }
-            }
-        }
-    }
-
-    private func neighborhoodRow(emoji: String, emojiAccessibility: String, title: String, subtitle: String, seed: Int) -> some View {
-        Button {
-            onNavigate(.dongne)
-        } label: {
-            HStack(spacing: Spacing.s3) {
-                ZStack {
-                    PhotoPlaceholder(seed: seed, cornerRadius: 12)
-                        .frame(width: 50, height: 50)
-                    Text(emoji)
-                        .font(.system(size: 22))
-                }
-                .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.ink)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(AppFont.micro)
-                        .foregroundStyle(AppColors.ink3)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(LiquidPressStyle(scale: 0.97))
-        .accessibilityLabel("\(title), \(subtitle), \(emojiAccessibility)")
-        .accessibilityHint("탭하면 상세 정보 보기")
     }
 
     // MARK: - 가계부 요약

@@ -42,11 +42,8 @@ struct BabyLogApp: App {
         // 원격 푸시 토큰은 알림 권한과 무관하게 등록(토큰 확보가 목적). Push 역량 없으면 didFail로 무시.
         await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
         guard await scheduler.requestAuthorization() else { return }
-        let cal = Calendar.current
-        guard let soon = cal.date(byAdding: .day, value: 7, to: Date()) else { return }
-        let vax = VaccineRecord(id: UUID(), childId: UUID(), vaccineId: "DTaP 4차",
-                                scheduledDate: soon, completedDate: nil, hospital: "행복소아과")
-        scheduler.schedule(NotificationScheduler.vaccineReminders([vax], now: Date()))
+        // (제거됨) 무작위 UUID에 걸던 더미 'DTaP 4차' 백신 알림 — 실제 아이와 무관한 가짜 알림이라 삭제.
+        // 실제 접종 알림은 추후 아이의 KDCA 스케줄 기반으로 스케줄링한다.
 
         // "N년 전 오늘" 추억 사진 알림 (월 1회, 실 다이어리 기반)
         let memories = NotificationScheduler.memoryReminders(

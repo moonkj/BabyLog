@@ -631,57 +631,31 @@ struct BudgetScreen: View {
 // MARK: - SubsidyCard
 
 /// 정부지원금 카드.
-/// urgent(D-day ≤7) 상태는 골드 배경 + 신청 방법 빠른 액션 노출.
+/// 신청 정보와 복지로 바로가기를 제공한다.
+/// NOTE: 실제 마감일(D-day) 데이터가 SubsidyInfo에 없으므로,
+///       가짜 카운트다운/긴급(곧 마감) 연출은 표시하지 않는다.
+///       복지로 API가 실 마감일을 제공하면 그때 D-day를 복원한다. (정직한 결제·고지 원칙)
 private struct SubsidyCard: View {
 
     let info: SubsidyInfo
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulse = false
-
-    // D-day 계산 (목업: 첫만남이용권은 D-12, 나머지는 상시)
-    private var dDay: Int? {
-        switch info.id {
-        case "subsidy-001": return 12   // 첫만남이용권 — 곧 마감 (목업)
-        default:            return nil  // 상시 신청
-        }
-    }
-
-    private var isUrgent: Bool {
-        guard let d = dDay else { return false }
-        return d <= 30
-    }
-
-    private var dDayLabel: String? {
-        guard let d = dDay else { return nil }
-        return d == 0 ? "D-Day" : "D-\(d)"
-    }
-
     var body: some View {
-        BLCard(padding: Spacing.s4, flat: !isUrgent) {
+        BLCard(padding: Spacing.s4, flat: true) {
             VStack(spacing: 0) {
                 // 상단: 아이콘 + 정보 + 신청 버튼
                 HStack(spacing: Spacing.s3) {
                     iconBox
 
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: Spacing.s2) {
-                            Text(info.name)
-                                .font(.system(size: 15.5, weight: .bold))
-                                .foregroundStyle(AppColors.ink)
-                                .lineLimit(1)
-
-                            if let label = dDayLabel {
-                                BLBadge(tone: .amber, text: label, systemIcon: "clock.fill", dot: false)
-                                    .scaleEffect(pulse ? 1.04 : 1.0)
-                                    .accessibilityLabel("마감 \(label)")
-                            }
-                        }
+                        Text(info.name)
+                            .font(.system(size: 15.5, weight: .bold))
+                            .foregroundStyle(AppColors.ink)
+                            .lineLimit(1)
 
                         HStack(spacing: Spacing.s2) {
                             Text(amountStr(info.amountKRW))
                                 .font(AppFont.num(14, weight: .heavy))
-                                .foregroundStyle(isUrgent ? AppColors.gold : AppColors.primary)
+                                .foregroundStyle(AppColors.primary)
                                 .lineLimit(1)
                             Text(info.eligibility)
                                 .font(AppFont.caption)
@@ -693,47 +667,10 @@ private struct SubsidyCard: View {
 
                     applyButton
                 }
-
-                // urgent 카드 — "신청 방법 보기" LiquidButton + 복지로 링크
-                if isUrgent {
-                    Divider()
-                        .background(AppColors.gold.opacity(0.25))
-                        .padding(.vertical, Spacing.s3)
-
-                    LiquidButton(fill: AppColors.gold, cornerRadius: Radius.sm) {
-                        openApplyInfo()
-                    } label: {
-                        HStack(spacing: Spacing.s2) {
-                            Image(systemName: "arrow.up.right.square.fill")
-                                .accessibilityHidden(true)
-                            Text("신청 방법 보기 — 복지로")
-                        }
-                    }
-                    .accessibilityLabel("\(info.name) 신청 방법 보기. 복지로 페이지로 이동합니다.")
-                    .accessibilityHint("복지로 웹사이트가 열립니다.")
-                }
-            }
-        }
-        // urgent 카드는 BLCard 위에 골드 그라데이션 오버레이로 색조 강화
-        .overlay(alignment: .topLeading) {
-            if isUrgent {
-                LinearGradient(
-                    colors: [Color(hex: 0xFBF1DC).opacity(0.55), Color(hex: 0xF7E7C4).opacity(0.45)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-                .allowsHitTesting(false)
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(info.name), \(amountStr(info.amountKRW)). \(info.eligibility)\(dDayLabel.map { ". 마감 \($0)" } ?? "")")
-        .onAppear {
-            // 마감 임박 카드만 은은한 D-day 펄스 — 모션 줄이기 ON이면 정지
-            guard isUrgent, !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
+        .accessibilityLabel("\(info.name), \(amountStr(info.amountKRW)). \(info.eligibility)")
     }
 
     // 복지로 공식 사이트로 직접 이동. (mock 딥링크는 세션 의존이라 메인으로; 복지로 API 연동 시 실 딥링크로 대체)
@@ -746,12 +683,12 @@ private struct SubsidyCard: View {
     private var iconBox: some View {
         ZStack {
             RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                .fill(isUrgent ? AppColors.goldTint : AppColors.primaryTint)
+                .fill(AppColors.primaryTint)
                 .frame(width: 46, height: 46)
 
             Image(systemName: "gift.fill")
                 .font(.system(size: 21, weight: .medium))
-                .foregroundStyle(isUrgent ? AppColors.gold : AppColors.primary)
+                .foregroundStyle(AppColors.primary)
         }
         .accessibilityHidden(true)
     }
@@ -765,7 +702,7 @@ private struct SubsidyCard: View {
                 .foregroundStyle(AppColors.onPrimary)
                 .padding(.horizontal, Spacing.s4)
                 .frame(height: 38)
-                .background(isUrgent ? AppColors.gold : AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                .background(AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         }
         .buttonStyle(LiquidPressStyle())
         .frame(minWidth: 44, minHeight: 44)

@@ -7,6 +7,8 @@ enum AppEvent {
     case milestoneAchieved(childId: UUID, milestone: String)
     case recordSaved(childId: UUID)
     case pregnancyEndedInLoss(pregnancyId: UUID)
+    /// 기록 멈춤(일시중단) — 상실은 아니지만 모든 주차 알림·태아 가이드·권유 알림을 즉시 중단.
+    case pregnancyPaused(pregnancyId: UUID)
 }
 
 // MARK: - Event Bus

@@ -170,9 +170,11 @@ struct ShareCardCanvas: View {
         if vm.fields.weight, let w = vm.weightText {
             result.append(w)
         }
-        if vm.fields.percentile {
-            result.append("상위 42%")  // 팀장이 실제 백분위 API로 교체
-        }
+        // '또래 백분위'는 공유 카드에 수치/등수로 표기하지 않는다.
+        // - 정직 원칙: 실데이터 없이 조작된 백분위를 진짜처럼 노출 금지.
+        // - 또래 비교 안심 톤: '상위 N%' 같은 등수 경쟁 프레이밍 금지.
+        // 필드 토글(또래 백분위)은 ShareCardView.swift(ShareCardFields.percentile,
+        // 263~264행 DarkChip)에 정의되어 있으나, 공유 카드 렌더에서는 아무것도 그리지 않는다.
         return result
     }
 

@@ -291,14 +291,33 @@ enum PregnancyData {
         let isUrgent: Bool
     }
     static func checkupSchedule(currentWeek: Int) -> [CheckupItem] {
-        [
-            .init(name: "초기 정밀 초음파",      weekRange: "11~13주",  dueLabel: "권장", isDone: false, isUrgent: false),
-            .init(name: "기형아 1차 검사",        weekRange: "11~13주",  dueLabel: "권장", isDone: false, isUrgent: false),
-            .init(name: "기형아 2차 검사",        weekRange: "16~20주",  dueLabel: "권장", isDone: false, isUrgent: false),
-            .init(name: "정밀 초음파",            weekRange: "20~24주",  dueLabel: "D-14", isDone: false, isUrgent: false),
-            .init(name: "임신성 당뇨 검사",       weekRange: "24~28주",  dueLabel: "D-3",  isDone: false, isUrgent: true),
-            .init(name: "빈혈·소변 검사",         weekRange: "28주",     dueLabel: "D+11", isDone: false, isUrgent: false),
-            .init(name: "GBS 검사",               weekRange: "35~37주",  dueLabel: "예정", isDone: false, isUrgent: false),
+        // 권장 검사 주차(시작·끝). D-day는 실제 검진 예약일이 없으므로 만들어내지 않는다.
+        // 대신 현재 주차와 권장 주차를 비교해 "권장/예정/지난 시기"의 중립 레이블만 표기한다.
+        let schedule: [(name: String, range: String, start: Int, end: Int)] = [
+            ("초기 정밀 초음파", "11~13주", 11, 13),
+            ("기형아 1차 검사",  "11~13주", 11, 13),
+            ("기형아 2차 검사",  "16~20주", 16, 20),
+            ("정밀 초음파",      "20~24주", 20, 24),
+            ("임신성 당뇨 검사", "24~28주", 24, 28),
+            ("빈혈·소변 검사",   "28주",    28, 28),
+            ("GBS 검사",         "35~37주", 35, 37),
         ]
+        return schedule.map { item in
+            let label: String
+            if currentWeek < item.start {
+                label = "예정"          // 아직 권장 시기 전
+            } else if currentWeek > item.end {
+                label = "지난 시기"     // 권장 시기 지남 (닦달 없이 중립 표기)
+            } else {
+                label = "권장 시기"     // 지금이 권장 시기
+            }
+            return CheckupItem(
+                name: item.name,
+                weekRange: item.range,
+                dueLabel: label,
+                isDone: false,
+                isUrgent: false
+            )
+        }
     }
 }

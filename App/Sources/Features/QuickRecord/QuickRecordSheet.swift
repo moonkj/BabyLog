@@ -12,15 +12,11 @@ struct QuickRecordSheet: View {
 
     @EnvironmentObject private var store: AppStore
 
-    /// 현재 선택된 아이 이름 (하드코딩 금지 — store 기준)
-    private var childName: String {
-        if mode == .pregnancy { return store.activePregnancy?.nickname ?? "우리 아기" }
-        return store.selectedChild?.name ?? "우리 아기"
-    }
-
     // MARK: Internal state
     @State private var showDetail = false
     @State private var savedOverlay = false
+    /// 아무 것도 입력하지 않고 저장을 누르면 표시하는 안내 (성공 위장 금지 — 정직)
+    @State private var showEmptyHint = false
 
     // 이정표 선택 (다중)
     @State private var selectedMilestones: Set<String> = []
@@ -37,11 +33,10 @@ struct QuickRecordSheet: View {
     @State private var heightText: String = ""
     @State private var weightText: String = ""
 
-    // 저장 완료 순간 카운터 — 선택 아이의 실제 기록(다이어리) 수 (저장 후 호출되어 방금 항목 포함)
-    private var momentCount: Int {
-        guard let id = store.selectedChild?.id else { return 1 }
-        return max(1, store.diaryEntries(for: id).count)
-    }
+    // 저장 완료 순간 — 실제 저장한 대상의 카운터·이름을 저장 시점에 캡처해 표시.
+    // (selectedChild를 무조건 세면 형제·자매 저장/임신 모드에서 잘못된 수가 나옴.)
+    @State private var savedMomentCount = 1
+    @State private var savedDisplayName = "우리 아기"
 
     // MARK: 모드별 콘텐츠
     private var sheetTitle: String {
@@ -116,6 +111,10 @@ struct QuickRecordSheet: View {
                     }
                     saveButton
                         .padding(.top, Spacing.s2)
+                    if showEmptyHint {
+                        emptyHintRow
+                            .padding(.top, Spacing.s2)
+                    }
                     toggleDetailButton
                         .padding(.top, Spacing.s1)
                 }
@@ -124,6 +123,17 @@ struct QuickRecordSheet: View {
             }
         }
         .background(AppColors.surface)
+        // 사용자가 무언가 입력하면 안내를 즉시 해제 (더 이상 빈 저장이 아님)
+        .onChange(of: hasMedia) { _ in clearEmptyHintIfNeeded() }
+        .onChange(of: memo) { _ in clearEmptyHintIfNeeded() }
+        .onChange(of: selectedMilestones) { _ in clearEmptyHintIfNeeded() }
+        .onChange(of: heightText) { _ in clearEmptyHintIfNeeded() }
+        .onChange(of: weightText) { _ in clearEmptyHintIfNeeded() }
+    }
+
+    private func clearEmptyHintIfNeeded() {
+        guard showEmptyHint else { return }
+        withAnimation(.easeInOut(duration: 0.2)) { showEmptyHint = false }
     }
 
     // MARK: - Sub-views
@@ -423,6 +433,23 @@ struct QuickRecordSheet: View {
         .accessibilityHint("탭하면 기록이 저장됩니다")
     }
 
+    // 입력 없이 저장 시 부드러운 안내 (성공 위장 대신 — 정직 원칙)
+    private var emptyHintRow: some View {
+        HStack(spacing: Spacing.s2) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.ink3)
+                .accessibilityHidden(true)
+            Text(mode == .pregnancy ? "배 사진이나 메모를 추가해 주세요" : "사진이나 메모를 추가해 주세요")
+                .font(AppFont.caption)
+                .foregroundStyle(AppColors.ink2)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Spacing.s2)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .accessibilityElement(children: .combine)
+    }
+
     // 자세히 펼치기 / 간단하게 토글
     private var toggleDetailButton: some View {
         Button {
@@ -462,7 +489,7 @@ struct QuickRecordSheet: View {
                 }
                 .popAnimation()
 
-                Text("\(childName)의 \(momentCount)번째 순간")
+                Text("\(savedDisplayName)의 \(savedMomentCount)번째 순간")
                     .font(AppFont.h2)
                     .foregroundStyle(AppColors.ink)
                     .multilineTextAlignment(.center)
@@ -477,34 +504,44 @@ struct QuickRecordSheet: View {
         }
         .transition(.opacity.combined(with: .scale(scale: 0.92)))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(childName)의 \(momentCount)번째 순간이 저장되었습니다")
+        .accessibilityLabel("\(savedDisplayName)의 \(savedMomentCount)번째 순간이 저장되었습니다")
     }
 
     // MARK: - Actions
 
-    // 임신 모드 저장: 배 사진 → 활성 임신 배사진 타임라인, 산모 체중 → 체중 기록
-    private func savePregnancyRecord() {
-        guard let preg = store.activePregnancy else { return }
+    // 임신 모드 저장: 배 사진 → 활성 임신 배사진 타임라인, 산모 체중 → 체중 기록.
+    // 반환값: 실제로 무언가 저장되었으면 true (성공 위장 방지용).
+    @discardableResult
+    private func savePregnancyRecord() -> Bool {
+        guard let preg = store.activePregnancy else { return false }
+        var savedAnything = false
         let week = AgeCalculator.pregnancyWeeks(lmp: preg.lmpDate, edd: preg.eddDate, asOf: Date())?.weeks ?? 0
         for img in selectedImages {
             if let ref = PhotoStore.save(img) {
                 store.addBellyPhoto(pregnancyId: preg.id, week: week, photoRef: ref)
+                savedAnything = true
             }
         }
         if showDetail, let w = Double(weightText.trimmingCharacters(in: .whitespaces)) {
             store.addPregnancyWeight(pregnancyId: preg.id, kg: w)
+            savedAnything = true
         }
         // 메모 저장 (손실 방지)
         let trimmedMemo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedMemo.isEmpty {
             store.addPregnancyMemo(pregnancyId: preg.id, text: trimmedMemo)
+            savedAnything = true
         }
+        return savedAnything
     }
 
     private func handleSave() {
+        // 이 저장으로 실제 무언가가 기록되었는지 추적 (성공 위장 금지 — 정직 원칙)
+        var didSave = false
+
         if mode == .pregnancy {
             // 임신 모드: 배 사진 + 산모 체중을 활성 임신 기록에 저장
-            savePregnancyRecord()
+            didSave = savePregnancyRecord()
         } else if let childId = store.selectedChild?.id {
             // 사진·메모·이정표 중 하나라도 있으면 DiaryEntry 기록
             let trimmedMemo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -530,6 +567,7 @@ struct QuickRecordSheet: View {
                         videoRef:  videoFile
                     )
                 }
+                didSave = true
             }
             // 자세히 모드에서 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
             if showDetail {
@@ -542,10 +580,33 @@ struct QuickRecordSheet: View {
                         weightKg:            weightVal,
                         headCircumferenceCm: nil
                     )
+                    didSave = true
                 }
             }
         } else {
             onSave(); onClose(); return
+        }
+
+        // 아무 것도 입력하지 않았으면 성공 피드백을 위장하지 않고 부드럽게 안내 (정직)
+        guard didSave else {
+            Haptics.warning()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showEmptyHint = true
+            }
+            return
+        }
+
+        // 실제 저장한 대상 기준으로 보상 오버레이 문구를 캡처 (selectedChild 고정 카운트 버그 방지)
+        if mode == .pregnancy {
+            savedDisplayName = store.activePregnancy?.nickname ?? "우리 아기"
+            if let pid = store.activePregnancy?.id {
+                savedMomentCount = max(1, store.bellyPhotos(pregnancyId: pid).count)
+            } else {
+                savedMomentCount = 1
+            }
+        } else if let target = store.selectedChild {
+            savedDisplayName = target.name
+            savedMomentCount = max(1, store.diaryEntries(for: target.id).count)
         }
 
         // 1탭: 저장 버튼 탭 → 보상 오버레이 표시 (+ 성공 햅틱)

@@ -260,9 +260,8 @@ struct ShareCardView: View {
                 DarkChip(text: "월령·D+day", isOn: vm.fields.monthAge) {
                     vm.fields.monthAge.toggle()
                 }
-                DarkChip(text: "또래 백분위", isOn: vm.fields.percentile) {
-                    vm.fields.percentile.toggle()
-                }
+                // '또래 백분위' 칩 제거 — 실제 백분위 데이터가 없어 카드에 가짜 '상위 N%'가 찍히던 문제(정직·또래비교 원칙).
+                //   실데이터(WHO 밴드 기반) 연동 시 안심 톤으로 복원.
                 DarkChip(text: "이정표", isOn: vm.fields.milestone) {
                     vm.fields.milestone.toggle()
                 }

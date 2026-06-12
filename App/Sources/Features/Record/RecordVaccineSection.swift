@@ -248,7 +248,7 @@ struct VaccineSection: View {
                     Text("\(name)가 다가와요")
                         .font(.system(size: 15, weight: .heavy))
                         .foregroundStyle(AppColors.ink)
-                    Text("질병관리청 스케줄 기준 · D-7 알림 설정됨")
+                    Text("질병관리청 표준 스케줄 기준")
                         .font(AppFont.caption)
                         .foregroundStyle(AppColors.ink2)
                 }
@@ -268,7 +268,7 @@ struct VaccineSection: View {
         }
         .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name) 접종 \(dNum)일 후 예정. 알림 설정됨.")
+        .accessibilityLabel("\(name) 접종 \(dNum)일 후 예정. 질병관리청 표준 스케줄 기준.")
     }
 
     // MARK: - Async

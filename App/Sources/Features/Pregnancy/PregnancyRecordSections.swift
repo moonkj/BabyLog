@@ -516,13 +516,25 @@ struct PregnancyCheckupSection: View {
         store.toggleCheckupDone(pregnancyId: pid, checkupId: checkup.name)
     }
 
+    /// 현재 주차에 맞는 이 시기 권장 검사. 실제 예약일이 없으므로 D-day는 만들어내지 않는다.
+    private var suggestedCheckup: (title: String, detail: String) {
+        switch week.weeks {
+        case 0..<11:   return ("초기 산전 검사", "10주 전후 · 첫 진료 권장")
+        case 11..<14:  return ("초기 정밀 초음파·기형아 1차 검사", "11~13주 권장")
+        case 14..<20:  return ("기형아 2차 검사", "16~20주 권장")
+        case 20..<24:  return ("정밀 초음파", "20~24주 권장")
+        case 24..<28:  return ("임신성 당뇨 검사", "24~28주 · 공복 검사 권장")
+        case 28..<35:  return ("빈혈·소변 검사", "28주 전후 권장")
+        default:       return ("GBS 검사", "35~37주 권장")
+        }
+    }
+
     var body: some View {
         LazyVStack(spacing: Spacing.s3, pinnedViews: []) {
-            // 가장 가까운 검사 하이라이트
-            urgentCheckupCard(
-                title: "임신성 당뇨 검사",
-                detail: "24~28주 · 공복 검사 권장",
-                dday: "D-3"
+            // 이 시기 권장 검사 하이라이트 (실 주차 기반, 만들어낸 D-day 없음)
+            suggestedCheckupCard(
+                title: suggestedCheckup.title,
+                detail: suggestedCheckup.detail
             )
             .padding(.horizontal, Spacing.s5)
 
@@ -548,7 +560,7 @@ struct PregnancyCheckupSection: View {
         }
     }
 
-    private func urgentCheckupCard(title: String, detail: String, dday: String) -> some View {
+    private func suggestedCheckupCard(title: String, detail: String) -> some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
                 .fill(
@@ -576,7 +588,7 @@ struct PregnancyCheckupSection: View {
                 .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("가장 가까운 검사")
+                    Text("이 시기 권장 검사")
                         .font(.system(size: 11, weight: .bold))
                         .tracking(0.5)
                         .foregroundStyle(Color(hex: 0xA8537E).opacity(0.85))
@@ -588,17 +600,13 @@ struct PregnancyCheckupSection: View {
                         .foregroundStyle(Color(hex: 0xA8537E))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(dday)
-                    .font(AppFont.num(22, weight: .heavy))
-                    .foregroundStyle(AppColors.pregnancyPink)
             }
             .padding(Spacing.s5)
         }
         .blShadow(.card)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title). \(detail). \(dday)")
-        .accessibilityHint("가장 가까운 산전 검사")
+        .accessibilityLabel("이 시기 권장 검사: \(title). \(detail).")
+        .accessibilityHint("현재 주차 기준 권장 산전 검사")
     }
 
     private func checkupRow(checkup: PregnancyData.CheckupItem) -> some View {

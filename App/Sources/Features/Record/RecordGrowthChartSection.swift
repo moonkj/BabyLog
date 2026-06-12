@@ -24,7 +24,7 @@ struct GrowthChartSection: View {
             .sorted { $0.date < $1.date }
     }
 
-    // WHO 백분위 참조 데이터 (남아 기준 근사값, 월령별)
+    // WHO 백분위 참조 데이터 (성별 구분, 월령별)
     private struct WHOBand: Identifiable {
         var id: Int { month }
         let month: Int
@@ -33,7 +33,16 @@ struct GrowthChartSection: View {
         let p85: Double
     }
 
-    private var weightBands: [WHOBand] {
+    // 성별을 알 수 없을 때(미지정/미입력) 밴드 오버레이를 권위 있게 그리지 않도록 판단.
+    // 남아/여아 표준이 서로 다르므로 잘못된 "정상범위"를 보여주는 것보다 생략이 안전·정직하다.
+    private var hasKnownGender: Bool {
+        switch child.gender {
+        case .boy, .girl: return true
+        default:          return false
+        }
+    }
+
+    private var weightBandsBoy: [WHOBand] {
         // WHO 남아 몸무게 백분위 근사 (0–16개월)
         [
             WHOBand(month: 0,  p15: 2.9,  p50: 3.3,  p85: 3.9),
@@ -48,7 +57,22 @@ struct GrowthChartSection: View {
         ]
     }
 
-    private var heightBands: [WHOBand] {
+    private var weightBandsGirl: [WHOBand] {
+        // WHO 여아 몸무게 백분위 근사 (0–16개월)
+        [
+            WHOBand(month: 0,  p15: 2.8,  p50: 3.2,  p85: 3.7),
+            WHOBand(month: 2,  p15: 4.5,  p50: 5.1,  p85: 5.9),
+            WHOBand(month: 4,  p15: 5.7,  p50: 6.4,  p85: 7.3),
+            WHOBand(month: 6,  p15: 6.5,  p50: 7.3,  p85: 8.3),
+            WHOBand(month: 8,  p15: 7.0,  p50: 7.9,  p85: 9.0),
+            WHOBand(month: 10, p15: 7.5,  p50: 8.5,  p85: 9.6),
+            WHOBand(month: 12, p15: 7.9,  p50: 8.9,  p85: 10.1),
+            WHOBand(month: 14, p15: 8.2,  p50: 9.4,  p85: 10.6),
+            WHOBand(month: 16, p15: 8.6,  p50: 9.8,  p85: 11.1),
+        ]
+    }
+
+    private var heightBandsBoy: [WHOBand] {
         // WHO 남아 키 백분위 근사 (0–16개월)
         [
             WHOBand(month: 0,  p15: 48.2, p50: 49.9, p85: 51.8),
@@ -61,6 +85,29 @@ struct GrowthChartSection: View {
             WHOBand(month: 14, p15: 75.0, p50: 78.0, p85: 81.1),
             WHOBand(month: 16, p15: 77.1, p50: 80.2, p85: 83.3),
         ]
+    }
+
+    private var heightBandsGirl: [WHOBand] {
+        // WHO 여아 키 백분위 근사 (0–16개월)
+        [
+            WHOBand(month: 0,  p15: 47.5, p50: 49.1, p85: 50.9),
+            WHOBand(month: 2,  p15: 54.4, p50: 57.1, p85: 59.1),
+            WHOBand(month: 4,  p15: 59.8, p50: 62.1, p85: 64.5),
+            WHOBand(month: 6,  p15: 63.2, p50: 65.7, p85: 68.2),
+            WHOBand(month: 8,  p15: 66.0, p50: 68.7, p85: 71.5),
+            WHOBand(month: 10, p15: 68.5, p50: 71.5, p85: 74.5),
+            WHOBand(month: 12, p15: 70.8, p50: 74.0, p85: 77.1),
+            WHOBand(month: 14, p15: 73.0, p50: 76.4, p85: 79.7),
+            WHOBand(month: 16, p15: 75.0, p50: 78.6, p85: 82.1),
+        ]
+    }
+
+    private var weightBands: [WHOBand] {
+        child.gender == .girl ? weightBandsGirl : weightBandsBoy
+    }
+
+    private var heightBands: [WHOBand] {
+        child.gender == .girl ? heightBandsGirl : heightBandsBoy
     }
 
     private var currentBands: [WHOBand] { metric == .weight ? weightBands : heightBands }
@@ -91,6 +138,87 @@ struct GrowthChartSection: View {
         let curr = currentValue
         guard let p = prev, let c = curr else { return nil }
         return c - p
+    }
+
+    // 성별 확인 시에만 권위 있게 밴드를 그린다(성별 미상이면 잘못된 표준 회피)
+    private var showsBand: Bool { hasKnownGender }
+
+    // MARK: 안심 헤드라인 (등수 비교 금지 · 의료조언 금지)
+
+    /// 최신 측정값이 WHO 밴드 어디에 위치하는지 (성별 확인된 경우만 판정)
+    private enum BandPosition { case withinRange, belowRange, aboveRange }
+
+    /// 월령에 해당하는 밴드를 선형 보간해 p15/p85 경계를 구하고, 측정값의 위치를 판정한다.
+    private func bandPosition(value: Double?, month: Int, bands: [WHOBand]) -> BandPosition? {
+        guard let v = value else { return nil }
+        let sorted = bands.sorted { $0.month < $1.month }
+        guard let first = sorted.first, let lastB = sorted.last else { return nil }
+        let bound: (p15: Double, p85: Double)
+        if month <= first.month {
+            bound = (first.p15, first.p85)
+        } else if month >= lastB.month {
+            bound = (lastB.p15, lastB.p85)
+        } else {
+            var found: (Double, Double)? = nil
+            for i in 0..<(sorted.count - 1) {
+                let lo = sorted[i], hi = sorted[i + 1]
+                if month >= lo.month && month <= hi.month {
+                    let span = Double(hi.month - lo.month)
+                    let t = span > 0 ? Double(month - lo.month) / span : 0
+                    found = (lo.p15 + (hi.p15 - lo.p15) * t, lo.p85 + (hi.p85 - lo.p85) * t)
+                    break
+                }
+            }
+            guard let f = found else { return nil }
+            bound = (f.0, f.1)
+        }
+        if v < bound.p15 { return .belowRange }
+        if v > bound.p85 { return .aboveRange }
+        return .withinRange
+    }
+
+    /// 최신 키·몸무게 측정 각각이 밴드 안/밖 어디인지. 성별 미상이면 nil(판정 보류).
+    private var latestBandPosition: BandPosition? {
+        guard hasKnownGender, let last = lastRecord else { return nil }
+        let month = AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: last.date).months
+
+        let wPos = bandPosition(value: last.weightKg, month: month, bands: weightBands)
+        let hPos = bandPosition(value: last.heightCm, month: month, bands: heightBands)
+
+        // 둘 중 하나라도 범위 밖이면 '범위 밖'으로 안내(부드럽게), 둘 다 범위 안이면 '범위 안'
+        let positions = [wPos, hPos].compactMap { $0 }
+        guard !positions.isEmpty else { return nil }
+        if positions.contains(where: { $0 != .withinRange }) {
+            // 위/아래 구분은 안심 헤드라인에선 불필요 — 범위 밖 한 가지로 통일
+            return positions.first(where: { $0 == .belowRange }) ?? .aboveRange
+        }
+        return .withinRange
+    }
+
+    /// 실제 측정 위치를 반영한 헤드라인 (false reassurance 금지)
+    private var assuranceHeadline: String {
+        switch latestBandPosition {
+        case .withinRange:
+            return "또래 범위 안에서 잘 자라고 있어요"
+        case .belowRange, .aboveRange:
+            // 알람 톤 금지 · 의료조언 금지 · 거짓 안심 금지
+            return "\(child.name)만의 속도로 자라고 있어요"
+        case nil:
+            // 성별 미상 등으로 판정 불가 — 중립 캡션(거짓 안심 회피)
+            return "\(child.name)의 성장 추이를 기록하고 있어요"
+        }
+    }
+
+    /// 헤드라인 아래 보조 문구 (위치에 맞춰 톤 조정)
+    private var assuranceSubline: String {
+        switch latestBandPosition {
+        case .withinRange:
+            return "정밀 수치는 아래 차트에서 확인할 수 있어요"
+        case .belowRange, .aboveRange:
+            return "성장 속도는 아이마다 달라요 — 정기 검진에서 함께 확인해보세요"
+        case nil:
+            return "정밀 수치는 아래 차트에서 확인할 수 있어요"
+        }
     }
 
     var body: some View {
@@ -187,10 +315,10 @@ struct GrowthChartSection: View {
                 .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("또래와 비슷하게 잘 크고 있어요")
+                    Text(assuranceHeadline)
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(AppColors.ink)
-                    Text("걱정 마세요 — 정밀 수치는 아래 차트에서 확인할 수 있어요")
+                    Text(assuranceSubline)
                         .font(AppFont.caption)
                         .foregroundStyle(AppColors.ink2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -236,29 +364,33 @@ struct GrowthChartSection: View {
         let lastPt = chartPoints.last
         let metricLabel = metric.label
         let metricUnit = metric.unit
+        let drawBand = showsBand
         return Chart {
-            // WHO 밴드 (p15–p85) — AreaMark
-            ForEach(bands) { band in
-                AreaMark(
-                    x: .value("월령", band.month),
-                    yStart: .value("p15", band.p15),
-                    yEnd: .value("p85", band.p85)
-                )
-                .foregroundStyle(AppColors.primary.opacity(0.10))
-                .interpolationMethod(.catmullRom)
-                .accessibilityHidden(true)
-            }
+            // WHO 밴드 (p15–p85) — AreaMark · 성별 확인된 경우만 표시
+            // (성별 미상이면 남/여 표준이 달라 잘못된 "정상범위"를 권위 있게 그리지 않음)
+            if drawBand {
+                ForEach(bands) { band in
+                    AreaMark(
+                        x: .value("월령", band.month),
+                        yStart: .value("p15", band.p15),
+                        yEnd: .value("p85", band.p85)
+                    )
+                    .foregroundStyle(AppColors.primary.opacity(0.10))
+                    .interpolationMethod(.catmullRom)
+                    .accessibilityHidden(true)
+                }
 
-            // WHO p50 중앙선 — LineMark (점선)
-            ForEach(bands) { band in
-                LineMark(
-                    x: .value("월령", band.month),
-                    y: .value("p50", band.p50)
-                )
-                .foregroundStyle(AppColors.primary.opacity(0.45))
-                .lineStyle(StrokeStyle(lineWidth: 1.3, dash: [4, 4]))
-                .interpolationMethod(.catmullRom)
-                .accessibilityHidden(true)
+                // WHO p50 중앙선 — LineMark (점선)
+                ForEach(bands) { band in
+                    LineMark(
+                        x: .value("월령", band.month),
+                        y: .value("p50", band.p50)
+                    )
+                    .foregroundStyle(AppColors.primary.opacity(0.45))
+                    .lineStyle(StrokeStyle(lineWidth: 1.3, dash: [4, 4]))
+                    .interpolationMethod(.catmullRom)
+                    .accessibilityHidden(true)
+                }
             }
 
             // 실제 측정 데이터 — LineMark
@@ -336,8 +468,16 @@ struct GrowthChartSection: View {
     private var chartLegend: some View {
         HStack(spacing: Spacing.s3) {
             legendItem(color: AppColors.primary, style: .solid, label: child.name)
-            legendItem(color: AppColors.primary.opacity(0.45), style: .dashed, label: "WHO 중앙(p50)")
-            legendItem(color: AppColors.primary.opacity(0.10), style: .area, label: "WHO 정상범위")
+            if showsBand {
+                let genderLabel = child.gender == .girl ? "여아" : "남아"
+                legendItem(color: AppColors.primary.opacity(0.45), style: .dashed, label: "WHO \(genderLabel) 중앙(p50)")
+                legendItem(color: AppColors.primary.opacity(0.10), style: .area, label: "WHO \(genderLabel) 정상범위")
+            } else {
+                // 성별 미상 — 권위 있는 정상범위 대신 안내
+                Text("성별 입력 시 WHO 성장곡선이 함께 표시돼요")
+                    .font(AppFont.micro)
+                    .foregroundStyle(AppColors.ink3)
+            }
         }
     }
 
@@ -399,8 +539,9 @@ struct GrowthChartSection: View {
     }
 
     private var chartAccessibilityDescription: String {
-        "성장 차트. \(metric.label) 추이. "
+        let genderLabel = child.gender == .girl ? "여아" : "남아"
+        return "성장 차트. \(metric.label) 추이. "
         + (chartPoints.last.map { "현재 \($0.value)\(metric.unit)" } ?? "")
-        + ". WHO 정상 범위 밴드 표시됨."
+        + (showsBand ? ". WHO \(genderLabel) 정상 범위 밴드 표시됨." : ". 성별 미입력으로 WHO 정상 범위는 표시되지 않음.")
     }
 }
