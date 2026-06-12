@@ -37,44 +37,79 @@ struct GrowthRingView: View {
 
 // MARK: - 레이더 스윕 (계층 3, 기능 진입) — DESIGN.md §8.4
 
-/// 주변/응급 탐색을 표현하는 레이더 스윕. 로딩 인디케이터로 사용(§7.1 로딩 필수).
-/// rotation만 애니메이션(60fps). reduce motion 시 정적 동심원 + 중심점.
+/// 주변/응급 탐색 레이더 스윕(핸드오프 loading_radar_handoff).
+/// 세이지 3중 동심원 + 회전 스윕(70° 부채꼴) + 코어/헤일로 + 골드 블립 펄스.
+/// reduce motion 시 정지(블립은 은은히 표시).
 struct RadarSweepView: View {
     var size: CGFloat = 76
-    var color: Color = AppColors.primary
+    /// 스윕·코어 색(기본 세이지 — 핸드오프 팔레트).
+    var color: Color = Color(hex: 0x4E8268)
+
+    private let ringColor = Color(hex: 0xDBD1BF)
+    private let blipColor = Color(hex: 0xB0832E)
+    private let period: Double = 1.6
+    private let blips: [(x: CGFloat, y: CGFloat, delay: Double)] = [
+        (0.70, 0.32, 0.2), (0.30, 0.62, 0.8), (0.64, 0.70, 1.2),
+    ]
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var angle: Double = 0
 
     var body: some View {
-        ZStack {
-            ForEach(1...3, id: \.self) { i in
+        TimelineView(.animation(paused: reduceMotion)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            let spin = reduceMotion ? 0 : (t.truncatingRemainder(dividingBy: period) / period) * 360
+            ZStack {
+                // 동심원 3개(반지름 비 13/36/59)
+                ring(13.0 / 59.0)
+                ring(36.0 / 59.0)
+                ring(1.0)
+
+                // 회전 스윕(70° 부채꼴, 세이지 → 투명)
                 Circle()
-                    .stroke(color.opacity(0.16), lineWidth: 1)
-                    .frame(width: size * CGFloat(i) / 3, height: size * CGFloat(i) / 3)
-            }
+                    .fill(AngularGradient(stops: [
+                        .init(color: color.opacity(0.45), location: 0),
+                        .init(color: color.opacity(0.0), location: 70.0 / 360.0),
+                        .init(color: color.opacity(0.0), location: 1),
+                    ], center: .center))
+                    .rotationEffect(.degrees(spin))
 
-            // 스윕 트레일 (각도 그라데이션)
-            Circle()
-                .fill(AngularGradient(
-                    gradient: Gradient(colors: [color.opacity(0.32), .clear]),
-                    center: .center
-                ))
-                .frame(width: size, height: size)
-                .rotationEffect(.degrees(angle))
+                // 코어 + 헤일로
+                Circle().fill(color.opacity(0.18)).frame(width: size * 0.205, height: size * 0.205)
+                Circle().fill(color).frame(width: size * 0.108, height: size * 0.108)
 
-            Circle()
-                .fill(color)
-                .frame(width: 6, height: 6)
-        }
-        .frame(width: size, height: size)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
-                angle = 360
+                // 골드 블립 펄스
+                ForEach(0..<blips.count, id: \.self) { i in
+                    let b = blips[i]
+                    let q = reduceMotion ? 0.45 : phase(t, delay: b.delay)
+                    Circle()
+                        .fill(blipColor)
+                        .frame(width: size * 0.075, height: size * 0.075)
+                        .scaleEffect(blipScale(q))
+                        .opacity(reduceMotion ? 0.75 : blipOpacity(q))
+                        .position(x: size * b.x, y: size * b.y)
+                }
             }
+            .frame(width: size, height: size)
         }
         .accessibilityHidden(true)
+    }
+
+    private func ring(_ rel: CGFloat) -> some View {
+        Circle().stroke(ringColor, lineWidth: 1.5).frame(width: size * rel, height: size * rel)
+    }
+    private func phase(_ t: Double, delay: Double) -> Double {
+        (((t - delay).truncatingRemainder(dividingBy: period) + period).truncatingRemainder(dividingBy: period)) / period
+    }
+    // blip keyframe: 0~20% 숨김(.4) → 35% 등장(1) → 100% 페이드(1.3)
+    private func blipOpacity(_ q: Double) -> Double {
+        if q < 0.2 { return 0 }
+        if q < 0.35 { return (q - 0.2) / 0.15 }
+        return max(0, 1 - (q - 0.35) / 0.65)
+    }
+    private func blipScale(_ q: Double) -> Double {
+        if q < 0.2 { return 0.4 }
+        if q < 0.35 { return 0.4 + (q - 0.2) / 0.15 * 0.6 }
+        return 1.0 + (q - 0.35) / 0.65 * 0.3
     }
 }
 

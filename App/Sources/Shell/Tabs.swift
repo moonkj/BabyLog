@@ -145,6 +145,7 @@ struct HomeTab: View {
     var onNavigate: (AppTab) -> Void = { _ in }
     @State private var showEmergency = false
     @State private var showAddChild = false
+    @State private var showLayoutMenu = false
     @State private var editingChild: Child? = nil
     @State private var showPeerTip = false
     @State private var showNoMemory = false
@@ -392,19 +393,11 @@ struct HomeTab: View {
         }
     }
 
-    // MARK: 레이아웃 전환 메뉴
+    // MARK: 레이아웃 전환 메뉴 (커스텀 팝오버 — 핸드오프 라인 글리프 사용)
     private var layoutMenu: some View {
-        Menu {
-            ForEach(HomeLayout.allCases, id: \.rawValue) { layout in
-                Button {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        layoutRaw = layout.rawValue
-                    }
-                } label: {
-                    Label(layout.label, systemImage: layout.icon)
-                }
-                .accessibilityLabel("레이아웃 \(layout.label)으로 전환")
-            }
+        Button {
+            Haptics.light()
+            showLayoutMenu = true
         } label: {
             HomeLayoutIcon(layout: currentLayout, color: MotionIconPalette.green, size: 22)
                 .frame(width: 44, height: 44)
@@ -415,7 +408,43 @@ struct HomeTab: View {
                 }
                 .blShadow(.chip)
         }
+        .buttonStyle(LiquidPressStyle(scale: 0.94))
         .accessibilityLabel("홈 레이아웃 변경. 현재: \(currentLayout.label)")
+        .popover(isPresented: $showLayoutMenu) {
+            VStack(spacing: 2) {
+                ForEach(HomeLayout.allCases, id: \.rawValue) { layout in
+                    let selected = layout == currentLayout
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { layoutRaw = layout.rawValue }
+                        showLayoutMenu = false
+                    } label: {
+                        HStack(spacing: 12) {
+                            HomeLayoutIcon(layout: layout,
+                                           color: selected ? AppColors.gold : Color(hex: 0x3F6B55),
+                                           size: 22)
+                            Text(layout.label)
+                                .font(.system(size: 15, weight: selected ? .bold : .medium))
+                                .foregroundStyle(selected ? AppColors.gold : AppColors.ink)
+                            Spacer(minLength: 12)
+                            if selected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(AppColors.gold)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 48)
+                        .background(selected ? AppColors.goldTint : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("레이아웃 \(layout.label)\(selected ? ", 현재 선택됨" : "")")
+                }
+            }
+            .padding(8)
+            .frame(width: 220)
+            .presentationCompactAdaptation(.popover)
+        }
     }
 
     // MARK: - 다자녀 칩

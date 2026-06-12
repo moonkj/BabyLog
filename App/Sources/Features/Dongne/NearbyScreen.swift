@@ -707,7 +707,7 @@ struct NearbyScreen: View {
             // 레이더 스윕 로딩 (§8.4 기능 진입 — 주변 훑기) + BLSkeleton
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 VStack(spacing: Spacing.s3) {
-                    RadarSweepView(size: 72, color: AppColors.primary)
+                    RadarSweepView(size: 96)
                     Text("주변을 살펴보는 중…")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppColors.ink2)
@@ -786,7 +786,7 @@ struct NearbyScreen: View {
     private var placeListContent: some View {
         if placesLoading && places.isEmpty {
             VStack(spacing: Spacing.s3) {
-                RadarSweepView(size: 72, color: selectedCategory.iconColor)
+                RadarSweepView(size: 96)
                 Text("주변을 살펴보는 중…")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.ink2)
