@@ -2,14 +2,15 @@
 // BabyLog — Features/Budget
 //
 // 가계부 탭 메인 화면.
-// 팀장이 BudgetTab에서 BudgetScreen()으로 호출.
-// 기존 파일 수정 없음 — Features/Budget/ 내부에서만 완결.
+// 구성(위→아래): 지출 추이(기간 세그먼트 7일/30일/6개월/1년 + 막대 차트) →
+//                 카테고리별 지출 → 최근 지출 → 월령 가이드 → 정부지원금(받음 체크).
+// 모든 수치는 실데이터(store.expenses)만 사용 — 추측/가공 데이터 없음(정직 원칙).
 
 import SwiftUI
 import Charts
 import Foundation
 
-// MARK: - Mock Data
+// MARK: - Mock Data (월령별 가이드 — 콘텐츠성 안내)
 
 private enum BudgetMockData {
 
@@ -56,7 +57,7 @@ struct BudgetScreen: View {
 
     @State private var subsidies: [SubsidyInfo] = []
     @State private var isLoadingSubsidies = true
-    @State private var selectedMonth: Date = Date()
+    @State private var period: BudgetPeriod = .month
     @State private var showAddExpense = false
 
     // MARK: Computed
@@ -70,31 +71,33 @@ struct BudgetScreen: View {
     /// 실데이터 — store에 영속된 지출 전체
     private var allExpenses: [Expense] { store.expenses }
 
-    private var currentMonthExpenses: [Expense] {
-        allExpenses.filter { expense in
-            Calendar.current.isDate(expense.date, equalTo: selectedMonth, toGranularity: .month)
-        }
+    /// 선택 기간에 속하는 지출
+    private var periodExpenses: [Expense] {
+        BudgetSummary.inPeriod(allExpenses, period)
     }
 
-    private var hasMonthExpenses: Bool { !currentMonthExpenses.isEmpty }
+    private var hasPeriodExpenses: Bool { !periodExpenses.isEmpty }
 
-    private var monthlyTotal: Int {
-        BudgetSummary.monthlyTotal(allExpenses, in: selectedMonth)
+    private var periodTotal: Int {
+        periodExpenses.reduce(0) { $0 + $1.amount }
     }
 
-    private var previousMonthTotal: Int {
-        guard let prev = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) else { return 0 }
-        return BudgetSummary.monthlyTotal(allExpenses, in: prev)
+    private var previousPeriodTotal: Int {
+        BudgetSummary.previousTotal(allExpenses, period)
     }
 
-    /// 전월 대비 증감 % (이전 달 지출 0이면 nil)
-    private var monthOverMonthPct: Int? {
-        guard previousMonthTotal > 0 else { return nil }
-        return Int((Double(monthlyTotal - previousMonthTotal) / Double(previousMonthTotal) * 100).rounded())
+    /// 전기 대비 증감 % (직전 동일 길이 구간 지출 0이면 nil)
+    private var periodOverPeriodPct: Int? {
+        guard previousPeriodTotal > 0 else { return nil }
+        return Int((Double(periodTotal - previousPeriodTotal) / Double(previousPeriodTotal) * 100).rounded())
+    }
+
+    private var trendBuckets: [TrendBucket] {
+        BudgetSummary.trend(allExpenses, period)
     }
 
     private var categoryBreakdown: [(category: ExpenseCategory, amount: Int)] {
-        let dict = BudgetSummary.byCategory(currentMonthExpenses)
+        let dict = BudgetSummary.byCategory(periodExpenses)
         return ExpenseCategory.allCases
             .compactMap { cat -> (ExpenseCategory, Int)? in
                 guard let amount = dict[cat], amount > 0 else { return nil }
@@ -111,43 +114,48 @@ struct BudgetScreen: View {
         BudgetMockData.guideMessage(ageMonths: childAgeMonths)
     }
 
+    /// 받지 않은 지원금 먼저, 받은(완료) 지원금은 아래로.
+    private var sortedSubsidies: [SubsidyInfo] {
+        subsidies.sorted { a, b in
+            let ca = store.isSubsidyClaimed(id: a.id), cb = store.isSubsidyClaimed(id: b.id)
+            if ca != cb { return !ca }   // 미수령 먼저
+            return false
+        }
+    }
+
     // MARK: Body
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                BLScreenHeader(title: "가계부", eyebrow: "지원금과 지출을 한눈에")
-                // 섹션 간 호흡 — 주요 블록은 s6로 리듬 통일
-                VStack(alignment: .leading, spacing: Spacing.s6) {
+                    BLScreenHeader(title: "가계부", eyebrow: "지출 추이와 받을 지원금")
+                    VStack(alignment: .leading, spacing: Spacing.s6) {
 
-                    // 0. 월 전환 스위처
-                    monthSwitcher
+                        // 1. 지출 추이 (기간 세그먼트 + 막대 차트 + 총액)
+                        trendSection
 
-                    // 1. 정부지원금 전면 배치
-                    subsidySection
+                        // 2~3. 카테고리별 지출 (선택 기간에 지출 있을 때만)
+                        if hasPeriodExpenses {
+                            donutDashboard
+                            categoryListSection
+                        }
 
-                    // 2~3. 지출 대시보드 (이번 달 지출 있을 때만)
-                    if hasMonthExpenses {
-                        donutDashboard
-                        categoryListSection
-                    } else {
-                        budgetEmptyCard
+                        // 4. 최근 지출 거래 리스트 (전체 지출 있을 때만)
+                        if !allExpenses.isEmpty {
+                            recentExpensesSection
+                        }
+
+                        // 5. 월령별 예상 지출 가이드
+                        guideCard
+
+                        // 6. 정부지원금 — 가계부이므로 지출 아래에 배치
+                        subsidySection
+
+                        Spacer().frame(height: 80)
                     }
-
-                    // 4. 최근 지출 거래 리스트 (전체 지출 있을 때만)
-                    if !allExpenses.isEmpty {
-                        recentExpensesSection
-                    }
-
-                    // 5. 월령별 예상 지출 가이드
-                    guideCard
-
-                    // 하단 FAB 여백
-                    Spacer().frame(height: 80)
-                }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.top, Spacing.s2)
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s2)
                 }
             }
             .background(AppColors.canvas.ignoresSafeArea())
@@ -162,234 +170,206 @@ struct BudgetScreen: View {
         }
     }
 
-    // MARK: 0. 월 전환 스위처
+    // MARK: 1. 지출 추이 (세그먼트 + 차트)
 
-    /// selectedMonth가 이번 달(또는 그 이후)이면 미래로 더 이동 불가.
-    private var canGoNextMonth: Bool {
-        let cal = Calendar.current
-        let now = cal.dateComponents([.year, .month], from: Date())
-        let sel = cal.dateComponents([.year, .month], from: selectedMonth)
-        guard let ny = now.year, let nm = now.month,
-              let sy = sel.year, let sm = sel.month else { return false }
-        return (sy, sm) < (ny, nm)
-    }
+    private var trendSection: some View {
+        BLCard {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                periodSegment
 
-    /// selectedMonth가 이번 달인지 여부 (레이블 표시용)
-    private var isCurrentMonth: Bool {
-        Calendar.current.isDate(selectedMonth, equalTo: Date(), toGranularity: .month)
-    }
+                // 총액 + 전기 대비
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(period.rangeLabel) 총 지출")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(AppColors.ink3)
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
+                        Text(amountFull(periodTotal))
+                            .font(AppFont.num(26, weight: .heavy))
+                            .foregroundStyle(AppColors.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .contentTransition(.numericText())
+                        if let pct = periodOverPeriodPct {
+                            deltaBadge(pct)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(
+                    "\(period.rangeLabel) 총 지출 \(amountFull(periodTotal))"
+                    + (periodOverPeriodPct.map { ", 직전 대비 \($0)퍼센트" } ?? ""))
 
-    private var monthTitle: String {
-        if isCurrentMonth { return "이번 달" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy년 M월"
-        return formatter.string(from: selectedMonth)
-    }
-
-    private func shiftMonth(_ delta: Int) {
-        guard let next = Calendar.current.date(byAdding: .month, value: delta, to: selectedMonth) else { return }
-        // 미래 달로는 이동하지 않음
-        if delta > 0 && !canGoNextMonth { return }
-        Haptics.light()
-        selectedMonth = next
-    }
-
-    private var monthSwitcher: some View {
-        HStack(spacing: Spacing.s2) {
-            Button {
-                shiftMonth(-1)
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(AppColors.ink2)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                // 막대 차트 (실데이터)
+                if periodTotal > 0 {
+                    trendChart
+                } else {
+                    trendEmpty
+                }
             }
-            .buttonStyle(LiquidPressStyle(scale: 0.9))
-            .accessibilityLabel("이전 달 보기")
-
-            Text(monthTitle)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(AppColors.ink)
-                .frame(maxWidth: .infinity)
-                .contentTransition(.numericText())
-                .accessibilityLabel("선택한 달: \(monthTitle)")
-                .accessibilityAddTraits(.isHeader)
-
-            Button {
-                shiftMonth(1)
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(canGoNextMonth ? AppColors.ink2 : AppColors.ink3.opacity(0.35))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(LiquidPressStyle(scale: 0.9))
-            .disabled(!canGoNextMonth)
-            .accessibilityLabel("다음 달 보기")
-            .accessibilityHint(canGoNextMonth ? "" : "이번 달 이후로는 이동할 수 없어요")
         }
-        .padding(.horizontal, Spacing.s2)
-        .frame(height: 44)
+    }
+
+    private var periodSegment: some View {
+        HStack(spacing: 4) {
+            ForEach(BudgetPeriod.allCases) { p in
+                let selected = p == period
+                Button {
+                    Haptics.light()
+                    withAnimation(.easeInOut(duration: 0.2)) { period = p }
+                } label: {
+                    Text(p.label)
+                        .font(.system(size: 13, weight: selected ? .bold : .medium))
+                        .foregroundStyle(selected ? AppColors.ink : AppColors.ink3)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(
+                            selected ? AppColors.surface : Color.clear,
+                            in: Capsule()
+                        )
+                        .shadow(color: selected ? Color(hex: 0x282118).opacity(0.08) : .clear,
+                                radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.95))
+                .accessibilityLabel("\(p.label) 보기")
+                .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+            }
+        }
+        .padding(4)
         .background(AppColors.surface2, in: Capsule())
     }
 
-    // MARK: 지출 없음 빈 상태
-
-    private var budgetEmptyCard: some View {
-        BLEmptyState(
-            icon: "wonsign.circle",
-            title: "\(monthTitle) 지출 기록이 없어요",
-            message: "오른쪽 아래 + 버튼으로 지출을 직접 추가해 관리해보세요."
-        )
-    }
-
-    // MARK: - Subviews
-
-    // MARK: 1. 정부지원금 섹션
-
     @ViewBuilder
-    private var subsidySection: some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            BLSectionHead(
-                eyebrow: "복지로",
-                title: "정부지원금 놓치지 마세요",
-                action: nil,
-                onAction: nil
+    private var trendChart: some View {
+        let unit: Calendar.Component = period.isDaily ? .day : .month
+        Chart(trendBuckets) { bucket in
+            BarMark(
+                x: .value("기간", bucket.date, unit: unit),
+                y: .value("지출", bucket.amount)
             )
-            .accessibilityAddTraits(.isHeader)
-
-            if store.selectedChild == nil {
-                // 아이 미등록 시 월령(0개월) 기반 지원금을 노출하지 않고 등록 안내만 표시
-                BLEmptyState(
-                    icon: "banknote",
-                    title: "아이 등록 후 안내해드려요",
-                    message: "아이를 등록하면 월령에 맞는 지원금을\n자동으로 안내해드려요."
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [AppColors.primary, AppColors.primary.opacity(0.55)],
+                    startPoint: .top, endPoint: .bottom
                 )
-            } else if isLoadingSubsidies {
-                subsidySkeletonView
-            } else if subsidies.isEmpty {
-                BLEmptyState(
-                    icon: "banknote",
-                    title: "해당 월령에 지원금이 없어요",
-                    message: "아이 등록 후 월령에 맞는 지원금을\n자동으로 안내해드려요."
-                )
-            } else {
-                ForEach(subsidies) { subsidy in
-                    SubsidyCard(info: subsidy)
-                }
-            }
+            )
+            .cornerRadius(3)
         }
-    }
-
-    private var subsidySkeletonView: some View {
-        VStack(spacing: Spacing.s3) {
-            ForEach(0..<2, id: \.self) { _ in
-                BLCard(padding: Spacing.s4) {
-                    HStack(spacing: Spacing.s3) {
-                        BLSkeleton(width: 46, height: 46, cornerRadius: Radius.sm)
-                        VStack(alignment: .leading, spacing: Spacing.s2) {
-                            BLSkeleton(height: 14, cornerRadius: Radius.xs)
-                                .frame(maxWidth: .infinity)
-                            BLSkeleton(height: 12, cornerRadius: Radius.xs)
-                                .frame(maxWidth: 200)
-                        }
-                        .frame(maxWidth: .infinity)
-                        BLSkeleton(width: 52, height: 36, cornerRadius: Radius.sm)
+        .frame(height: 150)
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                AxisGridLine().foregroundStyle(AppColors.line.opacity(0.6))
+                AxisValueLabel {
+                    if let amount = value.as(Int.self) {
+                        Text(axisAmount(amount))
+                            .font(.system(size: 10))
+                            .foregroundStyle(AppColors.ink3)
                     }
                 }
             }
         }
+        .chartXAxis {
+            switch period {
+            case .week:
+                AxisMarks(values: .stride(by: .day)) { _ in
+                    AxisValueLabel(format: .dateTime.weekday(.narrow))
+                        .font(.system(size: 10))
+                }
+            case .month:
+                AxisMarks(values: .stride(by: .day, count: 6)) { _ in
+                    AxisValueLabel(format: .dateTime.day())
+                        .font(.system(size: 10))
+                }
+            case .sixMonths:
+                AxisMarks(values: .stride(by: .month)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.defaultDigits))
+                        .font(.system(size: 10))
+                }
+            case .year:
+                AxisMarks(values: .stride(by: .month, count: 2)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.defaultDigits))
+                        .font(.system(size: 10))
+                }
+            }
+        }
+        .accessibilityLabel("\(period.rangeLabel) 지출 추이 막대 차트. 총 \(amountFull(periodTotal))")
     }
 
-    // MARK: 2. 도넛 차트 대시보드
+    private var trendEmpty: some View {
+        VStack(spacing: Spacing.s2) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(AppColors.ink3.opacity(0.6))
+            Text("\(period.rangeLabel) 지출 기록이 없어요")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.ink3)
+            Text("오른쪽 아래 + 버튼으로 지출을 추가해 보세요.")
+                .font(AppFont.caption)
+                .foregroundStyle(AppColors.ink3.opacity(0.85))
+        }
+        .frame(maxWidth: .infinity, minHeight: 150)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(period.rangeLabel) 지출 기록이 없어요. 오른쪽 아래 더하기 버튼으로 지출을 추가하세요.")
+    }
+
+    /// 전기 대비 증감 배지 (색+부호+레이블)
+    private func deltaBadge(_ pct: Int) -> some View {
+        let down = pct <= 0
+        return HStack(spacing: 2) {
+            Image(systemName: down ? "arrow.down.right" : "arrow.up.right")
+                .font(.system(size: 9, weight: .heavy))
+            Text("\(abs(pct))%")
+                .font(AppFont.num(11.5, weight: .heavy))
+        }
+        .foregroundStyle(down ? AppColors.primary : AppColors.danger)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background((down ? AppColors.primaryTint : AppColors.dangerTint), in: Capsule())
+        .accessibilityLabel("직전 \(period.label) 대비 \(down ? "감소" : "증가") \(abs(pct))퍼센트")
+    }
+
+    // MARK: 2. 도넛 차트 대시보드 (카테고리 비중)
 
     private var donutDashboard: some View {
         BLCard {
-            VStack(spacing: Spacing.s4) {
-                HStack(alignment: .center, spacing: Spacing.s4) {
-                    // 도넛 차트 (SectorMark)
-                    donutChart
+            HStack(alignment: .center, spacing: Spacing.s4) {
+                donutChart
 
-                    // 카테고리 범례
-                    VStack(alignment: .leading, spacing: Spacing.s3) {
-                        ForEach(categoryBreakdown, id: \.category) { item in
-                            HStack(spacing: Spacing.s2) {
-                                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                    .fill(item.category.badgeTone.ink)
-                                    .frame(width: 9, height: 9)
-                                    .accessibilityHidden(true)
+                // 카테고리 범례
+                VStack(alignment: .leading, spacing: Spacing.s3) {
+                    ForEach(categoryBreakdown, id: \.category) { item in
+                        HStack(spacing: Spacing.s2) {
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(item.category.badgeTone.ink)
+                                .frame(width: 9, height: 9)
+                                .accessibilityHidden(true)
 
-                                // 색+아이콘 3중 인코딩 — 색약 대응
-                                Image(systemName: item.category.systemIcon)
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundStyle(item.category.badgeTone.ink)
-                                    .accessibilityHidden(true)
+                            Image(systemName: item.category.systemIcon)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(item.category.badgeTone.ink)
+                                .accessibilityHidden(true)
 
-                                Text(item.category.displayName)
-                                    .font(AppFont.caption)
-                                    .foregroundStyle(AppColors.ink2)
-                                    .lineLimit(1)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(item.category.displayName)
+                                .font(AppFont.caption)
+                                .foregroundStyle(AppColors.ink2)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
-                                Text(amountShort(item.amount))
-                                    .font(AppFont.num(12.5, weight: .bold))
-                                    .foregroundStyle(AppColors.ink)
-                            }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("\(item.category.accessibilityLabel) \(amountFull(item.amount))")
+                            Text(amountShort(item.amount))
+                                .font(AppFont.num(12.5, weight: .bold))
+                                .foregroundStyle(AppColors.ink)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("\(item.category.accessibilityLabel) \(amountFull(item.amount))")
                     }
-                    .frame(maxWidth: .infinity)
-                }
-
-                // 구분선 + 합계 강조 헤더
-                Divider().background(AppColors.line)
-
-                // 총 지출 — 카드 위계의 정점 (가장 큰 숫자)
-                VStack(spacing: 2) {
-                    Text("\(monthTitle) 총 지출")
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(AppColors.ink3)
-                    Text(amountFull(monthlyTotal))
-                        .font(AppFont.num(26, weight: .heavy))
-                        .foregroundStyle(AppColors.ink)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .contentTransition(.numericText())
                 }
                 .frame(maxWidth: .infinity)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(monthTitle) 총 지출 \(amountFull(monthlyTotal))")
-
-                // 보조 통계 (전월 대비 · 기록 건수)
-                HStack(spacing: 0) {
-                    if let pct = monthOverMonthPct {
-                        miniStat(value: "\(pct > 0 ? "+" : "")\(pct)%",
-                                 label: "전월 대비",
-                                 valueTone: pct <= 0 ? AppColors.primary : AppColors.danger)
-                    } else {
-                        miniStat(value: "—", label: "전월 대비")
-                    }
-                    Divider().frame(height: 30).background(AppColors.line)
-                    miniStat(value: "\(currentMonthExpenses.count)건", label: "\(monthTitle) 기록")
-                }
-                .padding(.top, 2)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(
-                    (monthOverMonthPct.map { "전월 대비 \($0)%, " } ?? "")
-                    + "\(currentMonthExpenses.count)건 기록")
             }
         }
     }
 
     @ViewBuilder
     private var donutChart: some View {
-        let total = Double(monthlyTotal == 0 ? 1 : monthlyTotal)
+        let total = Double(periodTotal == 0 ? 1 : periodTotal)
         ZStack {
-            // SectorMark 도넛
             Chart(categoryBreakdown, id: \.category) { item in
                 SectorMark(
                     angle: .value("금액", item.amount),
@@ -402,46 +382,25 @@ struct BudgetScreen: View {
             }
             .frame(width: 130, height: 130)
 
-            // 중앙 텍스트
             VStack(spacing: 3) {
-                Text(monthTitle)
+                Text("카테고리")
                     .font(AppFont.micro)
                     .tracking(0.5)
                     .foregroundStyle(AppColors.ink3)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(amountShort(monthlyTotal))
+                Text(amountShort(periodTotal))
                     .font(AppFont.num(17, weight: .heavy))
                     .foregroundStyle(AppColors.ink)
             }
             .accessibilityHidden(true)
         }
-        .accessibilityLabel("카테고리별 지출 비중 도넛 차트. \(monthTitle) 총 \(amountFull(monthlyTotal))")
-    }
-
-    private func miniStat(value: String, label: String, valueTone: Color? = nil) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(AppFont.num(14.5, weight: .heavy))
-                .foregroundStyle(valueTone ?? AppColors.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Text(label)
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(AppColors.ink3)
-                .lineLimit(2)
-                .minimumScaleFactor(0.75)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, Spacing.s1)
+        .accessibilityLabel("카테고리별 지출 비중 도넛 차트. \(period.rangeLabel) 총 \(amountFull(periodTotal))")
     }
 
     // MARK: 3. 카테고리 분해 리스트
 
     private var categoryListSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            BLSectionHead(eyebrow: monthTitle, title: "카테고리별 지출")
+            BLSectionHead(eyebrow: period.rangeLabel, title: "카테고리별 지출")
                 .accessibilityAddTraits(.isHeader)
 
             BLCard(padding: 0) {
@@ -453,13 +412,12 @@ struct BudgetScreen: View {
                                 .padding(.horizontal, Spacing.s4)
                         }
 
-                        let pct = monthlyTotal > 0
-                            ? Int(Double(item.amount) / Double(monthlyTotal) * 100)
+                        let pct = periodTotal > 0
+                            ? Int(Double(item.amount) / Double(periodTotal) * 100)
                             : 0
 
                         VStack(spacing: Spacing.s2) {
                             HStack(spacing: Spacing.s3) {
-                                // 아이콘 뱃지 (색+아이콘 2중)
                                 ZStack {
                                     RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                                         .fill(item.category.badgeTone.bg)
@@ -470,7 +428,6 @@ struct BudgetScreen: View {
                                 }
                                 .accessibilityHidden(true)
 
-                                // 레이블 + 비율 (3중 인코딩 중 텍스트)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(item.category.displayName)
                                         .font(AppFont.subhead)
@@ -482,13 +439,11 @@ struct BudgetScreen: View {
 
                                 Spacer()
 
-                                // 금액 강조 (행 위계의 정점)
                                 Text(amountFull(item.amount))
                                     .font(AppFont.num(15, weight: .heavy))
                                     .foregroundStyle(AppColors.ink)
                             }
 
-                            // 전폭 비율 바 (색+길이 시각 보조)
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
                                     Capsule()
@@ -543,15 +498,14 @@ struct BudgetScreen: View {
                 }
             }
 
-            // 지출 관리 안내 문구 (정직 — 자동 수집 기능은 없음)
-            Text("지출을 직접 추가해 관리해요.\n큰 지출만 기록해도 한 달 흐름이 보여요.")
+            Text("지출을 직접 추가해 관리해요.\n큰 지출만 기록해도 흐름이 보여요.")
                 .font(AppFont.caption)
                 .foregroundStyle(AppColors.ink3)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
                 .frame(maxWidth: .infinity)
                 .padding(.top, Spacing.s1)
-                .accessibilityLabel("지출 관리 안내: 지출을 직접 추가해 관리하세요. 큰 지출만 기록해도 한 달 흐름이 보입니다.")
+                .accessibilityLabel("지출 관리 안내: 지출을 직접 추가해 관리하세요. 큰 지출만 기록해도 흐름이 보입니다.")
         }
     }
 
@@ -560,13 +514,11 @@ struct BudgetScreen: View {
     private var guideCard: some View {
         BLCard(flat: true) {
             HStack(alignment: .top, spacing: Spacing.s3) {
-                // 아이콘 박스
                 ZStack {
                     RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                         .fill(AppColors.surface)
                         .frame(width: 44, height: 44)
                         .blShadow(.chip)
-                    // 동전 플립 (§8.4 가계부)
                     CoinFlipView(size: 22, tint: AppColors.gold)
                 }
                 .accessibilityHidden(true)
@@ -598,7 +550,77 @@ struct BudgetScreen: View {
         .accessibilityLabel("\(guide.title). \(guide.body)")
     }
 
-    // MARK: FAB
+    // MARK: 6. 정부지원금 섹션 (지출 아래)
+
+    @ViewBuilder
+    private var subsidySection: some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            BLSectionHead(
+                eyebrow: "복지로",
+                title: "정부지원금 놓치지 마세요",
+                action: nil,
+                onAction: nil
+            )
+            .accessibilityAddTraits(.isHeader)
+
+            if store.selectedChild == nil {
+                BLEmptyState(
+                    icon: "banknote",
+                    title: "아이 등록 후 안내해드려요",
+                    message: "아이를 등록하면 월령에 맞는 지원금을\n자동으로 안내해드려요."
+                )
+            } else if isLoadingSubsidies {
+                subsidySkeletonView
+            } else if subsidies.isEmpty {
+                BLEmptyState(
+                    icon: "banknote",
+                    title: "해당 월령에 지원금이 없어요",
+                    message: "아이 등록 후 월령에 맞는 지원금을\n자동으로 안내해드려요."
+                )
+            } else {
+                ForEach(sortedSubsidies) { subsidy in
+                    SubsidyCard(
+                        info: subsidy,
+                        claimed: store.isSubsidyClaimed(id: subsidy.id),
+                        onToggleClaim: {
+                            Haptics.light()
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                store.toggleSubsidyClaimed(id: subsidy.id)
+                            }
+                        }
+                    )
+                }
+
+                Text("받았다고 체크하면 완료로 표시돼요. 금액·조건은 복지로에서 최종 확인하세요.")
+                    .font(AppFont.caption)
+                    .foregroundStyle(AppColors.ink3)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, Spacing.s1)
+            }
+        }
+    }
+
+    private var subsidySkeletonView: some View {
+        VStack(spacing: Spacing.s3) {
+            ForEach(0..<2, id: \.self) { _ in
+                BLCard(padding: Spacing.s4) {
+                    HStack(spacing: Spacing.s3) {
+                        BLSkeleton(width: 46, height: 46, cornerRadius: Radius.sm)
+                        VStack(alignment: .leading, spacing: Spacing.s2) {
+                            BLSkeleton(height: 14, cornerRadius: Radius.xs)
+                                .frame(maxWidth: .infinity)
+                            BLSkeleton(height: 12, cornerRadius: Radius.xs)
+                                .frame(maxWidth: 200)
+                        }
+                        .frame(maxWidth: .infinity)
+                        BLSkeleton(width: 52, height: 36, cornerRadius: Radius.sm)
+                    }
+                }
+            }
+        }
+    }
 
     // MARK: - Helpers
 
@@ -614,6 +636,16 @@ struct BudgetScreen: View {
         return "\(amount)원"
     }
 
+    /// 차트 Y축용 짧은 금액(만 단위). 0은 빈 문자열.
+    private func axisAmount(_ amount: Int) -> String {
+        if amount == 0 { return "0" }
+        if amount >= 10_000 {
+            let man = Double(amount) / 10_000
+            return man == man.rounded() ? "\(Int(man))만" : String(format: "%.0f만", man)
+        }
+        return "\(amount / 1000)천"
+    }
+
     private func amountFull(_ amount: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -624,7 +656,6 @@ struct BudgetScreen: View {
     // MARK: - Async
 
     private func loadSubsidies() async {
-        // 아이 미등록 시 월령(0개월) 기반 지원금을 불러오지 않음 — 등록 안내만 노출
         guard store.selectedChild != nil else {
             subsidies = []
             isLoadingSubsidies = false
@@ -643,84 +674,108 @@ struct BudgetScreen: View {
 
 // MARK: - SubsidyCard
 
-/// 정부지원금 카드.
-/// 신청 정보와 복지로 바로가기를 제공한다.
-/// NOTE: 실제 마감일(D-day) 데이터가 SubsidyInfo에 없으므로,
-///       가짜 카운트다운/긴급(곧 마감) 연출은 표시하지 않는다.
-///       복지로 API가 실 마감일을 제공하면 그때 D-day를 복원한다. (정직한 결제·고지 원칙)
+/// 정부지원금 카드. 받음 체크 시 완료 상태로 전환되고, 신청 버튼은 복지로로 연결한다.
+/// NOTE: 실 마감일(D-day) 데이터가 없으므로 가짜 카운트다운/긴급 연출은 표시하지 않는다.
 private struct SubsidyCard: View {
 
     let info: SubsidyInfo
+    let claimed: Bool
+    let onToggleClaim: () -> Void
 
     var body: some View {
         BLCard(padding: Spacing.s4, flat: true) {
-            VStack(spacing: 0) {
-                // 상단: 아이콘 + 정보 + 신청 버튼
-                HStack(spacing: Spacing.s3) {
-                    iconBox
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(info.name)
-                            .font(.system(size: 15.5, weight: .bold))
-                            .foregroundStyle(AppColors.ink)
-                            .lineLimit(1)
-
-                        HStack(spacing: Spacing.s2) {
-                            Text(amountStr(info.amountKRW))
-                                .font(AppFont.num(14, weight: .heavy))
-                                .foregroundStyle(AppColors.primary)
-                                .lineLimit(1)
-                            Text(info.eligibility)
-                                .font(AppFont.caption)
-                                .foregroundStyle(AppColors.ink2)
-                                .lineLimit(2)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    applyButton
+            HStack(spacing: Spacing.s3) {
+                // 받음 체크 토글 (44pt 터치 타깃)
+                Button(action: onToggleClaim) {
+                    Image(systemName: claimed ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 24, weight: .regular))
+                        .foregroundStyle(claimed ? AppColors.primary : AppColors.ink3.opacity(0.5))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(LiquidPressStyle(scale: 0.9))
+                .accessibilityLabel(claimed ? "\(info.name) 받음 해제" : "\(info.name) 받았다고 체크")
+                .accessibilityAddTraits(claimed ? [.isSelected, .isButton] : .isButton)
+
+                iconBox
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(info.name)
+                        .font(.system(size: 15.5, weight: .bold))
+                        .foregroundStyle(claimed ? AppColors.ink3 : AppColors.ink)
+                        .strikethrough(claimed, color: AppColors.ink3)
+                        .lineLimit(1)
+
+                    HStack(spacing: Spacing.s2) {
+                        Text(amountStr(info.amountKRW))
+                            .font(AppFont.num(14, weight: .heavy))
+                            .foregroundStyle(claimed ? AppColors.ink3 : AppColors.primary)
+                            .lineLimit(1)
+                        Text(info.eligibility)
+                            .font(AppFont.caption)
+                            .foregroundStyle(AppColors.ink3)
+                            .lineLimit(2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                trailingAction
             }
         }
+        .opacity(claimed ? 0.7 : 1)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(info.name), \(amountStr(info.amountKRW)). \(info.eligibility)")
+        .accessibilityLabel(
+            "\(info.name), \(amountStr(info.amountKRW)). \(info.eligibility)"
+            + (claimed ? ", 받음 완료" : ""))
     }
 
-    // 복지로 공식 사이트로 직접 이동. (mock 딥링크는 세션 의존이라 메인으로; 복지로 API 연동 시 실 딥링크로 대체)
-    private func openApplyInfo() {
-        if let url = URL(string: "https://www.bokjiro.go.kr") {
-            UIApplication.shared.open(url)
+    @ViewBuilder
+    private var trailingAction: some View {
+        if claimed {
+            HStack(spacing: 3) {
+                Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy))
+                Text("받음").font(.system(size: 12.5, weight: .heavy))
+            }
+            .foregroundStyle(AppColors.primary)
+            .padding(.horizontal, Spacing.s3)
+            .frame(height: 38)
+            .background(AppColors.primaryTint, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            .accessibilityHidden(true)
+        } else {
+            Button {
+                openApplyInfo()
+            } label: {
+                Text("신청")
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(AppColors.onPrimary)
+                    .padding(.horizontal, Spacing.s4)
+                    .frame(height: 38)
+                    .background(AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            }
+            .buttonStyle(LiquidPressStyle())
+            .frame(minWidth: 44, minHeight: 44)
+            .accessibilityLabel("\(info.name) 신청하기")
+            .accessibilityHint("복지로 신청 페이지로 이동합니다.")
         }
+    }
+
+    // 복지로 신청 페이지(있으면 해당 지원금 안내, 없으면 메인)로 이동.
+    private func openApplyInfo() {
+        let url = info.applyURL ?? URL(string: "https://www.bokjiro.go.kr")
+        if let url { UIApplication.shared.open(url) }
     }
 
     private var iconBox: some View {
         ZStack {
             RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                .fill(AppColors.primaryTint)
+                .fill(claimed ? AppColors.surface2 : AppColors.primaryTint)
                 .frame(width: 46, height: 46)
 
-            Image(systemName: "gift.fill")
+            Image(systemName: claimed ? "checkmark.seal.fill" : "gift.fill")
                 .font(.system(size: 21, weight: .medium))
-                .foregroundStyle(AppColors.primary)
+                .foregroundStyle(claimed ? AppColors.ink3 : AppColors.primary)
         }
         .accessibilityHidden(true)
-    }
-
-    private var applyButton: some View {
-        Button {
-            openApplyInfo()
-        } label: {
-            Text("신청")
-                .font(.system(size: 13.5, weight: .bold))
-                .foregroundStyle(AppColors.onPrimary)
-                .padding(.horizontal, Spacing.s4)
-                .frame(height: 38)
-                .background(AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-        }
-        .buttonStyle(LiquidPressStyle())
-        .frame(minWidth: 44, minHeight: 44)
-        .accessibilityLabel("\(info.name) 신청하기")
-        .accessibilityHint("복지로 신청 페이지로 이동합니다.")
     }
 
     private func amountStr(_ amount: Int) -> String {
@@ -741,15 +796,13 @@ private struct SubsidyCard: View {
 
 // MARK: - ExpenseRow
 
-/// 개별 지출 행.
-/// 자동 수집 항목에는 BLBadge "자동" (blue tone) 표시.
+/// 개별 지출 행. 자동 수집 항목에는 BLBadge "자동" (blue tone) 표시.
 private struct ExpenseRow: View {
 
     let expense: Expense
 
     var body: some View {
         HStack(spacing: Spacing.s3) {
-            // 카테고리 아이콘 (색+아이콘 2중)
             ZStack {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                     .fill(expense.category.badgeTone.bg)
@@ -760,7 +813,6 @@ private struct ExpenseRow: View {
             }
             .accessibilityHidden(true)
 
-            // 레이블 + 자동 뱃지
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: Spacing.s2) {
                     Text(expense.memo ?? expense.category.displayName)
@@ -775,7 +827,6 @@ private struct ExpenseRow: View {
                 }
 
                 HStack(spacing: 4) {
-                    // 레이블 텍스트 (3중 인코딩 중 텍스트)
                     Text(expense.category.displayName)
                         .font(AppFont.caption)
                         .foregroundStyle(AppColors.ink3)
@@ -789,7 +840,6 @@ private struct ExpenseRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 금액
             Text(amountFull(expense.amount))
                 .font(AppFont.num(14.5, weight: .heavy))
                 .foregroundStyle(AppColors.ink)

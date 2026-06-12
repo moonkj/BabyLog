@@ -142,3 +142,134 @@ enum BudgetSummary {
         }
     }
 }
+
+// MARK: - BudgetPeriod (지출 추이 기간 세그먼트)
+
+/// 지출 추이를 보는 기간 단위. 7일/30일은 일별 막대, 6개월/1년은 월별 막대.
+enum BudgetPeriod: String, CaseIterable, Identifiable {
+    case week, month, sixMonths, year
+
+    var id: String { rawValue }
+
+    /// 세그먼트 버튼 레이블
+    var label: String {
+        switch self {
+        case .week:      return "7일"
+        case .month:     return "30일"
+        case .sixMonths: return "6개월"
+        case .year:      return "1년"
+        }
+    }
+
+    /// 총액 헤더용 레이블
+    var rangeLabel: String {
+        switch self {
+        case .week:      return "최근 7일"
+        case .month:     return "최근 30일"
+        case .sixMonths: return "최근 6개월"
+        case .year:      return "최근 1년"
+        }
+    }
+
+    /// 추이 막대 개수 (일별/월별 버킷 수)
+    var bucketCount: Int {
+        switch self {
+        case .week:      return 7
+        case .month:     return 30
+        case .sixMonths: return 6
+        case .year:      return 12
+        }
+    }
+
+    /// true면 일별 버킷, false면 월별 버킷
+    var isDaily: Bool { self == .week || self == .month }
+}
+
+// MARK: - TrendBucket (추이 차트 막대 1개)
+
+/// 추이 차트의 한 버킷(일 또는 월). `date`는 버킷 시작 시각, `amount`는 그 구간 지출 합.
+struct TrendBucket: Identifiable, Equatable {
+    let date: Date
+    let amount: Int
+    var id: Date { date }
+}
+
+// MARK: - BudgetSummary 기간 집계 확장
+
+extension BudgetSummary {
+
+    private static func startOfMonth(_ date: Date, _ cal: Calendar) -> Date {
+        cal.date(from: cal.dateComponents([.year, .month], from: date)) ?? date
+    }
+
+    /// 기간의 시작 시각(포함). 종료는 항상 `now`.
+    static func periodStart(
+        _ period: BudgetPeriod, now: Date = Date(), calendar cal: Calendar = .current
+    ) -> Date {
+        switch period {
+        case .week:      return cal.date(byAdding: .day, value: -6, to: cal.startOfDay(for: now)) ?? now
+        case .month:     return cal.date(byAdding: .day, value: -29, to: cal.startOfDay(for: now)) ?? now
+        case .sixMonths: return cal.date(byAdding: .month, value: -5, to: startOfMonth(now, cal)) ?? now
+        case .year:      return cal.date(byAdding: .month, value: -11, to: startOfMonth(now, cal)) ?? now
+        }
+    }
+
+    /// [from, to] 구간의 지출 합계.
+    static func total(_ expenses: [Expense], from: Date, to: Date) -> Int {
+        expenses.filter { $0.date >= from && $0.date <= to }.reduce(0) { $0 + $1.amount }
+    }
+
+    /// 해당 기간에 속하는 지출만 반환.
+    static func inPeriod(
+        _ expenses: [Expense], _ period: BudgetPeriod,
+        now: Date = Date(), calendar cal: Calendar = .current
+    ) -> [Expense] {
+        let start = periodStart(period, now: now, calendar: cal)
+        return expenses.filter { $0.date >= start && $0.date <= now }
+    }
+
+    /// 직전 동일 길이 구간의 지출 합계(전기 대비 비교용). 비교 불가(0)면 nil 처리는 호출부에서.
+    static func previousTotal(
+        _ expenses: [Expense], _ period: BudgetPeriod,
+        now: Date = Date(), calendar cal: Calendar = .current
+    ) -> Int {
+        let prevNow: Date
+        switch period {
+        case .week:      prevNow = cal.date(byAdding: .day, value: -7, to: now) ?? now
+        case .month:     prevNow = cal.date(byAdding: .day, value: -30, to: now) ?? now
+        case .sixMonths: prevNow = cal.date(byAdding: .month, value: -6, to: now) ?? now
+        case .year:      prevNow = cal.date(byAdding: .month, value: -12, to: now) ?? now
+        }
+        let prevStart = periodStart(period, now: prevNow, calendar: cal)
+        return total(expenses, from: prevStart, to: prevNow)
+    }
+
+    /// 추이 차트용 버킷 배열(지출 0인 구간도 포함해 축이 전체 기간을 덮도록 함).
+    static func trend(
+        _ expenses: [Expense], _ period: BudgetPeriod,
+        now: Date = Date(), calendar cal: Calendar = .current
+    ) -> [TrendBucket] {
+        var buckets: [TrendBucket] = []
+        let n = period.bucketCount
+        if period.isDaily {
+            let today = cal.startOfDay(for: now)
+            for i in stride(from: n - 1, through: 0, by: -1) {
+                guard let day = cal.date(byAdding: .day, value: -i, to: today) else { continue }
+                let amt = expenses
+                    .filter { cal.isDate($0.date, inSameDayAs: day) }
+                    .reduce(0) { $0 + $1.amount }
+                buckets.append(.init(date: day, amount: amt))
+            }
+        } else {
+            let m0 = startOfMonth(now, cal)
+            for i in stride(from: n - 1, through: 0, by: -1) {
+                guard let mon = cal.date(byAdding: .month, value: -i, to: m0) else { continue }
+                let amt = expenses
+                    .filter { cal.isDate($0.date, equalTo: mon, toGranularity: .month) }
+                    .reduce(0) { $0 + $1.amount }
+                buckets.append(.init(date: mon, amount: amt))
+            }
+        }
+        return buckets
+    }
+}

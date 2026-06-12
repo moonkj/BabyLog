@@ -39,6 +39,8 @@ final class AppStore: ObservableObject {
     @Published private(set) var crewPostComments: [String: [String]] = [:]
     @Published private(set) var crewChats: [String: [ChatMessage]] = [:]
     @Published private(set) var tradeReports: [TradeReport] = []
+    /// 사용자가 '받았다'고 체크한 정부지원금 id 집합 (가계부 지원금 완료 표시, 영속).
+    @Published private(set) var claimedSubsidyIds: Set<String> = []
     private var crewSeeded: Bool = false
     private var crewPostSeeded: Bool = false
     /// 저장 파일 디코딩 실패 여부 — true면 자동저장으로 원본을 덮어쓰지 않는다(데이터 보존).
@@ -175,6 +177,7 @@ final class AppStore: ObservableObject {
                     self.crewChats          = saved.crewChats
                     self.crewPostSeeded     = saved.crewPostSeeded
                     self.tradeReports       = saved.tradeReports
+                    self.claimedSubsidyIds  = saved.claimedSubsidyIds
                     // 저장된 선택 아이가 아직 있으면 복원(다자녀 선택 유지)
                     self.selectedChildId    = saved.selectedChildId.flatMap { id in saved.children.contains(where: { $0.id == id }) ? id : nil }
                 }
@@ -458,6 +461,7 @@ final class AppStore: ObservableObject {
             crewChats: crewChats,
             crewPostSeeded: crewPostSeeded,
             tradeReports: tradeReports,
+            claimedSubsidyIds: claimedSubsidyIds,
             selectedChildId: selectedChildId
         )
     }
@@ -489,6 +493,7 @@ final class AppStore: ObservableObject {
         crewChats          = state.crewChats
         crewPostSeeded     = state.crewPostSeeded
         tradeReports       = state.tradeReports
+        claimedSubsidyIds  = state.claimedSubsidyIds
         // 저장된 선택 아이가 아직 존재하면 복원, 아니면 첫 아이로 폴백.
         selectedChildId    = state.selectedChildId.flatMap { id in children.contains(where: { $0.id == id }) ? id : nil }
         seedMarketIfNeeded()
@@ -727,6 +732,18 @@ final class AppStore: ObservableObject {
     /// 지출 항목을 삭제한다.
     func deleteExpense(id: UUID) {
         expenses.removeAll { $0.id == id }
+    }
+
+    // MARK: - 정부지원금 '받음' 체크 (영속)
+
+    func isSubsidyClaimed(id: String) -> Bool {
+        claimedSubsidyIds.contains(id)
+    }
+
+    /// 지원금 '받음' 상태를 토글한다(받았다고 체크 ↔ 해제).
+    func toggleSubsidyClaimed(id: String) {
+        if claimedSubsidyIds.contains(id) { claimedSubsidyIds.remove(id) }
+        else { claimedSubsidyIds.insert(id) }
     }
 
     // MARK: - 접종 완료 (안정 키 영속)
