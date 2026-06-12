@@ -114,25 +114,26 @@ struct MainTabView: View {
                 Group {
                     if mode == .pregnancy { PregnancyHomeView(onNavigate: { tab = $0 }) } else { HomeTab(onNavigate: { tab = $0 }) }
                 }
-                .tabItem { Label("홈", systemImage: "house.fill") }
+                .tabItem { Label("홈", systemImage: "house") }
                 .tag(AppTab.home)
 
                 Group {
                     if mode == .pregnancy { PregnancyRecordScreen() } else { RecordScreen() }
                 }
-                    .tabItem { Label("기록", systemImage: "book.closed.fill") }
+                    .tabItem { Label("기록", systemImage: "book") }
                     .tag(AppTab.record)
                 DongneTab()
                     .tabItem { Label("동네", systemImage: "mappin.and.ellipse") }
                     .tag(AppTab.dongne)
                 BudgetTab()
-                    .tabItem { Label("가계부", systemImage: "wonsign.circle.fill") }
+                    .tabItem { Label("가계부", systemImage: "wallet.bifold") }
                     .tag(AppTab.budget)
                 ProfileTab()
-                    .tabItem { Label("내정보", systemImage: "person.crop.circle.fill") }
+                    .tabItem { Label("내정보", systemImage: "person.crop.circle") }
                     .tag(AppTab.profile)
             }
-            .tint(AppColors.primary)
+            // 핸드오프 네비 — 라인 스타일 + 세이지 활성색(검정 채움 → 따뜻한 세이지)
+            .tint(Color(hex: 0x4E8268))
 
             // 빠른 기록 FAB (홈·기록) — 동네 탭은 팔기/모임 만들기 버튼이 있어 제외
             if tab == .home || tab == .record {

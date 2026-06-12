@@ -1105,7 +1105,10 @@ struct DongneTab: View {
                             withAnimation(.easeOut(duration: 0.18)) { seg = i }
                         } label: {
                             HStack(spacing: 5) {
-                                Image(systemName: segIcons[i]).font(.system(size: 13, weight: .bold))
+                                let segGlyphs: [NavGlyph] = [.nearby, .market, .crew]
+                                NavLineIcon(glyph: segGlyphs[i],
+                                            color: seg == i ? Color.white : NavPalette.inactive,
+                                            size: 18, bold: seg == i)
                                 Text(segs[i]).font(.system(size: 14.5, weight: .bold))
                             }
                             .foregroundStyle(seg == i ? .white : AppColors.ink2)
