@@ -66,6 +66,7 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
             let response = try await client.get(url, as: HIRAHospitalResponse.self)
             var results = try HospitalResponseParser.parse(response)
             if openNow { results = results.filter { $0.isOpenNow } }
+            results.sort { $0.distanceM < $1.distanceM }   // 거리순(가까운 곳 먼저)
             return results
         } catch {
             return try await fallback.hospitals(near: coordinate, openNow: openNow)

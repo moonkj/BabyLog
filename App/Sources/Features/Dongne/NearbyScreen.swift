@@ -573,12 +573,15 @@ private struct HospitalCard: View {
                             .font(.system(size: 15.5, weight: .bold))
                             .foregroundStyle(AppColors.ink)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .layoutPriority(1)
 
                         if hospital.isOpenNow {
                             BLBadge(tone: .mint, text: "영업중", systemIcon: nil, dot: true)
                         } else {
                             BLBadge(tone: .grey, text: "영업종료", systemIcon: nil, dot: false)
                         }
+                        Spacer(minLength: 0)
                     }
 
                     // 거리·평점·진료과목
