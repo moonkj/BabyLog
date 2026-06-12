@@ -123,4 +123,78 @@ enum CrewBackend {
         if let s = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), let n = Int(s) { return n }
         return nil
     }
+
+    // MARK: - 게시판(동네 공유 글)
+
+    private struct CrewPostDTO: Decodable {
+        let id: String
+        let category: String?
+        let author: String?
+        let author_name: String?
+        let title: String
+        let body: String?
+        let created_at: String?
+        let crew_post_like: [CountRow]?
+        let crew_post_reply: [CountRow]?
+        struct CountRow: Decodable { let count: Int }
+    }
+
+    /// 동네 게시글 최신순 조회(좋아요·댓글 수 포함). 미구성/실패 시 nil(→ 로컬 폴백).
+    static func fetchPosts(hood: String) async -> [CrewPost]? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              !hood.isEmpty, hood != "우리 동네",
+              let h = hood.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let select = "id,category,author,author_name,title,body,created_at,crew_post_like(count),crew_post_reply(count)"
+        let s = "\(base)/rest/v1/crew_post?hood=eq.\(h)&select=\(select)&order=created_at.desc&limit=50"
+        guard let url = URL(string: s) else { return nil }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dtos = try? JSONDecoder().decode([CrewPostDTO].self, from: data) else { return nil }
+        let me = SupabaseConfig.deviceID
+        return dtos.map { d in
+            CrewPost(
+                id: d.id,
+                category: CrewPostCategory(rawValue: d.category ?? "") ?? .info,
+                authorName: d.author_name ?? "이웃",
+                timeText: Self.relativeTime(d.created_at),
+                title: d.title,
+                body: d.body ?? "",
+                replyCount: d.crew_post_reply?.first?.count ?? 0,
+                likeCount: d.crew_post_like?.first?.count ?? 0,
+                mine: d.author == me
+            )
+        }
+    }
+
+    /// 동네 게시글 작성(공유). 성공 true.
+    @discardableResult
+    static func createPost(hood: String, category: String, title: String, body: String, authorName: String) async -> Bool {
+        guard SupabaseConfig.isConfigured, !hood.isEmpty, hood != "우리 동네",
+              var req = request("/rest/v1/crew_post", method: "POST") else { return false }
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "hood": hood, "category": category, "author": SupabaseConfig.deviceID,
+            "author_name": authorName, "title": title, "body": body,
+        ])
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
+    private static func relativeTime(_ iso: String?) -> String {
+        guard let iso else { return "방금" }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+        guard let date else { return "방금" }
+        let s = Int(Date().timeIntervalSince(date))
+        if s < 60 { return "방금" }
+        if s < 3600 { return "\(s / 60)분 전" }
+        if s < 86400 { return "\(s / 3600)시간 전" }
+        return "\(s / 86400)일 전"
+    }
 }

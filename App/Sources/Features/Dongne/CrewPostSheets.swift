@@ -11,6 +11,8 @@ import Foundation
 struct CrewPostWriteSheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var location = NearbyLocationProvider.shared
+    @AppStorage("bl_nickname") private var nickname: String = "양육자님"
 
     @State private var category: CrewPostCategory = .info
     @State private var title = ""
@@ -70,7 +72,11 @@ struct CrewPostWriteSheet: View {
 
                     LiquidButton(fill: canSave ? AppColors.primary : AppColors.ink3, action: {
                         guard canSave else { return }
-                        store.addCrewPost(category: category, title: title, body: body_)
+                        store.addCrewPost(category: category, title: title, body: body_)   // 로컬 즉시 반영
+                        // 서버 공유(동네 이웃과 공유) — 구성 시
+                        let hood = location.localityName ?? ""
+                        let cat = category.rawValue, t = title, b = body_, nm = nickname
+                        Task { await CrewBackend.createPost(hood: hood, category: cat, title: t, body: b, authorName: nm) }
                         Haptics.success()
                         dismiss()
                     }) {

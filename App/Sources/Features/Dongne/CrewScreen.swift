@@ -182,13 +182,25 @@ struct CrewScreen: View {
 
 private struct CrewActiveContent: View {
     @EnvironmentObject private var store: AppStore
+    @ObservedObject private var location = NearbyLocationProvider.shared
     @State private var showWrite = false
     @State private var selectedPost: CrewPost?
     @State private var showAllMeetups = false
     @State private var showAllGroups = false
     @State private var showAllPosts = false
+    /// 서버 공유 게시글(미구성/미로드 시 nil → 로컬 폴백)
+    @State private var sharedPosts: [CrewPost]? = nil
 
     private let sectionLimit = 5
+    private var hood: String { location.localityName ?? "우리 동네" }
+    /// 화면에 쓸 게시글 — 서버 연동 시 공유 글, 아니면 로컬
+    private var posts: [CrewPost] { sharedPosts ?? store.crewPosts }
+
+    private func loadPosts() async {
+        if SupabaseConfig.isConfigured, let p = await CrewBackend.fetchPosts(hood: hood) {
+            sharedPosts = p
+        }
+    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -219,6 +231,8 @@ private struct CrewActiveContent: View {
         .sheet(isPresented: $showAllPosts) {
             CrewPostListScreen().environmentObject(store)
         }
+        .task(id: hood) { await loadPosts() }
+        .onChange(of: showWrite) { _, open in if !open { Task { await loadPosts() } } }
     }
 
     // MARK: 같이 가요
@@ -272,8 +286,8 @@ private struct CrewActiveContent: View {
                 BLSectionHead(
                     eyebrow: "동네 이야기",
                     title: "동네 게시판",
-                    action: store.crewPosts.count > sectionLimit ? "전체보기" : nil,
-                    onAction: store.crewPosts.count > sectionLimit ? { Haptics.light(); showAllPosts = true } : nil
+                    action: posts.count > sectionLimit ? "전체보기" : nil,
+                    onAction: posts.count > sectionLimit ? { Haptics.light(); showAllPosts = true } : nil
                 )
                 Button {
                     Haptics.light()
@@ -295,7 +309,7 @@ private struct CrewActiveContent: View {
 
             BLCard(padding: 0) {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(store.crewPosts.prefix(sectionLimit).enumerated()), id: \.element.id) { idx, post in
+                    ForEach(Array(posts.prefix(sectionLimit).enumerated()), id: \.element.id) { idx, post in
                         Button {
                             Haptics.light()
                             selectedPost = post
