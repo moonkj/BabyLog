@@ -7,7 +7,8 @@
 2. ✅ **delete-account 배포 완료** — `supabase functions deploy delete-account`. JWT 없이 호출 시 401 확인(배포·게이트 정상). Apple 심사 요건 충족.
 3. ✅ **Storage 버킷 RLS 강화 완료** — `supabase/schema_hardening.sql`(소유 폴더만 insert/delete). SQL Editor 실행됨. (앱 uploadPhoto/deletePhoto 경로·헤더 ownerID 정합 확인.)
 4. ⏳ **crew_push_token / crew_waitlist RLS** — 보류(기기단위 테이블 vs 공용 ownerID 헤더 불일치 → 적용 시 로그인 정상동작 막힘). device 전용 헤더로 클라 수정 후 잠글 것. schema_hardening.sql 하단 주석 참고. (위험: 중간)
-5. ✅ **notify-crew-open 재배포 완료** — 원자 게이트(`update ... where opened=false returning`) + APNs 410 토큰 정리 반영. **단, 실제 푸시 동작은 유료 Apple Developer + APNS 시크릿 4종 + schema_push.sql + crew_waitlist Database Webhook 충족 시**(미충족 시 현행 '앱 열 때 로컬 알림' 유지). → docs/PUSH_SETUP.md
+5. ✅ **notify-crew-open 재배포 + 단말 수신 검증 완료(2026-06-13)** — 원자 게이트 + APNs 410 정리 반영. 시크릿 5종·entitlement·crew_push_token·앱 토큰등록·앱 트리거(임계30 직접호출) 전부 확인. 등록 토큰으로 테스트 푸시 → **APNs 샌드박스 200, 단말 수신 확인.** Webhook 불필요(앱이 직접 호출). → docs/PUSH_SETUP.md
+   - ⚠️ **출시 빌드 전환 시**: `APNS_HOST`=`api.push.apple.com` + `aps-environment`=`production`로 변경(현재 개발=샌드박스). 운영 호스트엔 개발토큰이 BadDeviceToken이므로 빌드 환경과 반드시 일치.
 6. ✅ **APNs 410 정리 완료** — 위 함수 재배포에 포함.
 
 > schema_market.sql(마켓 1:1 채팅 buyer 컬럼+참가자 RLS)도 같은 날 재실행 완료(B-7).
