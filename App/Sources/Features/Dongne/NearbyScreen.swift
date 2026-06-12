@@ -545,7 +545,7 @@ struct NearbyScreen: View {
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s2) {
-                ForEach(PlaceCategory.allCases, id: \.self) { cat in
+                ForEach(PlaceCategory.allCases.filter { $0 != .playground }, id: \.self) { cat in
                     BLChip(text: cat.rawValue, on: selectedCategory == cat) {
                         selectedCategory = cat
                         activeFilters = [cat.filterOptions.first ?? ""]
