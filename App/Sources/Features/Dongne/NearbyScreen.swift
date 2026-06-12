@@ -348,23 +348,24 @@ struct NearbyScreen: View {
         let category = selectedCategory
         let c = searchCoord
         placesLoading = true
-        let query = category == .kidsCafe ? "키즈카페" : "놀이터"
+        // 애플 한국 POI가 단일 키워드론 빈약할 수 있어 동의어를 순차 시도(첫 결과 사용).
+        let queries: [String] = category == .kidsCafe
+            ? ["키즈카페", "키즈 카페", "어린이카페", "kids cafe", "실내놀이터"]
+            : ["놀이터", "어린이공원", "어린이놀이터", "공원", "playground"]
         let coord = Coordinate(lat: c.latitude, lng: c.longitude)
-        do {
-            let result: [Place]
-            if !ProviderFactory.isMock(APIConfig.kakaoRESTKeyName) {
-                // 카카오 키 연동됨 → 카카오 로컬(더 촘촘한 한국 장소 데이터)
-                result = try await ProviderFactory.place().search(query, near: coord)
-            } else {
-                // 키 없음 → 애플 지도 MKLocalSearch(지금 바로 동작)
-                result = try await appleLocalSearch(query: query, center: c)
+        var result: [Place] = []
+        if !ProviderFactory.isMock(APIConfig.kakaoRESTKeyName) {
+            // 카카오 키 연동됨 → 카카오 로컬(더 촘촘한 한국 장소 데이터)
+            result = (try? await ProviderFactory.place().search(queries[0], near: coord)) ?? []
+        } else {
+            // 키 없음 → 애플 지도 MKLocalSearch(동의어 순차 시도)
+            for q in queries {
+                let r = (try? await appleLocalSearch(query: q, center: c)) ?? []
+                if !r.isEmpty { result = r; break }
             }
-            guard category == selectedCategory else { return }
-            places = result.sorted { $0.distanceM < $1.distanceM }
-        } catch {
-            guard category == selectedCategory else { return }
-            places = []
         }
+        guard category == selectedCategory else { return }
+        places = result.sorted { $0.distanceM < $1.distanceM }
         placesLoading = false
     }
 
@@ -372,8 +373,8 @@ struct NearbyScreen: View {
     private func appleLocalSearch(query: String, center: CLLocationCoordinate2D) async throws -> [Place] {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
-        request.region = MKCoordinateRegion(center: center, latitudinalMeters: 12_000, longitudinalMeters: 12_000)
-        request.resultTypes = [.pointOfInterest]
+        request.region = MKCoordinateRegion(center: center, latitudinalMeters: 15_000, longitudinalMeters: 15_000)
+        // resultTypes 제한 제거 — POI 누락 방지(기본값으로 주소+POI 모두 허용)
         let response = try await MKLocalSearch(request: request).start()
         let me = CLLocation(latitude: center.latitude, longitude: center.longitude)
         return response.mapItems.compactMap { item in
