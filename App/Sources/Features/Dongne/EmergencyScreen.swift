@@ -48,23 +48,35 @@ struct EmergencyScreen: View {
         }
     }
 
-    /// 내 위치 기준 응급용 병원 — 병원급(상급종합·종합병원·병원)만, 대학병원급이 최상단.
-    /// 정렬: ① 가장 가까운 대학병원급 → ② 나머지 거리순.
+    /// 내 위치 기준 응급용 — 대학병원급(상급종합·종합병원) + 소아과만.
+    /// 정렬: ① 가장 가까운 대학병원급 최상단 → ② 종합병원급·소아과 거리순.
     private func load() async {
         loading = true
         let coord = location.coordinate.map { Coordinate(lat: $0.latitude, lng: $0.longitude) }
         do {
-            let all = try await ProviderFactory.hospitalAll().hospitals(near: coord, openNow: false)
-            // 응급 관련 종별만(의원·치과·한의원·요양병원 제외)
-            let relevant = all.filter { h in
-                guard let c = h.clCdNm else { return false }
-                return c.contains("상급종합") || c.contains("종합병원") || c == "병원" || c.contains("대학")
-            }.sorted { $0.distanceM < $1.distanceM }
-            // 가장 가까운 대학병원급을 최상단으로, 나머지는 거리순
-            if let top = relevant.first(where: { $0.isMajorHospital }) {
-                hospitals = [top] + relevant.filter { $0.id != top.id }
+            // 두 조회 병렬: 전체 병원(종별 식별용) + 소아과(진료과목 11)
+            async let allRaw = ProviderFactory.hospitalAll().hospitals(near: coord, openNow: false)
+            async let pedRaw = ProviderFactory.hospital().hospitals(near: coord, openNow: false)
+            let all = try await allRaw
+            let peds = try await pedRaw
+
+            // 종합병원급(상급종합·종합병원)
+            let majors = all.filter { $0.isMajorHospital }
+            // 소아과(이름 기반 — 가정의학·내과 혼입 제거)
+            let kw = ["소아", "아동", "어린이", "키즈"]
+            let pediatric = peds.filter { h in kw.contains { h.name.contains($0) } }
+
+            // 합치고 거리순 + 중복 제거(종합병원이 소아과에도 잡히면 1회만)
+            var seen = Set<String>()
+            var combined: [HospitalInfo] = []
+            for h in (majors + pediatric).sorted(by: { $0.distanceM < $1.distanceM }) {
+                if seen.insert(h.id).inserted { combined.append(h) }
+            }
+            // 최상단 = 가장 가까운 대학병원급
+            if let top = combined.first(where: { $0.isMajorHospital }) {
+                hospitals = [top] + combined.filter { $0.id != top.id }
             } else {
-                hospitals = relevant
+                hospitals = combined
             }
         } catch {
             hospitals = []
