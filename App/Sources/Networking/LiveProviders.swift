@@ -65,9 +65,9 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         // 네트워크·파싱 실패(키 미활성 403 등) 시 샘플로 graceful 폴백 — 화면 안 깨짐
         do {
             let response = try await client.get(url, as: HIRAHospitalResponse.self)
-            var results = try HospitalResponseParser.parse(response)
+            var results = try HospitalResponseParser.parse(response, near: coordinate)
             if openNow { results = results.filter { $0.isOpenNow } }
-            results.sort { $0.distanceM < $1.distanceM }   // 거리순(가까운 곳 먼저)
+            results.sort { $0.distanceM < $1.distanceM }   // 좌표 기반 거리순(가까운 곳 먼저)
             return results
         } catch {
             return try await fallback.hospitals(near: coordinate, openNow: openNow)
@@ -108,12 +108,21 @@ enum HospitalResponseParser {
     /// 건강보험심사평가원 응답을 `[HospitalInfo]`로 변환합니다.
     /// - Parameter response: `HIRAHospitalResponse` 디코딩 결과
     /// - Returns: `HospitalInfo` 배열
-    static func parse(_ response: HIRAHospitalResponse) throws -> [HospitalInfo] {
+    static func parse(_ response: HIRAHospitalResponse, near userCoord: Coordinate? = nil) throws -> [HospitalInfo] {
         guard let items = response.response?.body?.items?.item else {
             return []
         }
         return items.map { item in
-            HospitalInfo(
+            let lat = item.YPos
+            let lng = Double(item.XPos ?? "")
+            // 거리: 사용자 좌표 + 기관 좌표가 있으면 직접 계산(API distance 비신뢰), 없으면 API distance 폴백
+            let dist: Int
+            if let uc = userCoord, let lat, let lng {
+                dist = Int(haversineMeters(lat1: uc.lat, lng1: uc.lng, lat2: lat, lng2: lng))
+            } else {
+                dist = Int(Double(item.distance ?? "0") ?? 0)
+            }
+            return HospitalInfo(
                 id: item.ykiho ?? UUID().uuidString,
                 name: item.yadmNm ?? "알 수 없음",
                 address: item.addr ?? "",
@@ -123,10 +132,22 @@ enum HospitalResponseParser {
                 // 화면에 "영업 정보는 공공데이터 기반, 방문 전 확인" 면책 있음.
                 isOpenNow: true,
                 lastCheckedMinutesAgo: 0,
-                distanceM: Int(Double(item.distance ?? "0") ?? 0),   // "935.52..." 소수 문자열 → 미터
-                rating: 0.0                 // HIRA API는 평점 미제공
+                distanceM: dist,
+                rating: 0.0,                // HIRA API는 평점 미제공
+                latitude: lat,
+                longitude: lng
             )
         }
+    }
+
+    /// 두 좌표 간 직선거리(미터) — Haversine.
+    static func haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double) -> Double {
+        let R = 6_371_000.0
+        let dLat = (lat2 - lat1) * .pi / 180
+        let dLng = (lng2 - lng1) * .pi / 180
+        let a = sin(dLat/2) * sin(dLat/2)
+            + cos(lat1 * .pi/180) * cos(lat2 * .pi/180) * sin(dLng/2) * sin(dLng/2)
+        return R * 2 * atan2(sqrt(a), sqrt(1-a))
     }
 
     /// 원시 JSON Data를 직접 파싱합니다 (QA 단위 테스트용).
@@ -184,6 +205,8 @@ struct HIRAHospitalItem: Decodable {
     let dgsbjtCdNm: String? // 진료과목명
     let clCdNm: String?     // 종별 코드명 (의원/병원 등)
     let distance: String?   // 거리(미터) — 문자열로 내려옴
+    let XPos: String?       // 경도(문자열)
+    let YPos: Double?       // 위도(숫자)
 }
 
 // ============================================================

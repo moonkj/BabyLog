@@ -30,6 +30,9 @@ struct HospitalInfo: Identifiable, Sendable {
     let distanceM: Int
     /// 5점 만점 평점
     let rating: Double
+    /// 기관 위치 좌표 (지도 핀·거리계산용). 없으면 nil.
+    let latitude: Double?
+    let longitude: Double?
 
     init(
         id: String,
@@ -40,7 +43,9 @@ struct HospitalInfo: Identifiable, Sendable {
         isOpenNow: Bool,
         lastCheckedMinutesAgo: Int,
         distanceM: Int,
-        rating: Double
+        rating: Double,
+        latitude: Double? = nil,
+        longitude: Double? = nil
     ) {
         self.id = id
         self.name = name
@@ -51,6 +56,8 @@ struct HospitalInfo: Identifiable, Sendable {
         self.lastCheckedMinutesAgo = lastCheckedMinutesAgo
         self.distanceM = distanceM
         self.rating = rating
+        self.latitude = latitude
+        self.longitude = longitude
     }
 }
 
