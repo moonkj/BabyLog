@@ -733,6 +733,10 @@ final class AppStore: ObservableObject {
         )
         diaryEntries.append(entry)
         bus.publish(.recordSaved(childId: childId))
+        // 이정표 달성 이벤트 발행(CLAUDE.md 공통 이벤트 버스) — 기능 간 연결의 표준 훅.
+        if let milestone, !milestone.trimmingCharacters(in: .whitespaces).isEmpty {
+            bus.publish(.milestoneAchieved(childId: childId, milestone: milestone))
+        }
         refreshBadgeAwards()
     }
 

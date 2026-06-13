@@ -234,7 +234,19 @@ struct NearbyScreen: View {
         locationProvider.coordinate ?? Self.centerCoord
     }
 
-    @State private var selectedCategory: PlaceCategory = .hospital
+    // 시간대 적응 — 야간(22~06시)엔 문 연 약국을 기본으로(가장 다급한 순간 0탭 정답).
+    // @State 초기값은 1회만 적용되므로 이후 사용자의 수동 선택은 그대로 존중된다.
+    @State private var selectedCategory: PlaceCategory = NearbyScreen.timeAwareDefaultCategory()
+
+    static func timeAwareDefaultCategory() -> PlaceCategory {
+        let h = Calendar.current.component(.hour, from: Date())
+        return (h >= 22 || h < 6) ? .pharmacy : .hospital
+    }
+
+    private var isNightNow: Bool {
+        let h = Calendar.current.component(.hour, from: Date())
+        return h >= 22 || h < 6
+    }
     // activeFilters 상태 제거 — 필터칩 UI가 없는데 초기값("현재 영업중")이 첫 소아과 조회에만
     // openNow:true로 적용돼 카테고리 전환 후와 결과가 달라지는 비결정성이 있었다.
     @State private var showMap: Bool = false
@@ -674,17 +686,29 @@ struct NearbyScreen: View {
     // MARK: Category Chips
 
     private var categoryChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.s2) {
-                ForEach(PlaceCategory.allCases.filter { $0 != .playground }, id: \.self) { cat in
-                    BLChip(text: cat.rawValue, on: selectedCategory == cat) {
-                        // activeFilters 제거 — 필터 상태 갱신 불필요(재조회는 onChange가 담당).
-                        selectedCategory = cat
-                    }
-                    .accessibilityAddTraits(selectedCategory == cat ? [.isSelected] : [])
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            // 왜 약국이 먼저인지 투명하게 안내(야간 한정). 사용자가 다른 카테고리를 고르면 사라짐.
+            if isNightNow && selectedCategory == .pharmacy {
+                HStack(spacing: 5) {
+                    Image(systemName: "moon.stars.fill").font(.system(size: 11, weight: .semibold))
+                    Text("지금은 야간 — 문 연 약국을 먼저 보여드려요")
+                        .font(.system(size: 12, weight: .semibold))
                 }
+                .foregroundStyle(AppColors.ink2)
+                .padding(.horizontal, Spacing.s5)
             }
-            .padding(.horizontal, Spacing.s5)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Spacing.s2) {
+                    ForEach(PlaceCategory.allCases.filter { $0 != .playground }, id: \.self) { cat in
+                        BLChip(text: cat.rawValue, on: selectedCategory == cat) {
+                            // activeFilters 제거 — 필터 상태 갱신 불필요(재조회는 onChange가 담당).
+                            selectedCategory = cat
+                        }
+                        .accessibilityAddTraits(selectedCategory == cat ? [.isSelected] : [])
+                    }
+                }
+                .padding(.horizontal, Spacing.s5)
+            }
         }
         .padding(.bottom, Spacing.s3)
     }
