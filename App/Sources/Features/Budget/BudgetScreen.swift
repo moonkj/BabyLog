@@ -744,11 +744,15 @@ private struct SubsidyCard: View {
     var body: some View {
         BLCard(padding: Spacing.s4, flat: true) {
             HStack(spacing: Spacing.s3) {
-                // 받음 체크 토글 (44pt 터치 타깃)
-                Button(action: onToggleClaim) {
+                // 받음 체크 토글 (44pt 터치 타깃) — 받았다고 체크 시 성취 보상(햅틱+바운스).
+                Button {
+                    if !claimed { Haptics.success() } else { Haptics.light() }
+                    onToggleClaim()
+                } label: {
                     Image(systemName: claimed ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 24, weight: .regular))
                         .foregroundStyle(claimed ? AppColors.primary : AppColors.ink3.opacity(0.5))
+                        .symbolEffect(.bounce, value: claimed)
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }

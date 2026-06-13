@@ -103,8 +103,9 @@ struct MainTabView: View {
             TimelineView(.periodic(from: .now, by: 300)) { ctx in
                 let hour = Calendar.current.component(.hour, from: ctx.date)
                 let isNight = hour >= 22 || hour < 6
-                Color.black
-                    .opacity(isNight ? 0.32 : 0)
+                // 순검정 대신 따뜻한 다크 톤 — 새벽 수유 시 차갑지 않게(럭셔리 톤 유지).
+                Color(hex: 0x282118)
+                    .opacity(isNight ? 0.34 : 0)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
                     .animation(.easeInOut(duration: 0.6), value: isNight)
@@ -228,6 +229,9 @@ struct MainTabView: View {
             .foregroundStyle(mode == .baby ? AppColors.primary : AppColors.pregnancyPink)
             .padding(.horizontal, 12).frame(height: 34)
             .liquidGlass(cornerRadius: Radius.pill)
+            // 시각 캡슐은 34pt 유지하되 히트영역만 44pt로 확대(아이 안고 엄지 조작 오조작 방지).
+            .contentShape(Rectangle())
+            .frame(minHeight: 44)
         }
         .accessibilityLabel(mode == .baby ? "육아 모드, 탭하면 임신 모드로 전환" : "임신 모드, 탭하면 육아 모드로 전환")
     }

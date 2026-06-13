@@ -159,7 +159,8 @@ struct FamilyShareScreen: View {
 
                 Button { startShare() } label: {
                     HStack(spacing: Spacing.s2) {
-                        Image(systemName: "rectangle.stack.badge.person.crop.fill")
+                        // '잇는다'(연결)의 은유 — 노드 펄스 공유 모션(적재적소).
+                        ShareMotionIcon(color: .white, size: 20, animated: true)
                         Text("공유 앨범에 추가")
                     }
                     .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)

@@ -16,13 +16,13 @@ struct SeedlingSplashView: View {
     @State private var titleShow = false
     @State private var fade = false
 
-    // 앱 아이콘 색 (원본 SVG에서 추출)
-    private let leafGreen = Color(hex: 0x2E7A5C)
+    // 앱 아이콘 색 — 브랜드 토큰(AppColors)으로 통일(저장 보상·뱃지에서 재등장).
+    private let leafGreen = AppColors.brandLeaf
     private let discFill  = Color.white
-    private let ringTop   = Color(hex: 0xEBC56C)
-    private let ringBot   = Color(hex: 0xC9A24B)
-    private let creamHi   = Color(hex: 0xF5EDDC)
-    private let creamLo   = Color(hex: 0xE3D4BA)
+    private let ringTop   = AppColors.brandRingTop
+    private let ringBot   = AppColors.brandRingBot
+    private let creamHi   = AppColors.brandCreamHi
+    private let creamLo   = AppColors.brandCreamLo
 
     private let discSize: CGFloat = 152
 

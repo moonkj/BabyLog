@@ -536,17 +536,21 @@ struct QuickRecordSheet: View {
     // MARK: 저장 완료 보상 오버레이
     private var saveRewardOverlay: some View {
         ZStack {
-            AppColors.surface
+            // 앱 아이콘·스플래시와 같은 크림 라디얼 — 기록이 담기는 순간에 브랜드 세계관 재등장.
+            RadialGradient(gradient: Gradient(colors: [AppColors.brandCreamHi, AppColors.brandCreamLo]),
+                           center: UnitPoint(x: 0.5, y: 0.42), startRadius: 0, endRadius: 420)
                 .ignoresSafeArea()
 
             VStack(spacing: Spacing.s4) {
-                // 팝 애니메이션 원형 아이콘
+                // 흰 원판 + 금색 링(아이콘과 동일) 안에 하트 — 팝 애니메이션
                 ZStack {
+                    Circle().fill(Color.white).frame(width: 80, height: 80)
                     Circle()
-                        .fill(AppColors.primaryTint)
-                        .frame(width: 76, height: 76)
+                        .stroke(LinearGradient(colors: [AppColors.brandRingTop, AppColors.brandRingBot],
+                                               startPoint: .top, endPoint: .bottom), lineWidth: 2.5)
+                        .frame(width: 80, height: 80)
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 34))
+                        .font(.system(size: 32))
                         .foregroundStyle(AppColors.primary)
                         .accessibilityHidden(true)
                 }

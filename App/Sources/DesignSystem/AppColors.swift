@@ -57,6 +57,14 @@ enum AppColors {
     static let gold     = dyn(0xC9A961, 0xD8B973)
     static let goldTint = dyn(0xFAF6E8, 0x322D1C)
 
+    // 브랜드 코어 — 앱 아이콘·스플래시 정체성 색(크림 배경·금색 링·잎 그린).
+    // 감정 피크 화면(저장 보상·뱃지)에 재등장시켜 "하나의 세계관"으로 묶는다(고정색 — 아이콘과 동일).
+    static let brandCreamHi = Color(hex: 0xF5EDDC)
+    static let brandCreamLo = Color(hex: 0xE3D4BA)
+    static let brandLeaf    = Color(hex: 0x2E7A5C)
+    static let brandRingTop = Color(hex: 0xEBC56C)
+    static let brandRingBot = Color(hex: 0xC9A24B)
+
     // Danger (응급·리콜) — 딥 레드
     static let danger     = dyn(0xB5363A, 0xE86B6F)
     static let dangerTint = dyn(0xF7E6E7, 0x3A211B)

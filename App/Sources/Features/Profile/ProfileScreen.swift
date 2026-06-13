@@ -240,15 +240,22 @@ struct ProfileScreen: View {
         .accessibilityLabel("프로필 카드")
     }
 
-    // 아바타 원형 (PhotoPlaceholder 재사용)
+    // 아바타 — 시스템 이모지 대신 성별 중립 모노그램(세이지 디스크) + 뱃지 진행 금색 링.
+    // 진행 링(GrowthRingView)으로 "내 활동이 쌓인다"는 누적감을 시각화(적재적소).
     private var avatarView: some View {
-        ZStack {
-            PhotoPlaceholder(seed: 3, cornerRadius: 999)
-            Text("🧑")
-                .font(.system(size: 28))
+        let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        let initial = String(trimmed.prefix(1))
+        return ZStack {
+            GrowthRingView(size: 64, lineWidth: 3, color: AppColors.gold, progress: CGFloat(badgeProgress))
+            Circle()
+                .fill(LinearGradient(colors: [AppColors.primary, AppColors.primaryPress],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 52, height: 52)
+            Text(initial.isEmpty ? "♡" : initial)
+                .font(.system(size: 23, weight: .bold))
+                .foregroundStyle(.white)
         }
-        .frame(width: 60, height: 60)
-        .clipShape(Circle())
+        .frame(width: 64, height: 64)
         .accessibilityHidden(true)
     }
 

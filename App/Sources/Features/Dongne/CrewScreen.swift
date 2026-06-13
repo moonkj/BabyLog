@@ -676,7 +676,7 @@ private struct CrewMeetupCard: View {
                         Text(meetup.hostName)
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(AppColors.ink2)
-                        BLBadge(tone: meetup.hostTier.badgeTone, text: meetup.hostTier.rawValue, systemIcon: nil, dot: false)
+                        BLBadge(tone: meetup.hostTier.badgeTone, text: meetup.hostTier.rawValue, systemIcon: meetup.hostTier.systemIcon, dot: false)
                     }
 
                     // 참가자 아바타 + 정원

@@ -226,7 +226,7 @@ struct MarketDetailSellerCard: View {
                         Text(item.sellerName)
                             .font(.system(size: 14.5, weight: .bold))
                             .foregroundStyle(AppColors.ink)
-                        BLBadge(tone: item.sellerTier.badgeTone, text: item.sellerTier.rawValue, systemIcon: nil, dot: false)
+                        BLBadge(tone: item.sellerTier.badgeTone, text: item.sellerTier.rawValue, systemIcon: item.sellerTier.systemIcon, dot: false)
                     }
 
                     if item.mine {

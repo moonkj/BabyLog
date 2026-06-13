@@ -1115,11 +1115,12 @@ private struct HospitalCard: View {
                     HStack(spacing: Spacing.s2) {
                         switch openState {
                         case .open:
-                            BLBadge(tone: .mint, text: "영업중", systemIcon: nil, dot: true).fixedSize()
+                            // 색+아이콘+레이블 3중 인코딩 — 색약 사용자도 시계 아이콘으로 '영업중' 식별.
+                            BLBadge(tone: .mint, text: "영업중", systemIcon: "clock.fill", dot: true).fixedSize()
                         case .closed:
-                            BLBadge(tone: .grey, text: "영업종료", systemIcon: nil, dot: false).fixedSize()
+                            BLBadge(tone: .grey, text: "영업종료", systemIcon: "moon.fill", dot: false).fixedSize()
                         case .checking:
-                            BLBadge(tone: .grey, text: "영업시간 확인 중…", systemIcon: nil, dot: false).fixedSize()
+                            BLBadge(tone: .grey, text: "영업시간 확인 중…", systemIcon: "hourglass", dot: false).fixedSize()
                         case .unknown:
                             // 시간 데이터가 없는 곳 — 추측하지 않고 전화 확인을 안내.
                             BLBadge(tone: .grey, text: "전화로 확인", systemIcon: "phone.fill", dot: false).fixedSize()
@@ -1131,8 +1132,8 @@ private struct HospitalCard: View {
                     Text("\(Self.distanceText(hospital.distanceM)) · \(hospital.department)")
                         .font(AppFont.caption)
                         .foregroundStyle(AppColors.ink2)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        .lineLimit(2)            // Dynamic Type 확대 시 종별 정보 짤림 방지
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 0)

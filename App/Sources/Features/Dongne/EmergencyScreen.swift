@@ -300,9 +300,8 @@ struct EmergencyScreen: View {
                     Circle()
                         .fill(Color.white.opacity(0.18))
                         .frame(width: 38, height: 38)
-                    Image(systemName: "phone.fill")
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(Color.white)
+                    // 응급 화면은 '지금 전화'라는 단일 의도 → 상시 흔들림+신호물결 모션(적재적소).
+                    PhoneMotionIcon(color: .white, size: 21, animated: true)
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("119 구급 상담")

@@ -56,6 +56,15 @@ enum MarketSellerTier: String {
         case .new:    return .grey
         }
     }
+
+    /// 색약 대응 — 등급을 색만이 아니라 아이콘으로도 구분(3중 인코딩, grade와 동일 패턴).
+    var systemIcon: String {
+        switch self {
+        case .golden: return "crown.fill"
+        case .warm:   return "hand.thumbsup.fill"
+        case .new:    return "sparkles"
+        }
+    }
 }
 
 /// 마켓 카테고리
