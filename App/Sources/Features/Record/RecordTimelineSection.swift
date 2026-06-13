@@ -323,24 +323,17 @@ private struct DiaryTimelineCard: View {
     @ViewBuilder
     private func actionBar(photo: UIImage?) -> some View {
         HStack(spacing: 18) {
+            // 무료=혼자 보는 저널 → 하트(소셜) 대신 즐겨찾기(⭐). 베스트 사진 선별·회고용.
+            // (가족 하트·댓글은 Pro 가족 피드에서 — SPEC 값 사다리.)
             Button { likeWithPop() } label: {
-                Image(systemName: liked ? "heart.fill" : "heart")
+                Image(systemName: liked ? "star.fill" : "star")
                     .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(liked ? Color(hex: 0xE8607A) : AppColors.ink)
+                    .foregroundStyle(liked ? AppColors.gold : AppColors.ink)
                     .scaleEffect(heartPop ? 1.25 : 1.0)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
             }
-            .accessibilityLabel(liked ? "좋아요 취소" : "좋아요")
-
-            Button { showComments = true } label: {
-                Image(systemName: "bubble.right")
-                    .font(.system(size: 21, weight: .regular))
-                    .foregroundStyle(AppColors.ink)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("댓글")
+            .accessibilityLabel(liked ? "즐겨찾기 해제" : "즐겨찾기")
 
             if let photo {
                 ShareLink(item: Image(uiImage: photo),
@@ -364,22 +357,19 @@ private struct DiaryTimelineCard: View {
     private var captionBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             if liked {
-                Text("좋아요 표시함")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppColors.ink)
+                HStack(spacing: 4) {
+                    Image(systemName: "star.fill").font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AppColors.gold)
+                    Text("즐겨찾기에 담음")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppColors.ink)
+                }
             }
             if let content = entry.content, !content.isEmpty {
                 (Text(child.name).font(.system(size: 14, weight: .bold))
                  + Text("  ") + Text(content).font(.system(size: 14)))
                     .foregroundStyle(AppColors.ink)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-            if commentCount > 0 {
-                Button { showComments = true } label: {
-                    Text("댓글 \(commentCount)개 모두 보기")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(AppColors.ink3)
-                }
             }
         }
         .padding(.horizontal, 12)
@@ -401,9 +391,9 @@ private struct DiaryTimelineCard: View {
     private var heartPopOverlay: some View {
         // reduceMotion이면 90pt 스프링 팝을 생략(전정장애 배려). 좋아요 자체는 정상 동작.
         if heartPop && !reduceMotion {
-            Image(systemName: "heart.fill")
+            Image(systemName: "star.fill")
                 .font(.system(size: 90, weight: .bold))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(AppColors.gold.opacity(0.92))
                 .shadow(color: .black.opacity(0.25), radius: 8)
                 .transition(.scale.combined(with: .opacity))
         }
