@@ -11,6 +11,10 @@ struct VaccineSection: View {
 
     @State private var vaccines: [VaccineRecord] = []
     @State private var isLoading = true   // 첫 렌더에 빈상태(실패) 깜빡임 방지 — 로드 완료까지 스켈레톤
+    /// 펼쳐진 백신 그룹 키(접힘 기본). 펼치면 회차별 개별 행 노출.
+    @State private var expandedGroups: Set<String> = []
+    /// 완료(모든 회차 접종) 그룹 묶음 펼침 여부.
+    @State private var showCompletedGroups = false
 
     // 접종 병원 입력 시트(.alert) 상태
     @State private var hospitalPromptVaccineId: String?   // 입력 대상 vaccineId (nil이면 닫힘)
@@ -165,52 +169,279 @@ struct VaccineSection: View {
                 retry: { Task { await loadVaccines(birthDate: child.birthDate) } }
             )
         } else {
-            VStack(alignment: .leading, spacing: Spacing.s3) {
-                // 임박 접종 배너 (다음 예정 접종 기반)
+            let groups = makeGroups(vaccines)
+            let ongoing = groups.filter { !isGroupDone($0) }
+            let completed = groups.filter { isGroupDone($0) }
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                // 다음 접종 — 어떤 접힘 상태에서도 항상 최상단 노출(후속 접종 누락 방지)
                 if let next = nextUpcoming {
                     upcomingBanner(for: next, birthDate: child.birthDate)
                 }
 
-                // 전체 리스트
-                ForEach(vaccines) { v in
-                    let name = displayName(for: v.vaccineId)
-                    VaccineRow(
-                        vaccineId: v.vaccineId,
-                        displayName: name,
-                        ageLabel: ageLabel(for: v, birthDate: child.birthDate),
-                        // 영속화된 병원만 노출 (목 데이터 v.hospital은 더 이상 사용 안 함)
-                        hospital: store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId),
-                        done: isDone(v),
-                        dDay: dDayLabel(for: v),
-                        onToggle: {
-                            let wasDone = isDone(v)
-                            withAnimation(.easeOut(duration: 0.18)) {
-                                store.toggleVaccine(childId: child.id, vaccineId: v.vaccineId)
+                // 진행 요약 — 분모에 '0~18개월 표준' 범위를 명시(평생 일정으로 오인 방지)
+                progressSummary
+
+                // 진행 중인 접종 그룹(미완 회차가 남은 것)
+                if !ongoing.isEmpty {
+                    BLSectionHead(title: "진행 중인 접종")
+                        .accessibilityAddTraits(.isHeader)
+                    BLCard(padding: 0) {
+                        VStack(spacing: 0) {
+                            ForEach(Array(ongoing.enumerated()), id: \.element.id) { idx, g in
+                                if idx > 0 { Divider().background(AppColors.line).padding(.leading, 64) }
+                                vaccineGroupRow(g, child: child)
                             }
-                            // 새로 '완료'가 됐고 병원 기록이 없으면 입력 유도.
-                            // 토글·체크 드로우 모션이 먼저 보이도록 다이얼로그는 살짝 지연 표시.
-                            if !wasDone,
-                               store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId) == nil {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                    presentHospitalPrompt(vaccineId: v.vaccineId, name: name)
-                                }
-                            }
-                        },
-                        onTapHospital: { openInMaps($0) },
-                        onEditHospital: { presentHospitalPrompt(vaccineId: v.vaccineId, name: name) }
-                    )
+                        }
+                    }
                 }
 
-                // 의료 면책 안내 문구
-                Text("⚠️ 이 일정은 질병관리청 표준 스케줄 참고용이에요. 실제 접종 일정은 담당 소아과 선생님과 확인하세요.")
+                // 완료한 접종 — 접기 기본(사용자가 '늘어놓을 필요 없다'던 항목)
+                if !completed.isEmpty {
+                    Button {
+                        Haptics.light()
+                        withAnimation(.easeInOut(duration: 0.2)) { showCompletedGroups.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.primary)
+                            Text("완료한 접종 \(completed.count)종")
+                                .font(.system(size: 13.5, weight: .bold)).foregroundStyle(AppColors.ink2)
+                            Image(systemName: showCompletedGroups ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(LiquidPressStyle(scale: 0.98))
+                    .accessibilityLabel(showCompletedGroups ? "완료한 접종 \(completed.count)종 접기" : "완료한 접종 \(completed.count)종 펼치기")
+
+                    if showCompletedGroups {
+                        BLCard(padding: 0) {
+                            VStack(spacing: 0) {
+                                ForEach(Array(completed.enumerated()), id: \.element.id) { idx, g in
+                                    if idx > 0 { Divider().background(AppColors.line).padding(.leading, 64) }
+                                    vaccineGroupRow(g, child: child)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 의료 면책 + 범위 고지(상시 노출) — 0~18개월 외 접종이 '없는' 게 아니라 '범위 밖'임을 정직하게.
+                Text("⚠️ 질병관리청 표준 **0~18개월** 일정 참고용이에요. 만 4~6세 추가접종·매년 독감은 포함되지 않으니 담당 소아과 선생님과 확인하세요.")
                     .font(AppFont.caption)
                     .foregroundStyle(AppColors.ink3)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                     .padding(.top, Spacing.s2)
-                    .accessibilityLabel("접종 일정 안내: 질병관리청 표준 스케줄 참고용이며, 실제 접종은 소아과 의사와 확인하세요.")
+                    .accessibilityLabel("안내: 질병관리청 표준 0~18개월 일정 참고용이며, 만 4~6세 추가접종과 매년 독감은 포함되지 않습니다. 실제 접종은 소아과 의사와 확인하세요.")
             }
         }
+    }
+
+    // MARK: - 백신 그룹(종류별) 구성
+
+    /// 백신 그룹 — 같은 종류(DTaP 등)의 회차들을 묶는다.
+    private struct VaccineGroup: Identifiable {
+        let id: String          // 그룹 키(접두, 예: "DTaP")
+        let name: String        // 표시명
+        let doses: [VaccineRecord]   // 회차(접종일순)
+    }
+
+    /// vaccineId 접두("DTaP-1"→"DTaP")로 그룹 키 도출.
+    private func groupKey(_ vaccineId: String) -> String {
+        vaccineId.split(separator: "-").first.map(String.init) ?? vaccineId
+    }
+
+    private func groupName(_ key: String) -> String {
+        switch key {
+        case "BCG":       return "BCG (결핵)"
+        case "HepB":      return "B형간염"
+        case "DTaP":      return "DTaP"
+        case "IPV":       return "폴리오(IPV)"
+        case "Hib":       return "Hib"
+        case "PCV":       return "폐렴구균(PCV)"
+        case "RV":        return "로타바이러스"
+        case "MMR":       return "MMR"
+        case "Varicella": return "수두"
+        case "HepA":      return "A형간염"
+        case "JEV":       return "일본뇌염"
+        default:          return key
+        }
+    }
+
+    private func makeGroups(_ records: [VaccineRecord]) -> [VaccineGroup] {
+        var map: [String: [VaccineRecord]] = [:]
+        for r in records { map[groupKey(r.vaccineId), default: []].append(r) }
+        return map.map { key, doses in
+            VaccineGroup(id: key, name: groupName(key),
+                         doses: doses.sorted { ($0.scheduledDate ?? .distantPast) < ($1.scheduledDate ?? .distantPast) })
+        }
+        // 가장 이른 회차 순으로 그룹 정렬(0개월대 → 12개월대)
+        .sorted { ($0.doses.first?.scheduledDate ?? .distantFuture) < ($1.doses.first?.scheduledDate ?? .distantFuture) }
+    }
+
+    private func isGroupDone(_ g: VaccineGroup) -> Bool {
+        g.doses.allSatisfy { isDone($0) }
+    }
+
+    /// 그룹의 월령 요약(예: "생후 2·4·6·15개월" / 단회는 "생후 2개월").
+    private func groupAgeSummary(_ g: VaccineGroup, birthDate: Date) -> String {
+        let months = g.doses.compactMap { r -> Int? in
+            guard let d = r.scheduledDate else { return nil }
+            return AgeCalculator.childAgeMonths(birthDate: birthDate, asOf: d).months
+        }
+        if months.isEmpty { return "" }
+        if months.count == 1 { return months[0] == 0 ? "출생 시" : "생후 \(months[0])개월" }
+        return "생후 " + months.map(String.init).joined(separator: "·") + "개월"
+    }
+
+    // MARK: - 그룹 행 (접힘=회차 도트 요약 / 펼침=회차별 개별 행)
+
+    @ViewBuilder
+    private func vaccineGroupRow(_ g: VaccineGroup, child: Child) -> some View {
+        let doneCount = g.doses.filter { isDone($0) }.count
+        let total = g.doses.count
+        let expanded = expandedGroups.contains(g.id)
+        let groupDone = doneCount == total
+
+        VStack(spacing: 0) {
+            // 요약 행 (탭하면 회차 펼침)
+            Button {
+                Haptics.light()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if expanded { expandedGroups.remove(g.id) } else { expandedGroups.insert(g.id) }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                            .fill(groupDone ? AppColors.primarySoft : AppColors.surface3)
+                            .frame(width: 40, height: 40)
+                        Image(systemName: groupDone ? "checkmark.circle.fill" : "syringe")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(groupDone ? AppColors.primary : AppColors.ink3)
+                    }
+                    .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(g.name)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(AppColors.ink)
+                        Text(groupAgeSummary(g, birthDate: child.birthDate))
+                            .font(AppFont.caption)
+                            .foregroundStyle(AppColors.ink3)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    // 회차 진행 — 색+모양(채움/외곽)+레이블 3중 인코딩
+                    if total > 1 {
+                        doseDots(g)
+                    }
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppColors.ink3)
+                }
+                .padding(.horizontal, Spacing.s4)
+                .padding(.vertical, Spacing.s3)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.99))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(g.name), \(total)회 중 \(doneCount)회 완료\(groupDone ? "" : ", 미완 회차 있음")")
+            .accessibilityHint(expanded ? "접어서 요약 보기" : "펼쳐서 회차별 보기")
+            .accessibilityAddTraits(.isButton)
+
+            // 펼침 — 회차별 개별 행(기존 VaccineRow 재사용: 체크·병원 기록)
+            if expanded {
+                Divider().background(AppColors.line).padding(.leading, 64)
+                ForEach(Array(g.doses.enumerated()), id: \.element.id) { idx, v in
+                    if idx > 0 { Divider().background(AppColors.line).padding(.leading, 64) }
+                    doseRow(v, child: child)
+                }
+            }
+        }
+    }
+
+    /// 회차 진행 도트(채움=완료, 외곽=미완, 금색 링=다음 차례) + "N/M" 텍스트.
+    @ViewBuilder
+    private func doseDots(_ g: VaccineGroup) -> some View {
+        let nextId = g.doses.first(where: { !isDone($0) })?.id
+        HStack(spacing: 4) {
+            ForEach(g.doses) { v in
+                let done = isDone(v)
+                Circle()
+                    .strokeBorder(done ? Color.clear : (v.id == nextId ? AppColors.gold : AppColors.line2),
+                                  lineWidth: 1.5)
+                    .background(Circle().fill(done ? AppColors.primary : Color.clear))
+                    .frame(width: 8, height: 8)
+            }
+            Text("\(g.doses.filter { isDone($0) }.count)/\(g.doses.count)")
+                .font(AppFont.num(11.5, weight: .bold))
+                .foregroundStyle(AppColors.ink3)
+        }
+        .accessibilityHidden(true)   // 그룹 행 레이블이 "N회 중 M회"로 대체 안내
+    }
+
+    /// 개별 회차 행 — 기존 VaccineRow + 토글/병원 기록 로직.
+    @ViewBuilder
+    private func doseRow(_ v: VaccineRecord, child: Child) -> some View {
+        let name = displayName(for: v.vaccineId)
+        VaccineRow(
+            vaccineId: v.vaccineId,
+            displayName: name,
+            ageLabel: ageLabel(for: v, birthDate: child.birthDate),
+            hospital: store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId),
+            done: isDone(v),
+            dDay: dDayLabel(for: v),
+            onToggle: {
+                let wasDone = isDone(v)
+                withAnimation(.easeOut(duration: 0.18)) {
+                    store.toggleVaccine(childId: child.id, vaccineId: v.vaccineId)
+                }
+                if !wasDone,
+                   store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId) == nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        presentHospitalPrompt(vaccineId: v.vaccineId, name: name)
+                    }
+                }
+            },
+            onTapHospital: { openInMaps($0) },
+            onEditHospital: { presentHospitalPrompt(vaccineId: v.vaccineId, name: name) }
+        )
+    }
+
+    /// 진행 요약 — '0~18개월 표준 N건 중 M건 기록' + 비율 바(색+레이블).
+    private var progressSummary: some View {
+        let total = vaccines.count
+        let done = vaccines.filter { isDone($0) }.count
+        let ratio = total > 0 ? Double(done) / Double(total) : 0
+        return BLCard(padding: Spacing.s4, flat: true) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("0~18개월 표준 일정")
+                        .font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink2)
+                    Spacer()
+                    Text("\(done) / \(total) 기록")
+                        .font(AppFont.num(13, weight: .heavy)).foregroundStyle(AppColors.primary)
+                }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(AppColors.surface3).frame(height: 6)
+                        Capsule().fill(AppColors.primary)
+                            .frame(width: max(6, geo.size.width * ratio), height: 6)
+                    }
+                }
+                .frame(height: 6)
+                .accessibilityHidden(true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("0~18개월 표준 일정 \(total)건 중 \(done)건 기록")
     }
 
     private var vaccineSkeletonView: some View {
