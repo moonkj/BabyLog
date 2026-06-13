@@ -39,6 +39,11 @@ struct QuickRecordSheet: View {
     @State private var savedMomentCount = 1
     @State private var savedDisplayName = "우리 아기"
 
+    // 가족(조부모) 공유 — 저장 직후 공유 앨범에 추가할지 선택(마지막 선택 기억). 육아 모드 + 미디어 있을 때만.
+    @AppStorage("bl_quickshare_family") private var shareToFamily = false
+    @State private var showFamilyShare = false
+    @State private var pendingShareURLs: [URL] = []
+
     // MARK: 모드별 콘텐츠
     private var sheetTitle: String {
         mode == .pregnancy ? "임신 기록" : "오늘 기록"
@@ -92,6 +97,10 @@ struct QuickRecordSheet: View {
         }
         // 애니메이션: 완료 오버레이 진입
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: savedOverlay)
+        // 가족 공유 시트 — 저장 직후 '공유 앨범에 추가'. 닫히면 기록 시트도 닫는다.
+        .sheet(isPresented: $showFamilyShare, onDismiss: { onSave(); onClose() }) {
+            QuickFamilyShareSheet(activityItems: pendingShareURLs)
+        }
     }
 
     // MARK: Main scroll content
@@ -110,6 +119,7 @@ struct QuickRecordSheet: View {
                         detailSection
                             .padding(.bottom, Spacing.s3)
                     }
+                    familyShareToggle
                     saveButton
                         .padding(.top, Spacing.s2)
                     if showEmptyHint {
@@ -443,6 +453,35 @@ struct QuickRecordSheet: View {
         .accessibilityLabel("\(label) 입력")
     }
 
+    // 가족(조부모) 공유 토글 — 육아 모드 + 미디어 있을 때만. 저장 직후 공유 앨범에 추가.
+    @ViewBuilder
+    private var familyShareToggle: some View {
+        if mode == .baby, hasMedia {
+            HStack(spacing: Spacing.s3) {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color(hex: 0xB5478A))
+                    .frame(width: 34, height: 34)
+                    .background(Color(hex: 0xFBEAF0), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("가족과 공유")
+                        .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                    Text("저장 후 조부모님 공유 앨범에 바로 추가")
+                        .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                }
+                Spacer(minLength: 0)
+                Toggle("", isOn: $shareToFamily).labelsHidden().tint(AppColors.primary)
+            }
+            .padding(.horizontal, Spacing.s3).padding(.vertical, Spacing.s2)
+            .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .padding(.top, Spacing.s3)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("가족과 공유. \(shareToFamily ? "켜짐" : "꺼짐")")
+            .accessibilityAddTraits(.isToggle)
+        }
+    }
+
     // 저장 LiquidButton (2탭 완료)
     private var saveButton: some View {
         LiquidButton(action: handleSave) {
@@ -590,9 +629,15 @@ struct QuickRecordSheet: View {
                 let content = trimmedMemo.isEmpty ? nil : trimmedMemo
                 // 대상 아이들: 현재 아이 + 함께 선택된 형제·자매. 각 아이가 자기 사진 파일을 소유(삭제 안전).
                 let targetIds = [childId] + selectedExtraChildIds.filter { $0 != childId }
-                for tid in targetIds {
+                var shareURLs: [URL] = []
+                for (idx, tid) in targetIds.enumerated() {
                     let refs = selectedImages.compactMap { PhotoStore.save($0) }
                     let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
+                    // 가족 공유용 파일 URL은 첫 번째 아이 사본 기준으로 1세트만 수집(중복 공유 방지)
+                    if idx == 0 {
+                        shareURLs = refs.map { PhotoStore.photosDirectory.appendingPathComponent($0) }
+                        if let vf = videoFile { shareURLs.append(PhotoStore.photosDirectory.appendingPathComponent(vf)) }
+                    }
                     store.addDiaryEntry(
                         childId:   tid,
                         content:   content,
@@ -602,6 +647,7 @@ struct QuickRecordSheet: View {
                         videoRef:  videoFile
                     )
                 }
+                pendingShareURLs = (shareToFamily && hasMedia) ? shareURLs : []
                 didSave = true
             }
             // 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
@@ -648,10 +694,14 @@ struct QuickRecordSheet: View {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
             savedOverlay = true
         }
-        // 2탭(1.6s): 오버레이 표시 후 onSave+onClose 호출
+        // 2탭(1.6s): 오버레이 표시 후 — 가족 공유 ON이면 공유 시트를 띄우고, 아니면 닫기.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-            onSave()
-            onClose()
+            if mode == .baby, shareToFamily, !pendingShareURLs.isEmpty {
+                showFamilyShare = true   // 닫기는 공유 시트 onDismiss에서
+            } else {
+                onSave()
+                onClose()
+            }
         }
     }
 }
@@ -691,6 +741,15 @@ private struct PhotosOnlyPickerButton<Label: View>: View {
         let finalImgs = imgs
         await MainActor.run { images = finalImgs }
     }
+}
+
+// MARK: - 가족 공유 시트 (저장 직후 '공유 앨범에 추가')
+private struct QuickFamilyShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Pop animation helper
