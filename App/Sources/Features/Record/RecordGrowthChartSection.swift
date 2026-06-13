@@ -54,6 +54,15 @@ struct GrowthChartSection: View {
             WHOBand(month: 12, p15: 8.6,  p50: 9.8,  p85: 11.0),
             WHOBand(month: 14, p15: 9.0,  p50: 10.3, p85: 11.5),
             WHOBand(month: 16, p15: 9.4,  p50: 10.8, p85: 12.0),
+            // 16~60개월 확장(WHO 남아 몸무게 근사)
+            WHOBand(month: 18, p15: 9.9,  p50: 11.3, p85: 12.7),
+            WHOBand(month: 24, p15: 10.8, p50: 12.2, p85: 13.6),
+            WHOBand(month: 30, p15: 11.8, p50: 13.3, p85: 14.9),
+            WHOBand(month: 36, p15: 12.7, p50: 14.3, p85: 16.2),
+            WHOBand(month: 42, p15: 13.5, p50: 15.3, p85: 17.3),
+            WHOBand(month: 48, p15: 14.3, p50: 16.3, p85: 18.5),
+            WHOBand(month: 54, p15: 15.2, p50: 17.3, p85: 19.7),
+            WHOBand(month: 60, p15: 16.0, p50: 18.3, p85: 20.9),
         ]
     }
 
@@ -69,6 +78,15 @@ struct GrowthChartSection: View {
             WHOBand(month: 12, p15: 7.9,  p50: 8.9,  p85: 10.1),
             WHOBand(month: 14, p15: 8.2,  p50: 9.4,  p85: 10.6),
             WHOBand(month: 16, p15: 8.6,  p50: 9.8,  p85: 11.1),
+            // 16~60개월 확장(WHO 여아 몸무게 근사)
+            WHOBand(month: 18, p15: 8.8,  p50: 10.2, p85: 11.6),
+            WHOBand(month: 24, p15: 10.0, p50: 11.5, p85: 13.0),
+            WHOBand(month: 30, p15: 11.0, p50: 12.7, p85: 14.4),
+            WHOBand(month: 36, p15: 12.0, p50: 13.9, p85: 15.8),
+            WHOBand(month: 42, p15: 12.9, p50: 15.0, p85: 17.1),
+            WHOBand(month: 48, p15: 13.8, p50: 16.1, p85: 18.5),
+            WHOBand(month: 54, p15: 14.6, p50: 17.2, p85: 19.8),
+            WHOBand(month: 60, p15: 15.4, p50: 18.2, p85: 21.0),
         ]
     }
 
@@ -84,6 +102,15 @@ struct GrowthChartSection: View {
             WHOBand(month: 12, p15: 72.8, p50: 75.7, p85: 78.6),
             WHOBand(month: 14, p15: 75.0, p50: 78.0, p85: 81.1),
             WHOBand(month: 16, p15: 77.1, p50: 80.2, p85: 83.3),
+            // 16~60개월 확장(WHO 남아 키 근사) — 큰 아이도 밴드 비교 가능하게
+            WHOBand(month: 18, p15: 79.6, p50: 82.3, p85: 85.0),
+            WHOBand(month: 24, p15: 84.1, p50: 87.1, p85: 90.0),
+            WHOBand(month: 30, p15: 88.7, p50: 91.9, p85: 95.1),
+            WHOBand(month: 36, p15: 92.7, p50: 96.1, p85: 99.5),
+            WHOBand(month: 42, p15: 96.3, p50: 99.9, p85: 103.5),
+            WHOBand(month: 48, p15: 99.5, p50: 103.3, p85: 107.1),
+            WHOBand(month: 54, p15: 102.7, p50: 106.7, p85: 110.7),
+            WHOBand(month: 60, p15: 105.8, p50: 110.0, p85: 114.2),
         ]
     }
 
@@ -99,6 +126,15 @@ struct GrowthChartSection: View {
             WHOBand(month: 12, p15: 70.8, p50: 74.0, p85: 77.1),
             WHOBand(month: 14, p15: 73.0, p50: 76.4, p85: 79.7),
             WHOBand(month: 16, p15: 75.0, p50: 78.6, p85: 82.1),
+            // 16~60개월 확장(WHO 여아 키 근사)
+            WHOBand(month: 18, p15: 78.0, p50: 80.7, p85: 83.4),
+            WHOBand(month: 24, p15: 82.5, p50: 85.7, p85: 88.9),
+            WHOBand(month: 30, p15: 87.4, p50: 90.7, p85: 94.0),
+            WHOBand(month: 36, p15: 91.5, p50: 95.1, p85: 98.7),
+            WHOBand(month: 42, p15: 95.2, p50: 99.0, p85: 102.8),
+            WHOBand(month: 48, p15: 98.7, p50: 102.7, p85: 106.7),
+            WHOBand(month: 54, p15: 102.0, p50: 106.2, p85: 110.4),
+            WHOBand(month: 60, p15: 105.0, p50: 109.4, p85: 113.8),
         ]
     }
 
@@ -370,8 +406,24 @@ struct GrowthChartSection: View {
 
     // MARK: Swift Charts 본체
 
+    /// X축 상한(개월) — 아이 데이터 범위에 맞춰 동적. 어린 아기는 ~18개월로 확대,
+    /// 큰 아이는 측정 월령+6(최대 60)까지. 밴드(0~60)가 항상 60까지라 축이 눌리는 것 방지.
+    private var chartMaxMonth: Int {
+        let maxData = chartPoints.map(\.month).max() ?? 0
+        return min(60, max(18, maxData + 6))
+    }
+
+    /// X축 눈금 — 상한에 맞춰 간격 조정.
+    private var chartXTicks: [Int] {
+        let m = chartMaxMonth
+        if m <= 18 { return [0, 4, 8, 12, 16] }
+        if m <= 36 { return [0, 6, 12, 18, 24, 30, 36].filter { $0 <= m } }
+        return [0, 12, 24, 36, 48, 60].filter { $0 <= m }
+    }
+
     private var growthChart: some View {
-        let bands = currentBands
+        let xMax = chartMaxMonth
+        let bands = currentBands.filter { $0.month <= xMax }   // 보이는 범위만(축 눌림 방지)
         let points = chartPoints
         let lastPt = chartPoints.last
         let metricLabel = metric.label
@@ -445,8 +497,9 @@ struct GrowthChartSection: View {
                 }
             }
         }
+        .chartXScale(domain: 0...Double(xMax))   // 데이터 범위에 맞춰 X축 고정(밴드 60까지여도 안 눌림)
         .chartXAxis {
-            AxisMarks(values: [0, 4, 8, 12, 16]) { val in
+            AxisMarks(values: chartXTicks) { val in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 3]))
                     .foregroundStyle(AppColors.line)
                 AxisValueLabel {

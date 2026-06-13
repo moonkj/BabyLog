@@ -485,7 +485,7 @@ struct HomeTab: View {
                         }
                     }
                 } label: {
-                    chip(child.name, on: isSelected)
+                    chip(child: child, on: isSelected)
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.96))
                 .contextMenu {
@@ -511,10 +511,12 @@ struct HomeTab: View {
         }
     }
 
-    private func chip(_ name: String, on: Bool) -> some View {
+    private func chip(child: Child, on: Bool) -> some View {
         HStack(spacing: 6) {
-            Text("👶").font(.system(size: 14))
-            Text(name).font(.system(size: 14, weight: .semibold))
+            // 이모지(👶) 대체 — 보들머리 아바타(사진 있으면 썸네일)
+            ChildAvatar(child: child, size: 24)
+                .padding(.leading, -2)
+            Text(child.name).font(.system(size: 14, weight: .semibold))
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
@@ -523,7 +525,7 @@ struct HomeTab: View {
         .frame(maxWidth: 130)
         .background(on ? AppColors.surface : AppColors.surface2, in: Capsule())
         .overlay { Capsule().stroke(on ? AppColors.primary.opacity(0.4) : AppColors.line, lineWidth: 1) }
-        .accessibilityLabel("\(name) 선택\(on ? ", 현재 선택됨" : "")")
+        .accessibilityLabel("\(child.name) 선택\(on ? ", 현재 선택됨" : "")")
         .accessibilityAddTraits(on ? [.isSelected] : [])
     }
 
