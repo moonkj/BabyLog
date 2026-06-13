@@ -243,6 +243,10 @@ struct MarketScreen: View {
     @State private var sharedItems: [MarketItem]? = nil
     @State private var didLoad = false
     @State private var loadFailed = false
+    /// '관심'만 보기 — 내가 좋아요(저장)한 매물만 필터.
+    @State private var showSavedOnly = false
+    /// 첫 등장 이후 재등장(상세에서 복귀 등) 시 목록을 갱신해 상태 변경을 반영하기 위한 플래그.
+    @State private var hasAppeared = false
 
     /// 서버 공유 모드(Supabase 구성됨). 미구성 시 로컬(기기 저장) 폴백.
     private var serverMode: Bool { SupabaseConfig.isConfigured }
@@ -261,8 +265,10 @@ struct MarketScreen: View {
     private var items: [MarketItem] { serverMode ? (sharedItems ?? []) : store.marketItems }
 
     private var filteredItems: [MarketItem] {
-        if selectedCategory == .all { return items }
-        return items.filter { $0.category == selectedCategory }
+        var result = items
+        if showSavedOnly { result = result.filter { store.isMarketSaved($0.id) } }   // 관심만
+        if selectedCategory != .all { result = result.filter { $0.category == selectedCategory } }
+        return result
     }
 
     private func loadItems() async {
@@ -313,6 +319,12 @@ struct MarketScreen: View {
         }
         .task(id: hood) { didLoad = false; loadFailed = false; await loadItems() }
         .onChange(of: showSellSheet) { _, open in if !open { Task { await loadItems() } } }
+        // 상세에서 상태 변경(예약중/판매완료)·삭제 후 돌아오면 목록을 갱신해 반영한다.
+        // (첫 등장은 .task가 처리하므로 재등장부터)
+        .onAppear {
+            if hasAppeared { Task { await loadItems() } }
+            hasAppeared = true
+        }
         .accessibilityElement(children: .contain)
     }
 
@@ -398,17 +410,38 @@ struct MarketScreen: View {
             if loadFailed && items.isEmpty {
                 marketLoadFailedView
             } else {
-                Text("\(filteredItems.count)개 매물")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
-                    .padding(.horizontal, 2)
-                    .padding(.bottom, Spacing.s2)
+                // 개수 + '관심만 보기' 토글
+                HStack(spacing: Spacing.s2) {
+                    Text("\(showSavedOnly ? "관심 " : "")\(filteredItems.count)개 매물")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.ink3)
+                    Spacer(minLength: 0)
+                    Button {
+                        Haptics.selection()
+                        withAnimation(.easeInOut(duration: 0.2)) { showSavedOnly.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: showSavedOnly ? "heart.fill" : "heart")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("관심").font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundStyle(showSavedOnly ? AppColors.danger : AppColors.ink2)
+                        .padding(.horizontal, 12).frame(height: 32)
+                        .background(showSavedOnly ? AppColors.dangerTint : AppColors.surface, in: Capsule())
+                        .overlay { Capsule().stroke(showSavedOnly ? AppColors.danger.opacity(0.4) : AppColors.line, lineWidth: 1) }
+                    }
+                    .buttonStyle(LiquidPressStyle(scale: 0.95))
+                    .accessibilityLabel(showSavedOnly ? "관심 매물만 보는 중 — 해제" : "관심 매물만 보기")
+                    .accessibilityAddTraits(showSavedOnly ? [.isSelected] : [])
+                }
+                .padding(.horizontal, 2)
+                .padding(.bottom, Spacing.s2)
 
                 if filteredItems.isEmpty {
                     BLEmptyState(
-                        icon: "tag",
-                        title: "이 카테고리에 매물이 없어요",
-                        message: "다른 카테고리를 둘러보거나 직접 올려보세요."
+                        icon: showSavedOnly ? "heart" : "tag",
+                        title: showSavedOnly ? "관심 매물이 없어요" : "이 카테고리에 매물이 없어요",
+                        message: showSavedOnly ? "마음에 드는 매물에 하트를 눌러 모아보세요." : "다른 카테고리를 둘러보거나 직접 올려보세요."
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.top, Spacing.s4)
@@ -417,7 +450,7 @@ struct MarketScreen: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(filteredItems) { item in
                             NavigationLink(value: item) {
-                                MkItemCard(item: item)
+                                MkItemCard(item: item, isSaved: store.isMarketSaved(item.id))
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
@@ -533,6 +566,8 @@ private struct MkNeedSoonCard: View {
 
 private struct MkItemCard: View {
     let item: MarketItem
+    /// 내가 관심(좋아요)한 매물인지 — 상세에서 누른 하트가 목록에도 반영되도록.
+    var isSaved: Bool = false
 
     private let photoSide: CGFloat = 116
 
@@ -580,16 +615,13 @@ private struct MkItemCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 관심 수 (우하단 정렬)
+            // 내 관심 표시 (우하단) — 상세에서 누른 하트가 여기 반영된다.
+            // 서버는 좋아요 수를 집계하지 않으므로(항상 0) 가짜 카운트 대신 '내 저장' 상태만 정직 표시.
             VStack {
                 Spacer(minLength: 0)
-                HStack(spacing: 3) {
-                    Image(systemName: "heart")
-                        .font(.system(size: 12, weight: .semibold))
-                    Text("\(item.favoriteCount)")
-                        .font(.system(size: 12.5, weight: .medium))
-                }
-                .foregroundStyle(AppColors.ink3)
+                Image(systemName: isSaved ? "heart.fill" : "heart")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isSaved ? AppColors.danger : AppColors.ink3.opacity(0.5))
             }
         }
         .frame(minHeight: photoSide)
@@ -628,7 +660,9 @@ private struct MkItemCard: View {
     private var accessibilityDescription: String {
         let priceDesc = item.isFree ? "무료나눔" : "\(item.price.formatted())원"
         let recallDesc = item.hasRecall ? ", 리콜 이력 있음" : ""
-        return "\(item.title), \(priceDesc), \(item.distanceText), 관심 \(item.favoriteCount)\(recallDesc)"
+        let statusDesc = item.status != .selling ? ", \(item.status.rawValue)" : ""
+        let savedDesc = isSaved ? ", 관심 등록됨" : ""
+        return "\(item.title), \(priceDesc), \(item.distanceText)\(statusDesc)\(savedDesc)\(recallDesc)"
     }
 }
 
