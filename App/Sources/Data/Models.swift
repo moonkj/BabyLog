@@ -43,6 +43,25 @@ struct Pregnancy: Identifiable, Codable, Equatable {
         self.clinic = clinic
         self.status = status
     }
+
+    // 하위 호환 디코딩 — 필드 추가/미지 enum 값에도 구 저장파일 전체가 깨지지 않게
+    // (ChatMessage 패턴, CodablePersistence.swift 정책 참조). 인코딩은 합성 유지(키 1:1 동일).
+    enum CodingKeys: String, CodingKey {
+        case id, lmpDate, eddDate, fetusCount, nickname, clinic, status
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id         = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        lmpDate    = try c.decodeIfPresent(Date.self, forKey: .lmpDate)
+        eddDate    = try c.decodeIfPresent(Date.self, forKey: .eddDate)
+        fetusCount = try c.decodeIfPresent(Int.self,  forKey: .fetusCount) ?? 1
+        nickname   = try c.decodeIfPresent(String.self, forKey: .nickname)
+        clinic     = try c.decodeIfPresent(String.self, forKey: .clinic)
+        // 미지 rawValue(미래 버전이 추가한 상태)는 .paused로 흡수 — 민감영역:
+        // 모르는 상태를 .active로 오인하면 주차 알림·태아 가이드가 잘못 재개될 수 있다.
+        let rawStatus = try c.decodeIfPresent(String.self, forKey: .status)
+        status = rawStatus.flatMap(PregnancyStatus.init(rawValue:)) ?? .paused
+    }
 }
 
 // MARK: - Child
@@ -73,6 +92,23 @@ struct Child: Identifiable, Codable, Equatable {
         self.caregiverRole = caregiverRole
         self.pregnancyId = pregnancyId
     }
+
+    // 하위 호환 디코딩 — 키 누락/미지 enum 값에도 아이 데이터 전체가 소실되지 않게.
+    enum CodingKeys: String, CodingKey {
+        case id, name, birthDate, gender, profileImageRef, caregiverRole, pregnancyId
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id        = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name      = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        birthDate = try c.decodeIfPresent(Date.self, forKey: .birthDate) ?? Date()
+        // 미지 rawValue는 nil(미지정)로 흡수 — 성별 중립 원칙상 어느 쪽으로도 단정하지 않는다.
+        let rawGender = try c.decodeIfPresent(String.self, forKey: .gender)
+        gender    = rawGender.flatMap(Gender.init(rawValue:))
+        profileImageRef = try c.decodeIfPresent(String.self, forKey: .profileImageRef)
+        caregiverRole   = try c.decodeIfPresent(String.self, forKey: .caregiverRole)
+        pregnancyId     = try c.decodeIfPresent(UUID.self, forKey: .pregnancyId)
+    }
 }
 
 // MARK: - GrowthRecord
@@ -99,6 +135,22 @@ struct GrowthRecord: Identifiable, Codable, Equatable {
         self.heightCm = heightCm
         self.weightKg = weightKg
         self.headCircumferenceCm = headCircumferenceCm
+    }
+
+    // 하위 호환 디코딩 — 키 누락에도 성장 기록 전체가 소실되지 않게.
+    enum CodingKeys: String, CodingKey {
+        case id, childId, date, heightCm, weightKg, headCircumferenceCm
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id      = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        // childId 누락 시 새 UUID — 어떤 아이와도 매칭되지 않아 표시되진 않지만,
+        // 디코딩 실패로 전체 데이터를 날리는 것보다 낫다(복구 여지 유지).
+        childId = try c.decodeIfPresent(UUID.self, forKey: .childId) ?? UUID()
+        date    = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        heightCm = try c.decodeIfPresent(Double.self, forKey: .heightCm)
+        weightKg = try c.decodeIfPresent(Double.self, forKey: .weightKg)
+        headCircumferenceCm = try c.decodeIfPresent(Double.self, forKey: .headCircumferenceCm)
     }
 }
 

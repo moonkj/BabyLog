@@ -85,18 +85,8 @@ enum PhotoStore {
         return directory.appendingPathComponent(name)
     }
 
-    /// photos 디렉토리의 모든 파일을 파일명→원본 데이터로 반환(레거시 백업 포맷 폴백용).
-    static func allPhotoData() -> [String: Data] {
-        let fm = FileManager.default
-        guard let names = try? fm.contentsOfDirectory(atPath: directory.path) else { return [:] }
-        var out: [String: Data] = [:]
-        for name in names {
-            if let data = try? Data(contentsOf: directory.appendingPathComponent(name)) {
-                out[name] = data
-            }
-        }
-        return out
-    }
+    // allPhotoData()는 삭제됨 — 호출처 0(레거시 복원은 restorePhotos만 사용)이고,
+    // 전체 사진을 RAM에 올리는 함정이라 무심코 재사용되면 워치독 크래시를 부른다.
 
     /// 백업에서 사진 파일들을 복원(이미 있으면 유지, 없으면 기록).
     /// 보안: 조작된 백업의 경로 탈출(`../`·하위경로) 방지 — 안전한 파일명만 photos 디렉토리에 기록.

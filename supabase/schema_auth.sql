@@ -24,6 +24,9 @@ begin
   update public.crew_meetup_message set device_id = auth.uid()::text where device_id = p_device;
   update public.market_item         set seller    = auth.uid()::text where seller    = p_device;
   update public.market_chat_message set device_id = auth.uid()::text where device_id = p_device;
+  -- 스레드 키(buyer)도 함께 귀속 — 누락 시 buyer가 기기ID로 남아 로그인한 구매자가
+  -- 자기 채팅 스레드(RLS: buyer = auth.uid())를 못 보는 버그가 생긴다.
+  update public.market_chat_message set buyer     = auth.uid()::text where buyer     = p_device;
 
   -- 좋아요/참가/멤버십: (대상, device_id) 복합 PK → 두 신원 모두 행이 있으면 병합(중복은 버림).
   -- v1처럼 UPDATE+exception 방식은 충돌 1건에 테이블 전체가 스킵되므로 insert-select+delete로 행 단위 처리.

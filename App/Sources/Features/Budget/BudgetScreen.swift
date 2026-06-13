@@ -97,7 +97,14 @@ struct BudgetScreen: View {
     }
 
     private var previousPeriodTotal: Int {
-        if isYearMode { return BudgetSummary.yearTotal(allExpenses, year: selectedYear - 1) }
+        if isYearMode {
+            // 올해(진행 중)를 보는 경우 — 작년 '전체'가 아니라 작년 같은 진행 기간(1/1~같은 날짜)과 비교.
+            // (부분합 vs 전체 비교로 항상 큰 감소처럼 보이던 왜곡 수정. 과거 연도는 전년 전체와 비교 유지.)
+            if selectedYear == currentYear {
+                return BudgetSummary.yearToDateTotal(allExpenses, year: selectedYear - 1)
+            }
+            return BudgetSummary.yearTotal(allExpenses, year: selectedYear - 1)
+        }
         return BudgetSummary.previousTotal(allExpenses, period)
     }
 
@@ -746,7 +753,10 @@ struct BudgetScreen: View {
             let man = Double(amount) / 10_000
             return man == man.rounded() ? "\(Int(man))만" : String(format: "%.0f만", man)
         }
-        return "\(amount / 1000)천"
+        // 1만 미만 — 1000 미만은 원 단위 그대로("0천" 방지), 1000~9999는 소수 한 자리 '천'(.0이면 정수).
+        if amount < 1000 { return "\(amount)" }
+        let chon = Double(amount) / 1000
+        return chon == chon.rounded() ? "\(Int(chon))천" : String(format: "%.1f천", chon)
     }
 
     private func amountFull(_ amount: Int) -> String {
@@ -882,18 +892,20 @@ private struct SubsidyCard: View {
     }
 
     private func amountStr(_ amount: Int) -> String {
+        // 일시금(첫만남이용권 등)은 "총 N만원", 매월 지급은 "월 N만원" — '월 200만원' 오표기 수정.
+        let prefix = info.isLumpSum ? "총" : "월"
         if amount >= 10_000 {
             let man = amount / 10_000
             let rem = amount % 10_000
             if rem == 0 {
-                return "월 \(man)만원"
+                return "\(prefix) \(man)만원"
             } else {
                 let formatter = NumberFormatter()
                 formatter.numberStyle = .decimal
-                return "월 \(formatter.string(from: NSNumber(value: amount)) ?? "\(amount)")원"
+                return "\(prefix) \(formatter.string(from: NSNumber(value: amount)) ?? "\(amount)")원"
             }
         }
-        return "월 \(amount)원"
+        return "\(prefix) \(amount)원"
     }
 }
 

@@ -247,7 +247,9 @@ struct MarketScreen: View {
     /// 서버 공유 모드(Supabase 구성됨). 미구성 시 로컬(기기 저장) 폴백.
     private var serverMode: Bool { SupabaseConfig.isConfigured }
     private var hood: String { location.localityName ?? "우리 동네" }
-    private var isLoading: Bool { serverMode && !didLoad }
+    /// 동네(localityName) 확정 전엔 로딩 유지 — 폴백("우리 동네")으로 조회한 빈 목록이
+    /// "0개 매물"로 플래시되는 것 방지(CrewScreen 패턴). 위치 거부 시엔 폴백으로 바로 표시.
+    private var isLoading: Bool { serverMode && (!didLoad || (location.localityName == nil && !location.denied)) }
 
     /// 선택된 아이의 월령(없으면 nil) — "곧 필요해요" 월령 기반 추천에 사용.
     private var childAgeMonths: Int? {

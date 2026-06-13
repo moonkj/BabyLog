@@ -1,5 +1,7 @@
 import Foundation
 import Combine
+import UserNotifications   // 기록 삭제 시 "N년 전 오늘" 추억 알림 취소용
+import WidgetKit           // 저장 직후 위젯 타임라인 갱신용
 
 // MARK: - AppStore
 
@@ -102,12 +104,19 @@ final class AppStore: ObservableObject {
             return
         }
         let newlyEarned = current.subtracting(seenBadgeIds)
+        // 카탈로그에 없는 고아 id도 seen 처리는 유지 — 매 호출 같은 id가 재등장해
+        // 무한 재시도되는 것 방지.
         seenBadgeIds = seenBadgeIds.union(current)
-        guard let firstId = newlyEarned.sorted().first,
-              var item = BadgeCatalogItem.sampleCatalog.first(where: { $0.id == firstId })
-        else { return }
-        item.isEarned = true
-        pendingBadgeAward = item
+        // 첫 id가 카탈로그에 없다고 그냥 return하면 같은 배치의 진짜 뱃지 축하가
+        // 통째로 삼켜진다(이미 seen 처리돼 다시 안 뜸) — 카탈로그에 존재하는
+        // 첫 항목을 찾을 때까지 순회한다.
+        for newId in newlyEarned.sorted() {
+            if var item = BadgeCatalogItem.sampleCatalog.first(where: { $0.id == newId }) {
+                item.isEarned = true
+                pendingBadgeAward = item
+                return
+            }
+        }
     }
     private var cancellables = Set<AnyCancellable>()
 
@@ -182,9 +191,12 @@ final class AppStore: ObservableObject {
                     self.selectedChildId    = saved.selectedChildId.flatMap { id in saved.children.contains(where: { $0.id == id }) ? id : nil }
                 }
             } catch {
-                // 손상 파일 보존(복구용) + 자동저장 차단
-                persistence.backupCorrupt()
-                self.loadDidFail = true
+                // 손상 파일을 .corrupt-<ts>로 보존(복구용). 보존에 성공했으면 원본은 이미
+                // 안전하므로 자동저장을 허용한다 — 안 그러면 사용자가 빈 앱에서 새로 쓴
+                // 기록이 종료 시 전부 증발하는 '기억상실 모드'가 된다.
+                // 보존 실패 시에만 차단 유지(원본 덮어쓰기 = 복구 여지 소멸).
+                let preserved = persistence.backupCorrupt()
+                self.loadDidFail = !preserved
             }
         }
         seedMarketIfNeeded()
@@ -420,6 +432,9 @@ final class AppStore: ObservableObject {
             .sink { [weak self] in
                 guard let self else { return }
                 try? self.persistence?.save(self.snapshot())
+                // 저장 직후 위젯 타임라인 갱신 — 호출하지 않으면 위젯이 시스템 재량
+                // 주기(수 시간)까지 스테일 데이터를 표시한다.
+                WidgetCenter.shared.reloadAllTimelines()
             }
             .store(in: &cancellables)
     }
@@ -429,6 +444,8 @@ final class AppStore: ObservableObject {
     func persistNow() {
         guard !loadDidFail else { return }
         try? persistence?.save(snapshot())
+        // 백그라운드 전환 등 즉시 저장 직후에도 위젯을 갱신해 최신 기록을 반영한다.
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - Persistence Convenience
@@ -561,6 +578,17 @@ final class AppStore: ObservableObject {
         if let child = children.first(where: { $0.id == id }), let p = child.profileImageRef {
             PhotoStore.delete(p)
         }
+        // 다이어리 좋아요/댓글 고아 정리(deleteDiaryEntry와 동일 정책) +
+        // "N년 전 오늘" 추억 알림 취소 — 사별·이별 후 고인이 된 아이의 알림이
+        // 도착하는 일은 절대 없어야 한다(민감영역).
+        let deletedEntryIds = diaryEntries.filter { $0.childId == id }.map(\.id)
+        for entryId in deletedEntryIds {
+            likedDiaryIds.remove(entryId.uuidString)
+            diaryComments[entryId.uuidString] = nil
+        }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: deletedEntryIds.map { "memory-\($0.uuidString)" }
+        )
         diaryEntries.removeAll { $0.childId == id }
         growthRecords.removeAll { $0.childId == id }
         // 접종 완료 키·병원 메모 정리
@@ -697,16 +725,18 @@ final class AppStore: ObservableObject {
     ///   - heightCm:             신장(cm) (옵션)
     ///   - weightKg:             체중(kg) (옵션)
     ///   - headCircumferenceCm:  두위(cm) (옵션)
+    ///   - date:                 측정일 (기본 = 지금). 과거 검진 기록 소급 입력용.
     func addGrowthRecord(
         childId: UUID,
         heightCm: Double?,
         weightKg: Double?,
-        headCircumferenceCm: Double?
+        headCircumferenceCm: Double?,
+        date: Date = Date()
     ) {
         let record = GrowthRecord(
             id: UUID(),
             childId: childId,
-            date: Date(),
+            date: date,
             heightCm: heightCm,
             weightKg: weightKg,
             headCircumferenceCm: headCircumferenceCm
@@ -858,6 +888,11 @@ final class AppStore: ObservableObject {
         diaryEntries.removeAll { $0.id == id }
         likedDiaryIds.remove(id.uuidString)
         diaryComments[id.uuidString] = nil
+        // 삭제된 기록의 "N년 전 오늘" 추억 알림 취소 — 지운 기록이 알림으로
+        // 되살아나면 안 된다(상실 등 민감 상황 포함).
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: ["memory-\(id.uuidString)"]
+        )
     }
 
     /// 다이어리 항목 수정 (캡션·이정표). 사진/영상은 유지.

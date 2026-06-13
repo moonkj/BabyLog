@@ -477,8 +477,10 @@ struct BirthTransitionView: View {
                 let h = blDecimal(birthHeight)
                 let w = blDecimal(birthWeight)
                 if h != nil || w != nil {
+                    // 출생 키/몸무게는 '오늘'이 아니라 폼에 입력한 실제 출생일로 기록한다
+                    // (출산 후 며칠 뒤 전환해도 성장곡선 0개월 시점이 어긋나지 않게).
                     store.addGrowthRecord(childId: child.id, heightCm: h, weightKg: w,
-                                          headCircumferenceCm: nil)
+                                          headCircumferenceCm: nil, date: birthDate)
                 }
                 Haptics.success()
                 withAnimation(.easeInOut(duration: 0.35)) {

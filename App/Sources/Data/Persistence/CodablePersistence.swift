@@ -179,8 +179,10 @@ struct PersistableState: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        pregnancies    = try container.decode([Pregnancy].self, forKey: .pregnancies)
-        children       = try container.decode([Child].self,     forKey: .children)
+        // 핵심 키도 strict decode 대신 decodeIfPresent — 키 하나 빠졌다고 전체 상태
+        // 디코딩이 실패하면 나머지 멀쩡한 데이터까지 전부 소실되기 때문(다른 키와 정책 통일).
+        pregnancies    = try container.decodeIfPresent([Pregnancy].self, forKey: .pregnancies) ?? []
+        children       = try container.decodeIfPresent([Child].self,     forKey: .children)    ?? []
         growthRecords  = try container.decodeIfPresent([GrowthRecord].self, forKey: .growthRecords) ?? []
         diaryEntries   = try container.decodeIfPresent([DiaryEntry].self,   forKey: .diaryEntries)  ?? []
         expenses       = try container.decodeIfPresent([Expense].self,      forKey: .expenses)      ?? []
@@ -279,12 +281,21 @@ struct LocalPersistence {
 
     /// 디코딩 실패 등으로 신뢰할 수 없는 상태일 때, 원본을 타임스탬프 백업으로 복사해 보존한다.
     /// (자동저장이 원본을 덮어쓰기 전에 호출 — 데이터 복구 여지 확보)
-    func backupCorrupt() {
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+    /// - Returns: 원본이 안전하게 보존됐는지. true면 호출부가 자동저장을 다시 허용해도 된다
+    ///   (보존 실패 시에만 false — 원본을 덮어쓰면 복구 여지가 사라지므로 저장을 막아야 함).
+    @discardableResult
+    func backupCorrupt() -> Bool {
+        // 원본 파일 자체가 없으면 보존할 것도 없다 → true (신규 저장 허용)
+        guard FileManager.default.fileExists(atPath: url.path) else { return true }
         let ts = Int(Date().timeIntervalSince1970)
         let backup = url.deletingLastPathComponent()
             .appendingPathComponent("state.corrupt-\(ts).json")
-        try? FileManager.default.copyItem(at: url, to: backup)
+        do {
+            try FileManager.default.copyItem(at: url, to: backup)
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// JSON 파일에서 상태를 복원한다. 파일이 없으면 nil 반환.

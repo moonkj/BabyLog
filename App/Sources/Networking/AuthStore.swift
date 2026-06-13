@@ -23,7 +23,13 @@ final class AuthStore: ObservableObject {
     var isLoggedIn: Bool { session != nil }
     var userId: String? { session?.userId }
 
-    private init() { session = Keychain.loadSession() }
+    private init() {
+        session = Keychain.loadSession()
+        // 세션 복원 경로 — 과거 claim_device가 실패(오프라인 등)했으면 여기서 재시도해 영구 누락 방지.
+        if session != nil {
+            Task { await self.retryClaimIfNeeded() }
+        }
+    }
 
     /// 진행 중인 refresh 1개를 공유 — 동시 호출이 단일 사용(refresh token)을 두 번 쓰는 레이스 방지.
     private var refreshTask: Task<StoredSession?, Never>?
@@ -90,12 +96,15 @@ final class AuthStore: ObservableObject {
     }
 
     func signOut(remote: Bool = true) async {
-        if remote, let s = session, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+        // 만료된 accessToken으로 logout을 부르면 401로 무음 실패(서버 측 refresh token 미회수)
+        // → validAccessToken() 경유로 필요 시 갱신된 유효 토큰을 쓴다. 갱신도 불가하면 원격 해지 생략.
+        if remote, session != nil, let token = await validAccessToken(),
+           let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
            let url = URL(string: "\(base)/auth/v1/logout") {
             var req = URLRequest(url: url)
             req.httpMethod = "POST"; req.timeoutInterval = 10
             req.setValue(key, forHTTPHeaderField: "apikey")
-            req.setValue("Bearer \(s.accessToken)", forHTTPHeaderField: "Authorization")
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             _ = try? await URLSession.shared.data(for: req)
         }
         Keychain.deleteSession()
@@ -104,10 +113,15 @@ final class AuthStore: ObservableObject {
 
     // MARK: - 익명→계정 귀속
 
+    /// claim_device 완료 플래그 키 — uid별로 기록(다른 계정 로그인 시 별도 수행).
+    private func claimDoneKey(_ uid: String) -> String { "bl_claim_done_\(uid)" }
+
     /// 로그인 직후 1회: 내 기기 UUID로 만든 콘텐츠를 auth.uid()로 귀속(서버 RPC).
+    /// 결과를 무시(_ = try?)하면 일시 실패가 영구 누락이 되므로, 2xx 확인 후에만 완료 플래그를 저장
+    /// → 실패 시 다음 세션 복원에서 retryClaimIfNeeded()가 재시도한다.
     private func claimDevice() async {
         guard let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
-              let token = session?.accessToken,
+              let token = session?.accessToken, let uid = session?.userId,
               let url = URL(string: "\(base)/rest/v1/rpc/claim_device") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"; req.timeoutInterval = 15
@@ -115,7 +129,16 @@ final class AuthStore: ObservableObject {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_device": SupabaseConfig.deviceID])
-        _ = try? await URLSession.shared.data(for: req)
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return }
+        UserDefaults.standard.set(true, forKey: claimDoneKey(uid))
+    }
+
+    /// 세션 복원/로그인 시 호출 — 완료 플래그가 없으면 claim_device를 재시도(멱등 RPC라 중복 호출 안전).
+    func retryClaimIfNeeded() async {
+        guard let uid = session?.userId,
+              !UserDefaults.standard.bool(forKey: claimDoneKey(uid)) else { return }
+        await claimDevice()
     }
 
     // MARK: - 계정 삭제(Apple 가이드라인 의무)

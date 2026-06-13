@@ -235,7 +235,8 @@ struct NearbyScreen: View {
     }
 
     @State private var selectedCategory: PlaceCategory = .hospital
-    @State private var activeFilters: Set<String> = ["현재 영업중"]
+    // activeFilters 상태 제거 — 필터칩 UI가 없는데 초기값("현재 영업중")이 첫 소아과 조회에만
+    // openNow:true로 적용돼 카테고리 전환 후와 결과가 달라지는 비결정성이 있었다.
     @State private var showMap: Bool = false
 
     // 병원 로드 상태
@@ -304,7 +305,8 @@ struct NearbyScreen: View {
                 .background(AppColors.canvas.ignoresSafeArea())
             }
         }
-        .task(id: activeFilters) {
+        // 첫 진입 1회 트리거 — activeFilters 제거로 onChange와의 이중 트리거(중복 조회)도 함께 해소.
+        .task {
             await reloadCurrent()
         }
         .onAppear { locationProvider.start() }
@@ -312,6 +314,9 @@ struct NearbyScreen: View {
         .onChange(of: selectedCategory) { _, _ in
             // 장소 카테고리(키즈카페·놀이터)는 지도 미지원 → 리스트로 강제(stale 병원 마커 방지).
             if isPlaceCategory && showMap { showMap = false }
+            // 카테고리 전환 — 이전 카테고리의 영업조회 진행 상태가 남아 '확인 중' 고착되지 않게 리셋.
+            // (조회 도중 이탈하면 openLoading=false가 실행되지 않고, 복귀 시 캐시 히트로 재조회도 안 되던 버그)
+            openStatus = [:]; openChecked = []; openLoading = false
             Task { await reloadCurrent() }
         }
         // 위치 획득 타임아웃(8초) — 권한은 있는데 GPS가 느린 경우. denied로 위장하지 않고
@@ -357,7 +362,9 @@ struct NearbyScreen: View {
     /// 카카오 키가 있으면 카카오 로컬(한국 POI 더 풍부), 없으면 애플 지도(키/비즈앱 불필요).
     private func loadPlaces() async {
         guard isPlaceCategory else { return }
-        if locationProvider.coordinate == nil && !locationProvider.denied {
+        // locationSlow(GPS 타임아웃) 후엔 폴백 좌표로 실제 검색해야 하므로 대기 가드에서 제외.
+        // (제외하지 않으면 타임아웃 후 reloadCurrent()가 또 막혀 레이더가 영원히 돈다)
+        if locationProvider.coordinate == nil && !locationProvider.denied && !locationSlow {
             placesLoading = true; places = []
             return
         }
@@ -424,7 +431,8 @@ struct NearbyScreen: View {
         guard isLiveCategory else { return }
         // 현재 위치 확보 전(권한 거부도 아님)이면 폴백(서울)으로 잘못 검색하지 않고 대기.
         // GPS가 도착하면 onChange가 이 함수를 다시 호출 → 그때 실제 내 위치로 검색.
-        if locationProvider.coordinate == nil && !locationProvider.denied {
+        // 단, locationSlow(GPS 타임아웃) 후엔 폴백 좌표로 실제 검색해야 하므로 대기하지 않는다.
+        if locationProvider.coordinate == nil && !locationProvider.denied && !locationSlow {
             hospitalState = .loading
             return
         }
@@ -435,15 +443,18 @@ struct NearbyScreen: View {
            Self.metersBetween(cached.coord, c) < 400,
            Date().timeIntervalSince(cached.at) < 600 {
             hospitalState = cached.results.isEmpty ? .empty : .loaded(cached.results)
-            // 탭 전환 등으로 @State가 비었으면 영업상태를 다시 조회(캐시 결과여도 "확인 중" 고착 방지)
-            if category == .hospital, !cached.results.isEmpty, openChecked.isEmpty {
+            // 탭 전환 등으로 @State가 일부만 채워졌어도 영업상태를 다시 조회
+            // (조회 도중 카테고리 이탈로 '부분 충전'된 경우도 포함 — isEmpty 조건이면 재조회를 건너뛰어
+            //  나머지가 "확인 중"으로 고착되던 버그)
+            if category == .hospital, !cached.results.isEmpty, openChecked.count < cached.results.count {
                 await fetchOpenStatus(cached.results, category: category)
             }
             return
         }
         hospitalState = .loading
         openStatus = [:]; openChecked = []; openLoading = false   // 새 검색 — 영업상태 초기화(스테일 방지)
-        let openNow = activeFilters.contains("현재 영업중")
+        // 기본 목록 API엔 영업시간 정보가 없어 openNow는 항상 false — 실제 영업여부는 상세조회로 확인.
+        let openNow = false
         do {
             let provider = category == .pharmacy ? ProviderFactory.pharmacy() : ProviderFactory.hospital()
             let results = try await provider.hospitals(
@@ -476,7 +487,7 @@ struct NearbyScreen: View {
         }
     }
 
-    /// 가까운 순 상위 N곳의 실제 영업 여부를 상세 영업시간으로 동시 조회(쿼터·속도 고려 N=24).
+    /// 가까운 순 상위 N곳의 실제 영업 여부를 상세 영업시간으로 동시 조회(표시되는 30곳 전부).
     /// 결과가 도착하는 대로 카드 뱃지가 미확인→영업중/영업종료로 갱신된다. 불명은 미확인 유지.
     private func fetchOpenStatus(_ hospitals: [HospitalInfo], category: PlaceCategory) async {
         // 표시되는 곳(가까운 30곳)을 전부 조회 — 미조회로 인한 '미확인'을 남기지 않는다.
@@ -665,8 +676,8 @@ struct NearbyScreen: View {
             HStack(spacing: Spacing.s2) {
                 ForEach(PlaceCategory.allCases.filter { $0 != .playground }, id: \.self) { cat in
                     BLChip(text: cat.rawValue, on: selectedCategory == cat) {
+                        // activeFilters 제거 — 필터 상태 갱신 불필요(재조회는 onChange가 담당).
                         selectedCategory = cat
-                        activeFilters = [cat.filterOptions.first ?? ""]
                     }
                     .accessibilityAddTraits(selectedCategory == cat ? [.isSelected] : [])
                 }
@@ -680,35 +691,9 @@ struct NearbyScreen: View {
 
     @ViewBuilder
     private var filterChips: some View {
-        if selectedCategory.filterOptions.isEmpty {
-            EmptyView()
-        } else {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.s2) {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
-                    .frame(width: 44, height: 36)
-                    .background(AppColors.surface2, in: Capsule())
-                    .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
-                    .accessibilityHidden(true)
-
-                ForEach(selectedCategory.filterOptions, id: \.self) { option in
-                    let isOn = activeFilters.contains(option)
-                    BLChip(text: option, on: isOn) {
-                        if isOn {
-                            activeFilters.remove(option)
-                        } else {
-                            activeFilters.insert(option)
-                        }
-                    }
-                    .accessibilityAddTraits(isOn ? [.isSelected] : [])
-                }
-            }
-            .padding(.horizontal, Spacing.s5)
-        }
-        .padding(.bottom, Spacing.s4)
-        }
+        // 필터칩 미노출(filterOptions가 전 카테고리 빈 배열) + activeFilters 상태 제거 — 빈 뷰 고정.
+        // 데이터 소스가 영업시간/연령 정보를 정직하게 주지 않아 지킬 수 없는 필터는 두지 않는다.
+        EmptyView()
     }
 
     // MARK: Map View (iOS 17 Map { })
@@ -733,7 +718,9 @@ struct NearbyScreen: View {
                     return syntheticCoordinate(for: index, center: searchCoord)
                 }()
                 Marker(hospital.name, systemImage: "cross.case.fill", coordinate: coord)
-                    .tint(hospital.isOpenNow ? AppColors.primary : AppColors.ink3)
+                    // 마커 색도 카드와 동일하게 실제 상세조회 결과(openState) 기반 — 기본 목록의
+                    // isOpenNow(시간정보 없음)로 칠하면 리스트 뱃지와 지도 색이 어긋난다.
+                    .tint(openState(for: hospital) == .open ? AppColors.primary : AppColors.ink3)
             }
         }
         .mapStyle(.standard(elevation: .realistic))
@@ -766,14 +753,15 @@ struct NearbyScreen: View {
 
     // MARK: Result Count Row (영업중 N곳 · 거리순)
 
-    private func resultCountRow(open: Int, total: Int, hoursKnown: Bool) -> some View {
+    private func resultCountRow(open: Int, total: Int, hoursKnown: Bool, checking: Bool = false) -> some View {
         // 영업시간을 아는 데이터가 있으면 "영업중 N곳", 없으면(기본 목록) "N곳"만 정직 표기.
-        let countLabel = hoursKnown ? "현재 영업중 " : "주변 "
-        let countValue = hoursKnown ? "\(open)곳" : "\(total)곳"
+        // 영업조회가 아직 진행 중이면 미완 카운트("0곳")로 오해하지 않게 "영업 확인 중…"으로 표기.
+        let countLabel = checking ? "영업 확인 중…" : (hoursKnown ? "현재 영업중 " : "주변 ")
+        let countValue = checking ? "" : (hoursKnown ? "\(open)곳" : "\(total)곳")
         return HStack(spacing: Spacing.s2) {
             HStack(spacing: Spacing.s2) {
                 HStack(spacing: 5) {
-                    if hoursKnown {
+                    if hoursKnown && !checking {
                         Circle()
                             .fill(BadgeTone.mint.ink)
                             .frame(width: 6, height: 6)
@@ -798,7 +786,10 @@ struct NearbyScreen: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(hoursKnown ? "현재 영업중 \(open)곳, 거리순 정렬" : "주변 \(total)곳, 거리순 정렬")
+            // 조회 진행 중엔 VoiceOver도 동일하게 "영업 확인 중"으로 안내.
+            .accessibilityLabel(checking
+                                ? "영업 확인 중, 거리순 정렬"
+                                : (hoursKnown ? "현재 영업중 \(open)곳, 거리순 정렬" : "주변 \(total)곳, 거리순 정렬"))
 
             Spacer(minLength: 0)
 
@@ -848,7 +839,9 @@ struct NearbyScreen: View {
                 if ProviderFactory.isMock(APIConfig.hiraKeyName) {
                     BLSampleNote(message: "지금은 샘플 병원 정보예요. 공공데이터 키를 연결하면 실제 우리 동네 병원으로 채워져요.")
                 }
-                resultCountRow(open: openCount, total: hospitals.count, hoursKnown: checksOpen)
+                // 영업조회 진행 중엔 카운트 대신 "영업 확인 중…" 표기(소아과만 영업조회 수행).
+                resultCountRow(open: openCount, total: hospitals.count, hoursKnown: checksOpen,
+                               checking: checksOpen && openLoading)
                 ForEach(hospitals) { hospital in
                     HospitalCard(
                         hospital: hospital,
@@ -979,18 +972,9 @@ struct NearbyScreen: View {
     // MARK: Filtering Logic (mockPlaces 기반 — 소아과 외 카테고리용)
 
     private var filteredMockPlaces: [NearbyPlace] {
+        // activeFilters 제거 — 필터칩이 없으므로 카테고리 필터 + 거리순 정렬만 유지.
         mockPlaces
             .filter { $0.category == selectedCategory }
-            .filter { place in
-                if activeFilters.isEmpty { return true }
-                var matches = true
-                if activeFilters.contains("현재 영업중") { matches = matches && place.isOpen }
-                if activeFilters.contains("야간진료") { matches = matches && place.hasNightCare }
-                if activeFilters.contains("공휴일진료") { matches = matches && place.hasHolidayCare }
-                if activeFilters.contains("24시간") { matches = matches && place.hasNightCare }
-                if activeFilters.contains("야간약국") { matches = matches && place.hasNightCare }
-                return matches
-            }
             .sorted { $0.distanceMeters < $1.distanceMeters }
     }
 }

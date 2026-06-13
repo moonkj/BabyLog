@@ -87,25 +87,30 @@ enum MarketBackend {
     }
 
     /// 내 활성(판매중·예약중·미만료) 매물 수 — 무료 1매물 게이트용.
-    static func myActiveListingCount() async -> Int {
+    /// 미구성/네트워크 실패/응답 해석 불가 시 nil(불명) — 0으로 단정하면 비행기모드로 한도를 우회할 수 있다.
+    static func myActiveListingCount() async -> Int? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let s = (await SupabaseConfig.ownerID()).addingPercentEncoding(withAllowedCharacters: .alphanumerics),
-              let url = URL(string: "\(base)/rest/v1/market_item?seller=eq.\(s)&status=in.(%ED%8C%90%EB%A7%A4%EC%A4%91,%EC%98%88%EC%95%BD%EC%A4%91)&expires_at=gt.now()&select=id") else { return 0 }
+              let url = URL(string: "\(base)/rest/v1/market_item?seller=eq.\(s)&status=in.(%ED%8C%90%EB%A7%A4%EC%A4%91,%EC%98%88%EC%95%BD%EC%A4%91)&expires_at=gt.now()&select=id") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue("count=exact", forHTTPHeaderField: "Prefer")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return 0 }
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
         // Content-Range: 0-4/5 → 총 개수. 없으면 배열 길이로 대체.
         if let range = http.value(forHTTPHeaderField: "Content-Range"),
            let total = range.split(separator: "/").last, let n = Int(total) { return n }
-        return (try? JSONDecoder().decode([ItemDTO].self, from: data))?.count ?? 0
+        if let rows = try? JSONDecoder().decode([ItemDTO].self, from: data) { return rows.count }
+        return nil   // 2xx여도 본문 해석 불가 = 불명
     }
 
     /// 무료 한도 초과 여부(등록 전 확인).
+    /// 카운트 확인 불가(nil)면 true — fail-closed: 등록 자체가 네트워크를 요구하므로
+    /// 보류해도 UX 손해가 없고, 오프라인으로 무료 한도를 우회하는 구멍을 막는다.
     static func freeLimitReached() async -> Bool {
-        await myActiveListingCount() >= freeListingLimit
+        guard let count = await myActiveListingCount() else { return true }
+        return count >= freeListingLimit
     }
 
     // MARK: - 등록 / 상태 / 삭제

@@ -132,7 +132,10 @@ enum BackupService {
         }
         defer { try? inH.close() }
         do {
-            _ = try readExactly(inH, 4)           // version (단일 포맷 — 무시)
+            // 포맷 버전 가드 — 미래 버전(상위 포맷) 파일을 현재 파서로 오파싱하면
+            // 프레이밍이 어긋나 쓰레기 데이터를 사진으로 기록할 수 있다. 정직하게 실패(nil).
+            let ver = try readU32(inH)
+            guard ver <= formatVersion else { throw BackupError.malformed }
             let stateLen = try readU64(inH)
             guard stateLen <= UInt64(maxStateBytes) else { throw BackupError.malformed }
             let stateData = try readExactly(inH, Int(stateLen))
@@ -153,18 +156,35 @@ enum BackupService {
         } catch { return nil }
     }
 
-    /// 입력에서 length 바이트를 dest 파일로 청크 기록(덮어쓰기).
+    /// 입력에서 length 바이트를 dest 파일로 청크 기록.
+    /// ⚠️ dest에 직접 쓰지 않는다 — 직접 쓰면 createFile이 기존 파일을 0바이트로 절단한 뒤
+    /// 백업이 중간에 잘려 있으면 라이브 사진(파일명 UUID 동일)이 파괴된다.
+    /// 임시 파일에 완전히 받은 뒤에만 반영하고, 기존 파일이 있으면 유지한다
+    /// (레거시 restorePhotos와 동일 정책 — 복원이 기존 데이터를 절대 해치지 않음).
     nonisolated private static func streamOut(_ inH: FileHandle, to dest: URL, length: UInt64) throws {
         let fm = FileManager.default
-        fm.createFile(atPath: dest.path, contents: nil)      // 생성/절단
-        let outH = try FileHandle(forWritingTo: dest)
-        defer { try? outH.close() }
-        var remaining = length
-        while remaining > 0 {
-            let want = Int(min(UInt64(chunkSize), remaining))
-            guard let chunk = try inH.read(upToCount: want), !chunk.isEmpty else { throw BackupError.malformed }
-            try outH.write(contentsOf: chunk)
-            remaining -= UInt64(chunk.count)
+        let tmp = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        fm.createFile(atPath: tmp.path, contents: nil)
+        let outH = try FileHandle(forWritingTo: tmp)
+        do {
+            var remaining = length
+            while remaining > 0 {
+                let want = Int(min(UInt64(chunkSize), remaining))
+                guard let chunk = try inH.read(upToCount: want), !chunk.isEmpty else { throw BackupError.malformed }
+                try outH.write(contentsOf: chunk)
+                remaining -= UInt64(chunk.count)
+            }
+            try outH.close()
+        } catch {
+            // 실패 시 임시 파일만 정리 — 기존 사진은 무손상
+            try? outH.close()
+            try? fm.removeItem(at: tmp)
+            throw error
+        }
+        if fm.fileExists(atPath: dest.path) {
+            try? fm.removeItem(at: tmp)          // 이미 있으면 기존 유지(임시본 폐기)
+        } else {
+            try fm.moveItem(at: tmp, to: dest)   // 없을 때만 새로 반영
         }
     }
 
@@ -178,8 +198,16 @@ enum BackupService {
         }
     }
 
+    /// 레거시 복원 허용 상한(1GB) — plist 복원은 전체를 RAM에 올리므로
+    /// 수 GB 파일이면 워치독에 죽는다. 불투명한 크래시 대신 정직한 실패(nil)를 택한다.
+    private static let maxLegacyBytes: UInt64 = 1 << 30
+
     /// 구포맷(v1, 바이너리 plist) 폴백 — 통째 로드(구 백업은 작다고 가정).
     nonisolated private static func restoreLegacy(_ url: URL) -> PersistableState? {
+        // 통째 로드 전 파일 크기 확인 — RAM 적재가 불가능한 크기면 시도 자체를 거부.
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = (attrs[.size] as? NSNumber)?.uint64Value,
+              size <= maxLegacyBytes else { return nil }
         guard let data = try? Data(contentsOf: url),
               let archive = try? PropertyListDecoder().decode(BackupArchive.self, from: data) else {
             return nil

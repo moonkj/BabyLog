@@ -10,11 +10,11 @@ import Foundation
 /// 부여 규칙 (SPEC 7.3):
 /// - "record_start"    : recordCount >= 1          (기록 시작)
 /// - "streak_30"       : consecutiveDays >= 30     (30일 연속 기록)
-/// - "parenting_master": recordCount >= 50         (육아고수)
-/// - "sharing_angel"   : tradeCount >= 3           (나눔 천사)
+/// - "parenting_pro"   : recordCount >= 50         (육아고수)        ← 실제 발급 id와 일치하도록 문서 정정(parenting_master 오기)
+/// - "share_angel"     : tradeCount >= 3           (나눔 천사)        ← 카탈로그 id에 맞춰 정합화(구 sharing_angel)
 /// - "trade_50"        : tradeCount >= 50          (거래 50회)
 /// - "first_crew"      : crewMeetings >= 1         (첫 크루 모임)
-/// - "info_master"     : postLikes >= 500          (맘 인플루언서)
+/// - "info_master"     : postLikes >= 500          (동네 인플루언서)  ← 성별 중립 원칙에 따라 명칭 정정(구 맘 인플루언서)
 enum BadgeEngine {
 
     /// 활동 지표를 기반으로 조건이 충족된 뱃지 식별자 집합을 반환한다.
@@ -41,7 +41,7 @@ enum BadgeEngine {
         if recordCount >= 50 { badges.insert("parenting_pro") }   // 카탈로그 id와 일치(육아고수)
 
         // MARK: 거래 활동 뱃지
-        if tradeCount >= 3   { badges.insert("sharing_angel") }
+        if tradeCount >= 3   { badges.insert("share_angel") }     // 카탈로그 id와 일치(나눔 천사) — 구 "sharing_angel" 정합화
         if tradeCount >= 50  { badges.insert("trade_50") }
 
         // MARK: 커뮤니티 활동 뱃지

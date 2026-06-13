@@ -9,7 +9,7 @@
 // [1] 구현이 이미 존재하므로 계약 불일치 위험은 낮다. 단, 임계값이 스펙에서 변경될 경우
 //     (예: streak_30 → streak_21, info_master likes 500 → 1000) 기존 테스트와 충돌.
 //
-// [2] "sharing_angel"과 "trade_50"은 동일한 tradeCount를 공유한다.
+// [2] "share_angel"과 "trade_50"은 동일한 tradeCount를 공유한다.
 //     tradeCount >= 50이면 두 뱃지가 동시에 부여된다. 이 동시 부여가 의도된 설계인지
 //     코더에게 확인 필요. 현재 구현은 동시 부여를 지원하며 테스트도 이를 검증한다.
 //
@@ -135,15 +135,15 @@ final class BadgeEngineTests: XCTestCase {
         XCTAssertTrue(badges.contains("parenting_pro"))
     }
 
-    // MARK: - sharing_angel (tradeCount >= 3)
+    // MARK: - share_angel (tradeCount >= 3)
 
     func test_sharingAngel_threshold_2_notAwarded() {
         let badges = BadgeEngine.earnedBadges(
             recordCount: 0, consecutiveDays: 0, tradeCount: 2,
             crewMeetings: 0, postLikes: 0
         )
-        XCTAssertFalse(badges.contains("sharing_angel"),
-            "tradeCount=2이면 sharing_angel 미부여")
+        XCTAssertFalse(badges.contains("share_angel"),
+            "tradeCount=2이면 share_angel 미부여")
     }
 
     func test_sharingAngel_threshold_3_awarded() {
@@ -151,8 +151,8 @@ final class BadgeEngineTests: XCTestCase {
             recordCount: 0, consecutiveDays: 0, tradeCount: 3,
             crewMeetings: 0, postLikes: 0
         )
-        XCTAssertTrue(badges.contains("sharing_angel"),
-            "tradeCount=3이면 sharing_angel 부여")
+        XCTAssertTrue(badges.contains("share_angel"),
+            "tradeCount=3이면 share_angel 부여")
     }
 
     // MARK: - trade_50 (tradeCount >= 50)
@@ -175,14 +175,14 @@ final class BadgeEngineTests: XCTestCase {
             "tradeCount=50이면 trade_50 부여")
     }
 
-    /// trade_50이면 sharing_angel도 동시 부여 [주의 §2]
+    /// trade_50이면 share_angel도 동시 부여 [주의 §2]
     func test_trade50_also_awardsSharingAngel() {
         let badges = BadgeEngine.earnedBadges(
             recordCount: 0, consecutiveDays: 0, tradeCount: 50,
             crewMeetings: 0, postLikes: 0
         )
-        XCTAssertTrue(badges.contains("sharing_angel"),
-            "tradeCount=50이면 sharing_angel(>=3)도 동시 부여 [주의: 의도된 설계 여부 확인]")
+        XCTAssertTrue(badges.contains("share_angel"),
+            "tradeCount=50이면 share_angel(>=3)도 동시 부여 [주의: 의도된 설계 여부 확인]")
         XCTAssertTrue(badges.contains("trade_50"))
     }
 
@@ -249,7 +249,7 @@ final class BadgeEngineTests: XCTestCase {
             "record_start",
             "streak_30",
             "parenting_pro",
-            "sharing_angel",
+            "share_angel",
             "trade_50",
             "first_crew",
             "info_master"

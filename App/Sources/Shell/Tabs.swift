@@ -275,6 +275,13 @@ struct HomeTab: View {
         }
     }
 
+    /// 두 날짜의 자정(startOfDay) 기준 일수 차 — '1년 전 오늘 ±3일' 판정 공용 헬퍼.
+    /// raw 타임스탬프로 dateComponents를 비교하면 윈도가 비대칭(최대 ±3일23시간)이 되고
+    /// memoryEntry와 판정이 어긋나므로, 두 판정 모두 이 헬퍼로 통일한다.
+    private func memoryDayDiff(_ a: Date, _ b: Date, _ cal: Calendar = .current) -> Int {
+        cal.dateComponents([.day], from: cal.startOfDay(for: a), to: cal.startOfDay(for: b)).day ?? .max
+    }
+
     private var priorityItem: PriorityItem? {
         let cid = selectedChild?.id
         let hasToday: Bool = {
@@ -282,18 +289,19 @@ struct HomeTab: View {
             return store.diaryEntries(for: cid).contains { Calendar.current.isDateInToday($0.date) }
         }()
         // 약 1년 전(±3일) 실제 기록이 있을 때만 '추억' 카드 — 없으면 거짓 추억을 띄우지 않는다.
+        // (memoryEntry와 동일하게 startOfDay 기준 day-diff + 최근접 .min 선택으로 판정 통일)
         let yearAgoId: String? = {
             guard let cid else { return nil }
             let cal = Calendar.current
             guard let target = cal.date(byAdding: .year, value: -1, to: Date()) else { return nil }
             return store.diaryEntries(for: cid)
-                .filter { abs(cal.dateComponents([.day], from: $0.date, to: target).day ?? 999) <= 3 }
-                .min { abs($0.date.timeIntervalSince(target)) < abs($1.date.timeIntervalSince(target)) }?
+                .filter { abs(memoryDayDiff($0.date, target, cal)) <= 3 }
+                .min { abs(memoryDayDiff($0.date, target, cal)) < abs(memoryDayDiff($1.date, target, cal)) }?
                 .id.uuidString
         }()
         return PriorityEngine.topPriority(
             vaccines: upcomingVaccines,
-            subsidies: [],
+            subsidies: [],   // 지원금 카드는 가계부 탭 전담 — 홈 우선순위에선 의도적 비활성
             hasRecentRecord: hasToday,
             yearAgoMemoryId: yearAgoId,
             now: Date()
@@ -533,15 +541,15 @@ struct HomeTab: View {
     }
 
     /// 1년 전 오늘(±3일)의 다이어리 기록 — 있으면 추억 카드 노출
+    /// (yearAgoMemoryId와 같은 startOfDay 기반 day-diff 헬퍼 + 최근접 .min 선택으로 통일 —
+    ///  두 곳의 판정/선택이 어긋나 카드와 우선순위가 다른 기록을 가리키던 문제 방지)
     private var memoryEntry: DiaryEntry? {
         guard let cid = selectedChild?.id else { return nil }
         let cal = Calendar.current
         guard let target = cal.date(byAdding: .year, value: -1, to: Date()) else { return nil }
-        let targetDay = cal.startOfDay(for: target)
-        return store.diaryEntries(for: cid).first { entry in
-            let d = cal.dateComponents([.day], from: cal.startOfDay(for: entry.date), to: targetDay).day ?? 99
-            return abs(d) <= 3
-        }
+        return store.diaryEntries(for: cid)
+            .filter { abs(memoryDayDiff($0.date, target, cal)) <= 3 }
+            .min { abs(memoryDayDiff($0.date, target, cal)) < abs(memoryDayDiff($1.date, target, cal)) }
     }
 
     private var heroCard: some View {

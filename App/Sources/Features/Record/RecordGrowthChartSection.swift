@@ -113,8 +113,10 @@ struct GrowthChartSection: View {
     private var currentBands: [WHOBand] { metric == .weight ? weightBands : heightBands }
 
     // 차트용 포인트 (월령 Int, 측정값 Double)
+    // id는 GrowthRecord의 UUID — 같은 달에 2회 이상 측정해도 ForEach id가 충돌하지 않는다.
+    // (month를 id로 쓰면 동월 중복 측정 시 일부 포인트가 누락/오작동)
     private struct ChartPoint: Identifiable {
-        var id: Int { month }
+        let id: UUID
         let month: Int
         let value: Double
     }
@@ -124,7 +126,7 @@ struct GrowthChartSection: View {
             let months = AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: r.date).months
             let val = metric == .weight ? r.weightKg : r.heightCm
             guard let v = val else { return nil }
-            return ChartPoint(month: months, value: v)
+            return ChartPoint(id: r.id, month: months, value: v)
         }
     }
 

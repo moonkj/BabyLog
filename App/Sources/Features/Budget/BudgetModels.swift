@@ -101,6 +101,24 @@ struct Expense: Identifiable, Equatable, Codable {
     }
 }
 
+// 하위 호환 디코딩 — ChatMessage 패턴(CodablePersistence.swift 상단 정책 참조):
+// 필드 추가/미지의 category rawValue에도 전체 저장 상태가 keyNotFound로 날아가지 않게
+// decodeIfPresent + 기본값으로 흡수한다(미지 카테고리는 .etc로).
+extension Expense {
+    enum CodingKeys: String, CodingKey {
+        case id, amount, category, date, memo, autoCollected
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id            = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        amount        = try c.decodeIfPresent(Int.self, forKey: .amount) ?? 0
+        category      = ExpenseCategory(rawValue: (try? c.decode(String.self, forKey: .category)) ?? "") ?? .etc
+        date          = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        memo          = try c.decodeIfPresent(String.self, forKey: .memo)
+        autoCollected = try c.decodeIfPresent(Bool.self, forKey: .autoCollected) ?? false
+    }
+}
+
 // MARK: - BudgetSummary
 
 /// 지출 집계 순수 함수 모음.
@@ -229,19 +247,25 @@ extension BudgetSummary {
     }
 
     /// 직전 동일 길이 구간의 지출 합계(전기 대비 비교용). 비교 불가(0)면 nil 처리는 호출부에서.
+    /// 직전 구간 = [현재구간시작 - 기간, 현재구간시작) — periodStart에서 연속 분할(반개구간).
+    /// (기존: 직전 끝점이 `now-7d` 시각 기준이라 [직전끝, 현재시작) 사이 지출이
+    ///  어느 구간에도 안 들어가는 공백이 생기던 버그 수정.)
     static func previousTotal(
         _ expenses: [Expense], _ period: BudgetPeriod,
         now: Date = Date(), calendar cal: Calendar = .current
     ) -> Int {
-        let prevNow: Date
+        let currentStart = periodStart(period, now: now, calendar: cal)
+        let prevStart: Date
         switch period {
-        case .week:      prevNow = cal.date(byAdding: .day, value: -7, to: now) ?? now
-        case .month:     prevNow = cal.date(byAdding: .day, value: -30, to: now) ?? now
-        case .sixMonths: prevNow = cal.date(byAdding: .month, value: -6, to: now) ?? now
-        case .year:      prevNow = cal.date(byAdding: .month, value: -12, to: now) ?? now
+        case .week:      prevStart = cal.date(byAdding: .day, value: -7, to: currentStart) ?? currentStart
+        case .month:     prevStart = cal.date(byAdding: .day, value: -30, to: currentStart) ?? currentStart
+        case .sixMonths: prevStart = cal.date(byAdding: .month, value: -6, to: currentStart) ?? currentStart
+        case .year:      prevStart = cal.date(byAdding: .month, value: -12, to: currentStart) ?? currentStart
         }
-        let prevStart = periodStart(period, now: prevNow, calendar: cal)
-        return total(expenses, from: prevStart, to: prevNow)
+        // 반개구간 [prevStart, currentStart) — 현재 구간 시작점은 포함하지 않는다(중복 집계 방지).
+        return expenses
+            .filter { $0.date >= prevStart && $0.date < currentStart }
+            .reduce(0) { $0 + $1.amount }
     }
 
     /// 특정 연도(1~12월)의 지출 합계.
@@ -250,6 +274,20 @@ extension BudgetSummary {
     ) -> Int {
         expenses
             .filter { cal.component(.year, from: $0.date) == year }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    /// 진행 연도 비교용 — 해당 연도 1/1부터, `asOf`를 그 연도로 평행이동한 같은 날짜까지의 합계.
+    /// (올해 부분합을 전년 '전체'와 비교하면 항상 큰 감소처럼 왜곡되므로 같은 진행 기간만 비교)
+    static func yearToDateTotal(
+        _ expenses: [Expense], year: Int, asOf now: Date = Date(), calendar cal: Calendar = .current
+    ) -> Int {
+        let nowYear = cal.component(.year, from: now)
+        guard let cutoff = cal.date(byAdding: .year, value: year - nowYear, to: now) else {
+            return yearTotal(expenses, year: year, calendar: cal)   // 계산 불가 시 전체 합계로 폴백
+        }
+        return expenses
+            .filter { cal.component(.year, from: $0.date) == year && $0.date <= cutoff }
             .reduce(0) { $0 + $1.amount }
     }
 

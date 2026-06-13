@@ -15,6 +15,19 @@
 import Foundation
 
 // ============================================================
+// MARK: - 공통 헬퍼
+// ============================================================
+
+/// data.go.kr 계열 쿼리의 '+'를 %2B로 명시 인코딩 — URLComponents는 쿼리의 '+'를 그대로 두는데
+/// 서버가 공백으로 해석해 serviceKey 인증이 깨질 수 있다(HospitalDetailService와 동일 처리를
+/// 파일 내 헬퍼로 통일 — 한쪽 경로만 인코딩되는 비대칭 방지).
+fileprivate extension URLComponents {
+    mutating func encodePlusInQuery() {
+        percentEncodedQuery = percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+    }
+}
+
+// ============================================================
 // MARK: - LiveHospitalInfoProvider
 // ============================================================
 
@@ -89,6 +102,7 @@ final class LiveHospitalInfoProvider: HospitalInfoProviding {
         ]
         appendDgsbjt(&items)
         c.queryItems = items
+        c.encodePlusInQuery()   // serviceKey의 '+' 보호 — 상세조회(HospitalDetailService)와 동일 처리
         guard let url = c.url else { return [] }
         let resp = try await client.get(url, as: HIRAHospitalResponse.self)
         return try HospitalResponseParser.parse(resp, near: coord)
@@ -467,6 +481,7 @@ final class LiveSubsidyProvider: SubsidyProviding {
             URLQueryItem(name: "lifeArray", value: "C0013"),  // 영유아 생애주기 코드
             URLQueryItem(name: "_type", value: "json"),
         ]
+        components.encodePlusInQuery()   // serviceKey의 '+' 보호 — 병원 검색과 동일 처리
 
         guard let url = components.url else {
             throw APIError.invalidURL
@@ -616,6 +631,7 @@ final class LiveVaccineScheduleProvider: VaccineScheduleProviding {
         }
 
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")   // 고정 포맷 — 사용자 로캘(불교력·12시간제 등) 영향 차단
         formatter.dateFormat = "yyyyMMdd"
         let birthStr = formatter.string(from: birthDate)
 
@@ -624,6 +640,7 @@ final class LiveVaccineScheduleProvider: VaccineScheduleProviding {
             URLQueryItem(name: "birthDay", value: birthStr),
             URLQueryItem(name: "_type", value: "json"),
         ]
+        components.encodePlusInQuery()   // serviceKey의 '+' 보호 — 병원 검색과 동일 처리
 
         guard let url = components.url else {
             throw APIError.invalidURL
@@ -670,6 +687,7 @@ enum VaccineResponseParser {
         }
 
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")   // 고정 포맷 응답 파싱 — 로캘 영향 차단
         formatter.dateFormat = "yyyyMMdd"
         let zeroUUID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
 

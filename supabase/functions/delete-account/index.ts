@@ -37,7 +37,30 @@ Deno.serve(async (req) => {
     .eq("seller", userId)
     .in("status", ["판매중", "예약중"]);
 
-  // 3) 본인 콘텐츠는 보존(소유 uuid 고아화 = 익명). 식별만 해제하기 위해 auth 사용자 삭제.
+  // 3) 표시명 스크럽 — 콘텐츠 본문은 보존(데이터 보존 원칙)하되, 닉네임 등 표시명만 '이웃'으로
+  //    익명화한다. auth 사용자만 지우면 소유 uuid는 고아화되지만 author_name 류에 실명/닉네임이
+  //    잔존해 식별이 가능하므로, 삭제 전 식별자를 제거한다. (실제 스키마 컬럼 기준:
+  //    crew_post·crew_post_reply=author/author_name, crew_meetup=host/host_name,
+  //    crew_meetup_message·market_chat_message=device_id/author_name,
+  //    crew_group=creator/creator_name, market_item=seller/seller_name)
+  const scrubTargets: { table: string; owner: string; nameCol: string }[] = [
+    { table: "crew_post",           owner: "author",    nameCol: "author_name" },
+    { table: "crew_post_reply",     owner: "author",    nameCol: "author_name" },
+    { table: "crew_meetup",         owner: "host",      nameCol: "host_name" },
+    { table: "crew_meetup_message", owner: "device_id", nameCol: "author_name" },
+    { table: "crew_group",          owner: "creator",   nameCol: "creator_name" },
+    { table: "market_item",         owner: "seller",    nameCol: "seller_name" },
+    { table: "market_chat_message", owner: "device_id", nameCol: "author_name" },
+  ];
+  for (const t of scrubTargets) {
+    // best-effort — 한 테이블 실패가 계정 삭제 자체를 막지 않도록 오류는 기록만.
+    const { error } = await admin.from(t.table)
+      .update({ [t.nameCol]: "이웃" })
+      .eq(t.owner, userId);
+    if (error) console.error(`scrub ${t.table}.${t.nameCol} failed: ${error.message}`);
+  }
+
+  // 4) 본인 콘텐츠는 보존(소유 uuid 고아화 = 익명). 식별만 해제하기 위해 auth 사용자 삭제.
   const { error: delErr } = await admin.auth.admin.deleteUser(userId);
   if (delErr) {
     return new Response(JSON.stringify({ error: delErr.message }), {

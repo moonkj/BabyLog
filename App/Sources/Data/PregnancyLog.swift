@@ -34,4 +34,25 @@ struct PregnancyLog: Identifiable, Codable, Equatable {
         self.photoRef = photoRef
         self.note = note
     }
+
+    // 하위 호환 디코딩 — 키 누락/미지 Kind 값에도 임신 기록 전체가 깨지지 않게
+    // (ChatMessage 패턴). 인코딩은 합성 유지(키 1:1 동일).
+    enum CodingKeys: String, CodingKey {
+        case id, pregnancyId, date, kind, value, photoRef, note
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id          = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        // pregnancyId 누락 시 새 UUID — 어느 임신과도 매칭되지 않아 표시되진 않지만
+        // 전체 디코딩 실패(데이터 소실)보다 낫다.
+        pregnancyId = try c.decodeIfPresent(UUID.self, forKey: .pregnancyId) ?? UUID()
+        date        = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        // 미지 rawValue(미래 버전이 추가한 종류)는 .memo로 흡수 — 태동/체중/배사진으로
+        // 잘못 분류하면 카운트·차트가 오염되므로 가장 무해한 종류를 택한다.
+        let rawKind = try c.decodeIfPresent(String.self, forKey: .kind)
+        kind        = rawKind.flatMap(Kind.init(rawValue:)) ?? .memo
+        value       = try c.decodeIfPresent(Double.self, forKey: .value) ?? 0
+        photoRef    = try c.decodeIfPresent(String.self, forKey: .photoRef)
+        note        = try c.decodeIfPresent(String.self, forKey: .note)
+    }
 }

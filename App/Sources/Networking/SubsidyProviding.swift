@@ -22,19 +22,23 @@ struct SubsidyInfo: Identifiable, Sendable {
     let eligibility: String
     /// 신청 페이지 URL (복지로 또는 해당 기관)
     let applyURL: URL?
+    /// 일시금 여부 — true면 "총 N만원", false면 "월 N만원"으로 표기(첫만남이용권 등 오표기 방지).
+    let isLumpSum: Bool
 
     init(
         id: String,
         name: String,
         amountKRW: Int,
         eligibility: String,
-        applyURL: URL?
+        applyURL: URL?,
+        isLumpSum: Bool = false   // 기본 false — 기존 생성부(LiveProviders 등)는 수정 없이 컴파일
     ) {
         self.id = id
         self.name = name
         self.amountKRW = amountKRW
         self.eligibility = eligibility
         self.applyURL = applyURL
+        self.isLumpSum = isLumpSum
     }
 }
 
@@ -65,7 +69,8 @@ final class MockSubsidyProvider: SubsidyProviding {
                 name: "첫만남이용권",
                 amountKRW: 2_000_000,
                 eligibility: "출생 아동 1인당 200만원 바우처 지급. 출생 후 1년 이내 신청.",
-                applyURL: URL(string: "https://www.bokjiro.go.kr/ssis-tbu/twatbz/mkclAr/mkclArMtdInfo.do?tbbzSn=94")
+                applyURL: URL(string: "https://www.bokjiro.go.kr/ssis-tbu/twatbz/mkclAr/mkclArMtdInfo.do?tbbzSn=94"),
+                isLumpSum: true   // 일시금 — "총 200만원"으로 표기(월 지급 아님)
             ))
         }
 

@@ -65,7 +65,9 @@ enum CrewBackend {
     static func joinWaitlist(hood: String) async -> Bool {
         // on_conflict 미지정 시 PK(id) 기준 병합 → (hood,device_id) unique 충돌이 409로 떨어짐(재설치 후 영구 실패)
         guard SupabaseConfig.isConfigured, var req = await request("/rest/v1/crew_waitlist?on_conflict=hood,device_id", method: "POST") else { return false }
-        req.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+        // merge-duplicates(DO UPDATE)는 crew_waitlist에 UPDATE RLS 정책이 없어 42501로 실패한다.
+        // 페이로드가 (hood, device_id)뿐이라 갱신할 값이 없으므로 DO NOTHING(ignore-duplicates)이 안전·동등.
+        req.setValue("resolution=ignore-duplicates", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "hood": hood, "device_id": SupabaseConfig.deviceID,
         ])

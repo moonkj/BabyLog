@@ -64,7 +64,13 @@ Deno.serve(async (req) => {
       .eq("hood", hood);
     if ((count ?? 0) < THRESHOLD) return new Response(JSON.stringify({ hood, count, opened: false }), { status: 200 });
 
-    // 2) 오픈 상태 — 원자적 게이트(동시 호출 중복 발송 방지: 웹훅 + 클라 직접호출 레이스)
+    // 2) APNs JWT를 게이트 클레임 '전에' 생성 — 시크릿 미설정/형식 오류로 throw해도
+    //    게이트(opened=true)가 소모되지 않아 푸시가 영구 유실되지 않는다.
+    const jwt = await apnsJWT();
+    const fallbackHost = Deno.env.get("APNS_HOST") ?? "api.sandbox.push.apple.com";
+    const topic = Deno.env.get("APNS_TOPIC")!;
+
+    // 3) 오픈 상태 — 원자적 게이트(동시 호출 중복 발송 방지: 웹훅 + 클라 직접호출 레이스)
     //    행 없으면 생성(opened=false) → opened=false인 동안만 true로 전환(UPDATE...WHERE)되어
     //    딱 한 호출만 성공. 성공한 호출만 푸시를 발송한다.
     await supabase.from("crew_hood_status")
@@ -76,39 +82,48 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ hood, alreadyOpened: true }), { status: 200 });
     }
 
-    // 3) 동네 토큰 수집 (env 포함 — 토큰별로 샌드박스/운영 호스트를 다르게 보냄)
-    const { data: tokens } = await supabase
-      .from("crew_push_token").select("apns_token, env").eq("hood", hood);
-    if (!tokens?.length) return new Response(JSON.stringify({ hood, sent: 0 }), { status: 200 });
+    // 4) 발송 섹션(토큰 수집~발송 루프~stale 정리) — 실패 시 게이트를 되돌린다.
+    //    게이트(opened=true)만 소모하고 발송이 throw하면 푸시가 영구 유실되므로,
+    //    실패하면 opened=false로 롤백 후 500을 반환해 다음 호출이 재시도하게 한다.
+    try {
+      // 동네 토큰 수집 (env 포함 — 토큰별로 샌드박스/운영 호스트를 다르게 보냄)
+      const { data: tokens, error: tokErr } = await supabase
+        .from("crew_push_token").select("apns_token, env").eq("hood", hood);
+      if (tokErr) throw tokErr;   // 조회 실패를 '토큰 0개'로 오인해 게이트만 소모하지 않도록 throw
+      if (!tokens?.length) return new Response(JSON.stringify({ hood, sent: 0 }), { status: 200 });
 
-    // 4) APNs 발송 — 호스트는 토큰의 env로 결정(개발=샌드박스, 배포=운영).
-    //    빌드 구성별로 토큰이 자동 태깅되므로 APNS_HOST 수동 전환이 필요 없다.
-    //    env가 없는 레거시 행은 APNS_HOST(없으면 샌드박스)로 폴백.
-    const jwt = await apnsJWT();
-    const fallbackHost = Deno.env.get("APNS_HOST") ?? "api.sandbox.push.apple.com";
-    const topic = Deno.env.get("APNS_TOPIC")!;
-    const body = JSON.stringify({
-      aps: { alert: { title: `🌱 ${hood} 크루가 열렸어요`, body: "이웃이 충분히 모였어요. 동네 크루를 확인해 보세요." }, sound: "default" },
-    });
-    let sent = 0;
-    const stale: string[] = [];
-    for (const t of tokens) {
-      const host = t.env === "production" ? "api.push.apple.com"
-                 : t.env === "sandbox" ? "api.sandbox.push.apple.com"
-                 : fallbackHost;
-      const r = await fetch(`https://${host}/3/device/${t.apns_token}`, {
-        method: "POST",
-        headers: { authorization: `bearer ${jwt}`, "apns-topic": topic, "apns-push-type": "alert", "apns-priority": "10" },
-        body,
+      // APNs 발송 — 호스트는 토큰의 env로 결정(개발=샌드박스, 배포=운영).
+      //    빌드 구성별로 토큰이 자동 태깅되므로 APNS_HOST 수동 전환이 필요 없다.
+      //    env가 없는 레거시 행은 APNS_HOST(없으면 샌드박스)로 폴백.
+      const body = JSON.stringify({
+        aps: { alert: { title: `🌱 ${hood} 크루가 열렸어요`, body: "이웃이 충분히 모였어요. 동네 크루를 확인해 보세요." }, sound: "default" },
       });
-      if (r.ok) { sent++; continue }
-      // 410 Unregistered → 만료 토큰. 정리해 테이블 무한 증가 방지.
-      if (r.status === 410) stale.push(t.apns_token);
+      let sent = 0;
+      const stale: string[] = [];
+      for (const t of tokens) {
+        const host = t.env === "production" ? "api.push.apple.com"
+                   : t.env === "sandbox" ? "api.sandbox.push.apple.com"
+                   : fallbackHost;
+        const r = await fetch(`https://${host}/3/device/${t.apns_token}`, {
+          method: "POST",
+          headers: { authorization: `bearer ${jwt}`, "apns-topic": topic, "apns-push-type": "alert", "apns-priority": "10" },
+          body,
+        });
+        if (r.ok) { sent++; continue }
+        // 410 Unregistered → 만료 토큰. 정리해 테이블 무한 증가 방지.
+        if (r.status === 410) stale.push(t.apns_token);
+      }
+      if (stale.length) {
+        await supabase.from("crew_push_token").delete().in("apns_token", stale);
+      }
+      return new Response(JSON.stringify({ hood, count, sent, pruned: stale.length }), { status: 200 });
+    } catch (sendErr) {
+      // 발송 실패 → 게이트 롤백(opened=false). 다음 호출(웹훅/앱)이 다시 발송을 시도한다.
+      await supabase.from("crew_hood_status")
+        .update({ opened: false, opened_at: null })
+        .eq("hood", hood);
+      return new Response(`send error (gate rolled back): ${sendErr}`, { status: 500 });
     }
-    if (stale.length) {
-      await supabase.from("crew_push_token").delete().in("apns_token", stale);
-    }
-    return new Response(JSON.stringify({ hood, count, sent, pruned: stale.length }), { status: 200 });
   } catch (e) {
     return new Response(`error: ${e}`, { status: 500 });
   }

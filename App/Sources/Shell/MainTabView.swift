@@ -87,7 +87,10 @@ struct MainTabView: View {
                 BadgeAwardCard(badge: badge) {
                     withAnimation(.easeOut(duration: 0.25)) { store.pendingBadgeAward = nil }
                 }
-                .frame(maxWidth: min(320, UIScreen.main.bounds.width - 40))
+                // 외부 frame 제거 — 카드 내부에 maxWidth 320 제약이 이미 있고,
+                // 여기서 폭을 제한하면 카드 내부의 풀스크린 스크림이 세로 띠로 잘려
+                // 띠 밖 탭이 하부 UI로 전달되는 문제가 있었음
+                .id(badge.id) // 연속 획득 시 뷰 identity 분리 — 이전 카드의 4.5초 자동 닫힘 타이머가 새 카드를 조기 dismiss하지 않도록
                 .transition(.opacity)
                 .zIndex(20)
             }

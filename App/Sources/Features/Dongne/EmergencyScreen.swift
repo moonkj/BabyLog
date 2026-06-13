@@ -18,14 +18,20 @@ struct EmergencyScreen: View {
     @State private var loading = true
     /// 조회 실패 — 실제 "0곳"과 구분(아동안전: 거짓 "병원 없음" 방지). 재시도 UI 노출.
     @State private var loadFailed = false
+    /// 요청 세대 카운터 — 좌표 nil로 시작한 폴백 조회가 GPS 도착 후의 내 위치 조회를
+    /// 늦게 덮어쓰는 경합 방지(완료 시 세대가 일치하는 마지막 요청만 반영).
+    @State private var loadGeneration = 0
 
-    // 마지막 확인 시각 (조회 시점)
-    private let lastCheckedAt: String = {
+    // 마지막 확인 시각 — @State로 두고 load() 완료 시 갱신(뷰 생성 시각 고정이던 버그 수정).
+    @State private var lastCheckedAt: String = Self.timeString(Date())
+
+    /// "HH:mm" 표기(ko_KR) — 헤더의 "○○:○○ 기준" 갱신용.
+    private static func timeString(_ date: Date) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ko_KR")
         f.dateFormat = "HH:mm"
-        return f.string(from: Date())
-    }()
+        return f.string(from: date)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -53,48 +59,63 @@ struct EmergencyScreen: View {
     /// 내 위치 기준 응급용 — 대학병원급(상급종합·종합병원) + 소아과만.
     /// 정렬: ① 가장 가까운 대학병원급 최상단 → ② 종합병원급·소아과 거리순.
     private func load() async {
+        loadGeneration += 1
+        let gen = loadGeneration   // 이 요청의 세대 — 완료 시 일치할 때만 상태에 반영
         loading = true
         loadFailed = false
         let coord = location.coordinate.map { Coordinate(lat: $0.latitude, lng: $0.longitude) }
-        do {
-            // 두 조회 병렬: 전체 병원(종별 식별용) + 소아과(진료과목 11)
-            async let allRaw = ProviderFactory.hospitalAll().hospitals(near: coord, openNow: false)
-            async let pedRaw = ProviderFactory.hospital().hospitals(near: coord, openNow: false)
-            let all = try await allRaw
-            let peds = try await pedRaw
+        // 두 조회 병렬: 전체 병원(종별 식별용) + 소아과(진료과목 11)
+        // 부분 실패 허용 — 하나만 실패해도 성공한 쪽(예: 대학병원급)은 표시한다.
+        // 둘 다 실패했을 때만 loadFailed(거짓 "병원 없음" = 아동안전 위험).
+        async let allRaw = ProviderFactory.hospitalAll().hospitals(near: coord, openNow: false)
+        async let pedRaw = ProviderFactory.hospital().hospitals(near: coord, openNow: false)
+        let allResult: [HospitalInfo]? = try? await allRaw
+        let pedResult: [HospitalInfo]? = try? await pedRaw
 
-            // 대학병원급(상급종합·종합병원) — 응급실 운영이 사실상 보장되므로 영업조회 없이
-            // 가까운 순 최대 3곳을 '항상' 노출한다. (소아과 조회에 묻혀 후보에서 잘리던 버그 수정:
-            // 24h 응급이 필요한 상황에서 큰 병원을 빠뜨리는 건 아동안전 위험.)
-            let majorsNearest = all.filter { $0.isMajorHospital }
-                .sorted { $0.distanceM < $1.distanceM }
-            let topMajors = Array(majorsNearest.prefix(3))
-            let majorIDs = Set(topMajors.map { $0.id })
+        // 더 최신 요청이 시작됐으면 이 응답은 폐기(폴백 좌표 결과가 내 위치 결과를 덮어쓰지 않게)
+        guard gen == loadGeneration else { return }
 
-            // 소아과(이름 기반 — 가정의학·내과 혼입 제거)는 가까운 후보만 상세 영업시간을
-            // 조회해 '영업중'인 곳만 남긴다(빠르게). 대학병원급과 중복되면 제외.
-            let kw = ["소아", "아동", "어린이", "키즈"]
-            let pediatric = peds.filter { h in kw.contains { h.name.contains($0) } }
-                .filter { !majorIDs.contains($0.id) }
-                .sorted { $0.distanceM < $1.distanceM }
-            let pedCandidates = Array(pediatric.prefix(12))
-            var openPeds: [HospitalInfo] = []
-            await withTaskGroup(of: (HospitalInfo, Bool?).self) { group in
-                for h in pedCandidates {
-                    group.addTask { (h, await HospitalDetailService.isOpenNow(ykiho: h.id)) }
-                }
-                for await (h, open) in group where open == true {
-                    openPeds.append(h)
-                }
-            }
-            openPeds.sort { $0.distanceM < $1.distanceM }
-            // 최상단 = 가까운 대학병원급(최대 3) → 그 뒤 영업중 소아과 거리순
-            hospitals = topMajors + openPeds
-        } catch {
-            // HIRA 조회 실패 — 빈 결과로 위장하지 않는다(거짓 "병원 없음" = 아동안전 위험).
+        if allResult == nil && pedResult == nil {
+            // 둘 다 실패 — 빈 결과로 위장하지 않는다.
             hospitals = []
             loadFailed = true
+            lastCheckedAt = Self.timeString(Date())
+            loading = false
+            return
         }
+        let all = allResult ?? []
+        let peds = pedResult ?? []
+
+        // 대학병원급(상급종합·종합병원) — 응급실 운영이 사실상 보장되므로 영업조회 없이
+        // 가까운 순 최대 3곳을 '항상' 노출한다. (소아과 조회에 묻혀 후보에서 잘리던 버그 수정:
+        // 24h 응급이 필요한 상황에서 큰 병원을 빠뜨리는 건 아동안전 위험.)
+        let majorsNearest = all.filter { $0.isMajorHospital }
+            .sorted { $0.distanceM < $1.distanceM }
+        let topMajors = Array(majorsNearest.prefix(3))
+        let majorIDs = Set(topMajors.map { $0.id })
+
+        // 소아과(이름 기반 — 가정의학·내과 혼입 제거)는 가까운 후보만 상세 영업시간을
+        // 조회해 '영업중'인 곳만 남긴다(빠르게). 대학병원급과 중복되면 제외.
+        let kw = ["소아", "아동", "어린이", "키즈"]
+        let pediatric = peds.filter { h in kw.contains { h.name.contains($0) } }
+            .filter { !majorIDs.contains($0.id) }
+            .sorted { $0.distanceM < $1.distanceM }
+        let pedCandidates = Array(pediatric.prefix(12))
+        var openPeds: [HospitalInfo] = []
+        await withTaskGroup(of: (HospitalInfo, Bool?).self) { group in
+            for h in pedCandidates {
+                group.addTask { (h, await HospitalDetailService.isOpenNow(ykiho: h.id)) }
+            }
+            for await (h, open) in group where open == true {
+                openPeds.append(h)
+            }
+        }
+        // 영업조회 동안에도 새 요청이 시작될 수 있다 — 마지막 요청만 반영
+        guard gen == loadGeneration else { return }
+        openPeds.sort { $0.distanceM < $1.distanceM }
+        // 최상단 = 가까운 대학병원급(최대 3) → 그 뒤 영업중 소아과 거리순
+        hospitals = topMajors + openPeds
+        lastCheckedAt = Self.timeString(Date())   // 조회 완료 시각으로 갱신
         loading = false
     }
 

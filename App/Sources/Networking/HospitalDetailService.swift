@@ -12,7 +12,7 @@ import Foundation
 enum HospitalDetailService {
 
     /// 현재 영업 중 여부. 응급실(주/야간) 또는 해당 요일 진료시간 기준.
-    /// - Returns: 영업중 true / 영업종료 false / 조회 실패·불명 nil
+    /// - Returns: 영업중 true / 영업종료 false / 조회 실패·시간 데이터 전무(미확인) nil
     static func isOpenNow(ykiho: String, at date: Date = Date()) async -> Bool? {
         guard let key = APIConfig.key(APIConfig.hiraKeyName), !ykiho.isEmpty else { return nil }
         // LiveProviders와 동일한 패턴 — URLComponents + queryItems로 일관 인코딩.
@@ -105,8 +105,9 @@ struct HIRADetailItem: Decodable {
     }
 
     /// HHMM 문자열 → 정수(분 단위 비교용 HHMM). 빈값/형식오류는 nil.
+    /// v >= 0 — "0000"(자정 종료/시작)도 유효한 시각이므로 버리지 않는다(빈 문자열·비숫자는 여전히 nil).
     private func hhmm(_ s: String?) -> Int? {
-        guard let s, let v = Int(s.filter { $0.isNumber }), v > 0 else { return nil }
+        guard let s, let v = Int(s.filter { $0.isNumber }), v >= 0 else { return nil }
         return v
     }
 
@@ -117,14 +118,15 @@ struct HIRADetailItem: Decodable {
         return s < e ? (now >= s && now < e) : (now >= s || now < e)
     }
 
-    /// "1시00분~2시00분" 형태의 점심시간 → (시작HHMM, 끝HHMM). 없음/파싱실패 nil.
+    /// "1시00분~2시00분" 또는 "12:30~13:30" 형태의 점심시간 → (시작HHMM, 끝HHMM). 없음/파싱실패 nil.
     /// 점심은 항상 한낮이므로 1~7시는 오후로 보정(+12). "점심시간 없음" 등은 nil.
     private func lunchRange(_ s: String?) -> (Int, Int)? {
         guard let s, s.contains("~") else { return nil }
         let parts = s.components(separatedBy: "~")
         guard parts.count == 2 else { return nil }
         func parse(_ t: String) -> Int? {
-            guard let si = t.range(of: "시") else { return nil }
+            // 구분자 확장 — "시"(한글 포맷) 외에 ":"(콜론 포맷 "12:30")도 지원. 오후 보정은 동일.
+            guard let si = t.range(of: "시") ?? t.range(of: ":") else { return nil }
             guard var h = Int(t[t.startIndex..<si.lowerBound].filter { $0.isNumber }) else { return nil }
             let m = Int(t[si.upperBound...].filter { $0.isNumber }) ?? 0
             if h < 8 { h += 12 }   // 점심 1~7시 = 오후(13~19), 12시는 정오 그대로
@@ -134,8 +136,20 @@ struct HIRADetailItem: Decodable {
         return (a, b)
     }
 
-    func isOpen(at date: Date) -> Bool {
-        let cal = Calendar(identifier: .gregorian)
+    /// 영업 판정. 시간 데이터가 전무한 기관은 '영업종료'(false)가 아니라 '미확인'(nil) —
+    /// 데이터 없음을 확정 종료로 단정하면 실제 영업 중인 곳을 닫힌 곳으로 오표시한다.
+    func isOpen(at date: Date) -> Bool? {
+        // 시간 관련 필드가 하나도 없으면 판정 불가 → nil(미확인)
+        let hourFields = [trmtMonStart, trmtMonEnd, trmtTueStart, trmtTueEnd,
+                          trmtWedStart, trmtWedEnd, trmtThuStart, trmtThuEnd,
+                          trmtFriStart, trmtFriEnd, trmtSatStart, trmtSatEnd,
+                          trmtSunStart, trmtSunEnd,
+                          emyDayStart, emyDayEnd, emyNgtStart, emyNgtEnd]
+        let hasAnyData = emyDayYn == "Y" || emyNgtYn == "Y" || hourFields.contains { hhmm($0) != nil }
+        guard hasAnyData else { return nil }
+        // 한국 의료기관의 영업시간이므로 KST 고정 — 해외 체류 중 현지 시각으로 오판하지 않게.
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Seoul") ?? cal.timeZone
         let now = cal.component(.hour, from: date) * 100 + cal.component(.minute, from: date)
         // 응급실(야간/주간) — 24시간 응급이면 항상 열림
         if emyDayYn == "Y" && emyNgtYn == "Y" { return true }

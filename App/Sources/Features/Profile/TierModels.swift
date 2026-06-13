@@ -164,6 +164,8 @@ extension BadgeCatalogItem {
         .init(id: "share_angel",    name: "나눔 천사",    condition: "무료나눔 3회 이상",            tone: .mint,   systemIcon: "gift.fill",             category: .trade,     isEarned: true),
         .init(id: "fast_reply",     name: "빠른 답장",    condition: "응답률 90% 이상 30일",        tone: .mint,   systemIcon: "bolt.fill",             category: .trade,     isEarned: false),
         .init(id: "safe_seller",    name: "안심 판매자",  condition: "거래 10회+ / 분쟁 0 / 4.5+", tone: .purple, systemIcon: "shield.fill",           category: .trade,     isEarned: false),
+        // BadgeEngine 발급 id와 정합화 — 카탈로그 미등재로 획득 축하가 소실되던 항목 추가
+        .init(id: "trade_50",       name: "거래 50회",    condition: "총 거래 50회 달성",            tone: .amber,  systemIcon: "trophy.fill",           category: .trade,     isEarned: false),
         // 기록
         .init(id: "record_start",   name: "기록 시작",    condition: "첫 성장 기록 작성",            tone: .mint,   systemIcon: "pencil",                category: .record,    isEarned: true),
         .init(id: "streak_30",      name: "30일 연속",    condition: "30일 연속 일지 작성",          tone: .mint,   systemIcon: "flame.fill",            category: .record,    isEarned: false),
@@ -171,6 +173,8 @@ extension BadgeCatalogItem {
         // 커뮤니티
         .init(id: "first_crew",     name: "첫 크루 모임", condition: "첫 번째 크루 참여",            tone: .blue,   systemIcon: "person.3.fill",         category: .community, isEarned: true),
         .init(id: "neighborhood",   name: "든든한 이웃",  condition: "도움 반응 50회 이상",          tone: .purple, systemIcon: "hands.sparkles.fill",   category: .community, isEarned: false),
+        // BadgeEngine 발급 id와 정합화 — 명칭은 성별 중립 원칙에 따라 '동네 인플루언서'(구 맘 인플루언서)
+        .init(id: "info_master",    name: "동네 인플루언서", condition: "게시글 좋아요 500개 이상",  tone: .amber,  systemIcon: "megaphone.fill",        category: .community, isEarned: false),
         // 특별
         .init(id: "early_member",   name: "초기 멤버",    condition: "정식 출시 30일 이내 가입",     tone: .amber,  systemIcon: "crown.fill",            category: .special,   isEarned: true),
     ]

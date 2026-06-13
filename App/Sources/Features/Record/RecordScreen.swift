@@ -75,18 +75,21 @@ struct RecordScreen: View {
             title: store.selectedChild?.name ?? "기록",
             eyebrow: store.selectedChild != nil ? "성장 기록" : "아이 성장 기록"
         ) {
-            Button {
-                showShareCard = true
-            } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(AppColors.ink2)
-                    .frame(width: 44, height: 44)
-                    .background(AppColors.surface, in: Circle())
-                    .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
+            // 아이 미등록 시 공유 버튼 숨김 — 시트 내용(selectedChild)이 없어 탭해도 빈 동작이 된다.
+            if store.selectedChild != nil {
+                Button {
+                    showShareCard = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppColors.ink2)
+                        .frame(width: 44, height: 44)
+                        .background(AppColors.surface, in: Circle())
+                        .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
+                }
+                .buttonStyle(LiquidPressStyle())
+                .accessibilityLabel("기록 공유")
             }
-            .buttonStyle(LiquidPressStyle())
-            .accessibilityLabel("기록 공유")
         }
     }
 

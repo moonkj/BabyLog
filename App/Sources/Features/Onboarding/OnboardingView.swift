@@ -39,9 +39,13 @@ struct OnboardingView: View {
 
     // MARK: - 등록 판정 / 기본값
 
-    /// 등록이 실제로 일어나려면: 날짜가 입력돼 있어야 한다(이름은 비면 기본값으로 채움).
+    /// 등록이 실제로 일어나는 조건: 날짜를 직접 골랐거나 '이름을 입력'했을 때.
+    /// 이름을 입력했는데 DatePicker를 안 건드렸다고 조용히 등록을 생략하던 무음 누락 수정 —
+    /// 피커에 날짜가 보이는 상태에서 다음을 눌렀으므로 표시된 날짜를 확인한 것으로 간주한다.
     /// → 축하 카드는 등록이 실제로 발생할 때만 노출(거짓 안내 금지).
-    private var willRegister: Bool { dateEntered }
+    private var willRegister: Bool {
+        dateEntered || !nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     /// 이름이 비어 있으면 단계에 맞는 기본 이름을 채워 등록이 실제로 일어나게 한다.
     /// (이름은 나중에 언제든 수정 가능 — 입력 부담을 0으로)
@@ -737,8 +741,8 @@ struct OnboardingView: View {
     }
 
     /// 완료 — 입력한 아이/임신을 AppStore에 기록한 뒤 onComplete.
-    /// 날짜를 입력한 경우에만 등록한다(이름이 비면 기본 이름으로 채워 실제 등록 보장).
-    /// 날짜를 건드리지 않았으면 아무것도 등록하지 않는다(가짜 오늘 날짜 등록 방지).
+    /// 날짜를 골랐거나 이름을 입력했으면 등록한다(이름이 비면 기본 이름, 날짜는 표시된 값 사용).
+    /// 둘 다 건드리지 않았으면 아무것도 등록하지 않는다(가짜 오늘 날짜 등록 방지).
     private func finish() {
         if willRegister {
             let name = resolvedName
