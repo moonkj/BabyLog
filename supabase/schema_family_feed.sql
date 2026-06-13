@@ -88,11 +88,16 @@ alter table public.bl_comment       enable row level security;
 
 -- ════════════════ ② 헬퍼 함수 (테이블 생성 후) ════════════════
 
+-- 소유자도 항상 '멤버'로 인정 — 가족 생성 직후(멤버 행 삽입 전)에도 본인이 자기 가족·
+-- 피드를 보고 멤버를 추가할 수 있게(RLS 닭-달걀 방지). 멤버 행 + 소유자 둘 다 허용.
 create or replace function public.bl_is_family_member(p_family uuid)
 returns boolean language sql security definer stable as $$
   select exists (
     select 1 from public.bl_family_member m
     where m.family_id = p_family and m.uid = auth.uid()::text
+  ) or exists (
+    select 1 from public.bl_family f
+    where f.id = p_family and f.owner_uid = auth.uid()::text
   );
 $$;
 
