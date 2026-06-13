@@ -137,7 +137,7 @@ struct FamilyShareScreen: View {
                         .font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
                 } icon: { Image(systemName: "gearshape.fill").foregroundStyle(AppColors.ink3) }
                 guideStep(1, "아이폰 ‘설정’ 앱을 열어요.")
-                guideStep(2, "아래로 내려 ‘사진’을 눌러요.")
+                guideStep(2, "‘앱’을 누른 뒤 목록에서 ‘사진’을 찾아 들어가요. (이전 iOS는 ‘설정’에서 바로 ‘사진’이 보이기도 해요.)")
                 guideStep(3, "‘공유 앨범’ 스위치를 켜요(초록색).")
                 Text("이게 꺼져 있으면 아래 공유 화면에 ‘공유 앨범에 추가’ 항목이 안 보여요.")
                     .font(.system(size: 11.5, weight: .regular)).foregroundStyle(AppColors.ink3)
