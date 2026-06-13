@@ -123,7 +123,9 @@ drop policy if exists bl_family_insert on public.bl_family;
 drop policy if exists bl_family_update on public.bl_family;
 drop policy if exists bl_family_delete on public.bl_family;
 create policy bl_family_select on public.bl_family for select using (bl_is_family_member(id));
-create policy bl_family_insert on public.bl_family for insert with check (owner_uid = public.bl_owner_id());
+-- INSERT는 크루/마켓 검증 패턴과 동일: auth.uid()가 있으면 본인 강제, null이면 행의 owner로 폴백
+-- (누구나 본인 명의로만 생성). 소유·열람 통제는 select/update/delete + bl_owner_id()가 담당.
+create policy bl_family_insert on public.bl_family for insert with check (owner_uid = coalesce(auth.uid()::text, owner_uid));
 create policy bl_family_update on public.bl_family for update using (owner_uid = public.bl_owner_id());
 create policy bl_family_delete on public.bl_family for delete using (owner_uid = public.bl_owner_id());
 
