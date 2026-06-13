@@ -28,6 +28,9 @@ final class AppStore: ObservableObject {
     // 마켓 (로컬 백본)
     @Published private(set) var marketItems: [MarketItem] = []
     @Published private(set) var savedMarketIds: Set<String> = []
+    /// 관심(좋아요)한 매물 스냅샷(id→매물). 다른 동네로 이동하거나 현재 fetch에 없어도
+    /// '관심 목록'에서 계속 볼 수 있도록 저장 시점 사본을 보관(영속).
+    @Published private(set) var savedMarketSnapshots: [String: MarketItem] = [:]
     @Published private(set) var marketChats: [String: [ChatMessage]] = [:]
     private var marketSeeded: Bool = false
     // 크루 (로컬 백본)
@@ -172,6 +175,7 @@ final class AppStore: ObservableObject {
                     self.diaryComments      = saved.diaryComments
                     self.marketItems        = saved.marketItems
                     self.savedMarketIds     = saved.savedMarketIds
+                    self.savedMarketSnapshots = saved.savedMarketSnapshots
                     self.marketChats        = saved.marketChats
                     self.marketSeeded       = saved.marketSeeded
                     self.crews              = saved.crews
@@ -351,18 +355,30 @@ final class AppStore: ObservableObject {
 
     func isMarketSaved(_ id: String) -> Bool { savedMarketIds.contains(id) }
 
-    func toggleMarketSaved(_ id: String) {
-        // 찜 토글은 서버 매물(marketItems에 없음)에도 항상 동작해야 한다.
-        let wasSaved = savedMarketIds.contains(id)
-        if wasSaved { savedMarketIds.remove(id) } else { savedMarketIds.insert(id) }
-        // 찜 수 증감은 로컬 매물에만 반영 (서버 매물 카운트는 서버가 관리)
-        guard let idx = marketItems.firstIndex(where: { $0.id == id }) else { return }
-        if wasSaved {
-            marketItems[idx].favoriteCount = max(0, marketItems[idx].favoriteCount - 1)
+    /// 찜 토글(매물 전달) — 저장 시 스냅샷도 보관해 '관심 목록'이 동네 이동·만료에도 유지되게.
+    func toggleMarketSaved(_ item: MarketItem) {
+        if savedMarketIds.contains(item.id) {
+            savedMarketIds.remove(item.id)
+            savedMarketSnapshots[item.id] = nil
         } else {
-            marketItems[idx].favoriteCount += 1
+            savedMarketIds.insert(item.id)
+            savedMarketSnapshots[item.id] = item   // 저장 시점 사본
         }
     }
+
+    /// 찜 토글(id만) — 스냅샷이 이미 있을 때만 보존, 없으면 id만. 가능하면 item 버전을 쓸 것.
+    func toggleMarketSaved(_ id: String) {
+        if savedMarketIds.contains(id) {
+            savedMarketIds.remove(id)
+            savedMarketSnapshots[id] = nil
+        } else {
+            savedMarketIds.insert(id)
+            if let it = marketItems.first(where: { $0.id == id }) { savedMarketSnapshots[id] = it }
+        }
+    }
+
+    /// 관심 매물 스냅샷 목록(최근 저장 추정 순서는 보장 안 함 — 호출부 정렬).
+    var savedMarketItemSnapshots: [MarketItem] { Array(savedMarketSnapshots.values) }
 
     func marketMessages(itemId: String) -> [ChatMessage] { marketChats[itemId] ?? [] }
 
@@ -464,6 +480,7 @@ final class AppStore: ObservableObject {
             diaryComments: diaryComments,
             marketItems: marketItems,
             savedMarketIds: savedMarketIds,
+            savedMarketSnapshots: savedMarketSnapshots,
             marketChats: marketChats,
             marketSeeded: marketSeeded,
             crews: crews,
@@ -496,6 +513,7 @@ final class AppStore: ObservableObject {
         diaryComments      = state.diaryComments
         marketItems        = state.marketItems
         savedMarketIds     = state.savedMarketIds
+        savedMarketSnapshots = state.savedMarketSnapshots
         marketChats        = state.marketChats
         marketSeeded       = state.marketSeeded
         crews              = state.crews

@@ -397,6 +397,23 @@ struct MarketDetailBottomBar: View {
                     .font(.system(size: 16, weight: .bold)).foregroundStyle(AppColors.ink3)
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            } else if item.status == .reserved {
+                // 예약중 — 구매는 비활성(예약자 보호), 채팅은 가능(대기 문의)
+                Button { onChat() } label: {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 19, weight: .bold)).foregroundStyle(AppColors.ink2)
+                        .frame(width: 50, height: 50)
+                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.92))
+                .accessibilityLabel("판매자와 채팅")
+
+                Text("예약중")
+                    .font(.system(size: 16, weight: .bold)).foregroundStyle(AppColors.ink3)
+                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    .accessibilityLabel("예약중인 상품")
             } else {
                 // 채팅(보조) + 구매하기(주)
                 Button { onChat() } label: {

@@ -378,9 +378,11 @@ struct MkSellFlowSheet: View {
             let newID = await MarketBackend.createItem(hood: hood, item: item, photos: photos)
             await MainActor.run {
                 submitting = false
-                if newID != nil {
-                    // 즉시 UI 반영을 위해 로컬에도 추가
-                    store.addMarketItem(item)
+                if let newID {
+                    // 로컬 store에는 '서버 id'로 추가 — 클라 UUID로 넣으면 서버 row와 불일치해
+                    // 유령 매물(뱃지 오트리거·사진 고아·상태변경 0행)이 된다. id를 맞춰 정합 유지.
+                    var stored = item; stored.id = newID
+                    store.addMarketItem(stored)
                     Haptics.success()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showComplete = true }
                 } else {

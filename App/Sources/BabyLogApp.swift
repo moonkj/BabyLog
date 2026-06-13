@@ -33,12 +33,24 @@ struct BabyLogApp: App {
                     store.enableAutoPersist()
                     store.refreshBadgeAwards()   // 첫 실행 시드 / 닫힌 새 획득 감지
                     notifications.start()
+                    await flushPendingReports()  // 신고 증거 업로드 — 마켓 탭 재진입에 의존하지 않게
                     await setupNotifications()
                 }
                 // 백그라운드 전환 시 즉시 저장 — debounce(0.5s) 대기 중 강제종료로 마지막 기록이 유실되지 않게.
+                // 포그라운드 복귀 시 미업로드 신고 재시도(증거 서버 보존).
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background || phase == .inactive { store.persistNow() }
+                    else if phase == .active { Task { await flushPendingReports() } }
                 }
+        }
+    }
+
+    /// 미업로드 거래 신고(증거)를 서버에 재전송 — 앱 시작/포그라운드 복귀 시점.
+    /// (이전엔 마켓 탭 진입 시에만 재시도돼 증거가 사용자 동선에 의존했음.)
+    private func flushPendingReports() async {
+        guard SupabaseConfig.isConfigured else { return }
+        for r in store.pendingReports {
+            if await MarketBackend.uploadReport(r) { store.markReportUploaded(r.id) }
         }
     }
 

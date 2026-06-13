@@ -111,7 +111,7 @@ struct MarketItemDetail: View {
                 item: displayItem,
                 isFavorited: Binding(
                     get: { store.isMarketSaved(item.id) },
-                    set: { _ in store.toggleMarketSaved(item.id) }
+                    set: { _ in store.toggleMarketSaved(displayItem) }   // 스냅샷 저장(관심 목록 보존)
                 ),
                 isMine: liveItem.mine,
                 onChat: { showChatSheet = true },

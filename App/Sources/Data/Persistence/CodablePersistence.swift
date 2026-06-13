@@ -81,6 +81,8 @@ struct PersistableState: Codable, Equatable {
     // 마켓 (로컬 백본 — 추후 Supabase 동기화)
     var marketItems: [MarketItem]
     var savedMarketIds: Set<String>
+    /// 관심 매물 스냅샷(id→매물) — 동네 이동·만료에도 관심 목록 유지.
+    var savedMarketSnapshots: [String: MarketItem]
     var marketChats: [String: [ChatMessage]]
     var marketSeeded: Bool
     // 크루 (로컬 백본)
@@ -117,6 +119,7 @@ struct PersistableState: Codable, Equatable {
         diaryComments: [String: [String]] = [:],
         marketItems: [MarketItem] = [],
         savedMarketIds: Set<String> = [],
+        savedMarketSnapshots: [String: MarketItem] = [:],
         marketChats: [String: [ChatMessage]] = [:],
         marketSeeded: Bool = false,
         crews: [CrewMeetup] = [],
@@ -145,6 +148,7 @@ struct PersistableState: Codable, Equatable {
         self.diaryComments = diaryComments
         self.marketItems = marketItems
         self.savedMarketIds = savedMarketIds
+        self.savedMarketSnapshots = savedMarketSnapshots
         self.marketChats = marketChats
         self.marketSeeded = marketSeeded
         self.crews = crews
@@ -169,7 +173,7 @@ struct PersistableState: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case pregnancies, children, growthRecords, diaryEntries, expenses, vaccineCompletions, pregnancyLogs
         case likedDiaryIds, diaryComments
-        case marketItems, savedMarketIds, marketChats, marketSeeded
+        case marketItems, savedMarketIds, savedMarketSnapshots, marketChats, marketSeeded
         case crews, joinedCrewIds, crewSeeded
         case joinedCrewGroupIds, likedCrewPostIds
         case vaccineHospitals, checkupDoneKeys
@@ -192,6 +196,7 @@ struct PersistableState: Codable, Equatable {
         diaryComments  = try container.decodeIfPresent([String: [String]].self, forKey: .diaryComments) ?? [:]
         marketItems    = try container.decodeIfPresent([MarketItem].self, forKey: .marketItems) ?? []
         savedMarketIds = try container.decodeIfPresent(Set<String>.self, forKey: .savedMarketIds) ?? []
+        savedMarketSnapshots = try container.decodeIfPresent([String: MarketItem].self, forKey: .savedMarketSnapshots) ?? [:]
         marketChats    = try container.decodeIfPresent([String: [ChatMessage]].self, forKey: .marketChats) ?? [:]
         marketSeeded   = try container.decodeIfPresent(Bool.self, forKey: .marketSeeded) ?? false
         crews          = try container.decodeIfPresent([CrewMeetup].self, forKey: .crews) ?? []

@@ -265,8 +265,17 @@ struct MarketScreen: View {
     private var items: [MarketItem] { serverMode ? (sharedItems ?? []) : store.marketItems }
 
     private var filteredItems: [MarketItem] {
-        var result = items
-        if showSavedOnly { result = result.filter { store.isMarketSaved($0.id) } }   // 관심만
+        var result: [MarketItem]
+        if showSavedOnly {
+            // 관심 목록: 현재 동네 매물 중 저장분 + 현재 목록에 없는 저장 스냅샷(다른 동네·만료분)을 합쳐
+            // 동네 이동·만료에도 찜한 매물이 사라지지 않게 한다.
+            let live = items.filter { store.isMarketSaved($0.id) }
+            let liveIDs = Set(live.map { $0.id })
+            let extras = store.savedMarketItemSnapshots.filter { store.isMarketSaved($0.id) && !liveIDs.contains($0.id) }
+            result = live + extras.sorted { $0.createdAt > $1.createdAt }
+        } else {
+            result = items
+        }
         if selectedCategory != .all { result = result.filter { $0.category == selectedCategory } }
         return result
     }
