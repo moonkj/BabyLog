@@ -173,14 +173,20 @@ struct MarketDetailInfoBlock: View {
                 }
             }
 
-            // 상품 설명 (등록 설명 우선, 없으면 기본 안내)
-            Text(item.description.isEmpty
-                 ? "\(item.monthsTag) 동안 사용했어요. 같은 동네라 직거래 환영합니다 :)"
-                 : item.description)
-                .font(.system(size: 14.5, weight: .regular))
-                .foregroundStyle(AppColors.ink2)
-                .lineSpacing(4)
-                .padding(.top, 4)
+            // 상품 설명 — 판매자가 쓴 것만 그대로 표시. 설명이 없으면 문구를 지어내지 않는다
+            // (정직 원칙: 판매자가 안 쓴 사용기간·인사말을 앱이 만들어내면 안 됨).
+            if !item.description.isEmpty {
+                Text(item.description)
+                    .font(.system(size: 14.5, weight: .regular))
+                    .foregroundStyle(AppColors.ink2)
+                    .lineSpacing(4)
+                    .padding(.top, 4)
+            } else {
+                Text("판매자가 남긴 설명이 없어요.")
+                    .font(.system(size: 13.5, weight: .regular))
+                    .foregroundStyle(AppColors.ink3)
+                    .padding(.top, 4)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(itemAccessibilityLabel)

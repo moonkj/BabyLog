@@ -643,13 +643,20 @@ final class LiveVaccineScheduleProvider: VaccineScheduleProviding {
         components.encodePlusInQuery()   // serviceKey의 '+' 보호 — 병원 검색과 동일 처리
 
         guard let url = components.url else {
-            throw APIError.invalidURL
+            return try await fallback.schedule(birthDate: birthDate)
         }
 
-        // ⚠️ Live 실패 시 Mock 폴백 금지 — 샘플 접종일정이 실제 일정처럼 보이면 위험(아동 안전).
-        //    실패는 그대로 throw하고 UI의 빈 상태/오류 처리에 맡긴다. Mock은 키 미설정일 때만.
-        let response = try await client.get(url, as: KDCAVaccineResponse.self)
-        return try VaccineResponseParser.parse(response, birthDate: birthDate)
+        // 예방접종 표준일정표는 '고정 공공 참조 데이터'(병원 영업시간처럼 가변·미확인이 아님).
+        // Live 호출이 실패(키 오류·엔드포인트 장애 등)해도 빈 에러 화면 대신 국가 표준일정으로
+        // 폴백한다 — 표준일정은 공식·결정적이며 화면에 '의료상담 대체 안 함' 면책이 항상 표기된다.
+        do {
+            let response = try await client.get(url, as: KDCAVaccineResponse.self)
+            let parsed = try VaccineResponseParser.parse(response, birthDate: birthDate)
+            // 응답이 비면(파싱 0건) 표준일정으로 폴백 — '0건'을 정상으로 오인하지 않는다.
+            return parsed.isEmpty ? try await fallback.schedule(birthDate: birthDate) : parsed
+        } catch {
+            return try await fallback.schedule(birthDate: birthDate)
+        }
     }
 }
 

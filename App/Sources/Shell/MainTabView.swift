@@ -81,21 +81,19 @@ struct MainTabView: View {
                     .zIndex(10)
             }
         }
-        // 전역 뱃지 획득 카드 — 어느 화면에서든 표시
-        .overlay {
-            if let badge = store.pendingBadgeAward {
-                BadgeAwardCard(badge: badge) {
-                    withAnimation(.easeOut(duration: 0.25)) { store.pendingBadgeAward = nil }
-                }
-                // 외부 frame 제거 — 카드 내부에 maxWidth 320 제약이 이미 있고,
-                // 여기서 폭을 제한하면 카드 내부의 풀스크린 스크림이 세로 띠로 잘려
-                // 띠 밖 탭이 하부 UI로 전달되는 문제가 있었음
-                .id(badge.id) // 연속 획득 시 뷰 identity 분리 — 이전 카드의 4.5초 자동 닫힘 타이머가 새 카드를 조기 dismiss하지 않도록
-                .transition(.opacity)
-                .zIndex(20)
-            }
+        // 전역 뱃지 획득 카드 — 윈도우 레벨로 띄워 시트/상세 위에도 항상 보이게 한다.
+        // (.overlay는 UIKit 시트 뒤로 가려지고 스크림도 잘렸음 → BadgeOverlayWindow로 이전)
+        .onChange(of: store.pendingBadgeAward?.id) { _, _ in presentBadgeIfNeeded() }
+        .onAppear { presentBadgeIfNeeded() }
+    }
+
+    /// pendingBadgeAward 변화에 맞춰 윈도우 카드를 띄우거나 내린다.
+    private func presentBadgeIfNeeded() {
+        if let badge = store.pendingBadgeAward {
+            BadgeOverlayWindow.show(badge) { store.pendingBadgeAward = nil }
+        } else {
+            BadgeOverlayWindow.hide()
         }
-        .animation(.easeOut(duration: 0.25), value: store.pendingBadgeAward?.id)
     }
 
     /// 야간 초저휘도 — 설정 ON 시 22~06시에 은은한 디밍(새벽 수유 배려). 5분마다 시간 재평가.
