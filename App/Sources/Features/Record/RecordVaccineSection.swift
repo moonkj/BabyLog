@@ -301,6 +301,87 @@ struct VaccineSection: View {
 
     @ViewBuilder
     private func vaccineGroupRow(_ g: VaccineGroup, child: Child) -> some View {
+        if g.doses.count == 1, let v = g.doses.first {
+            singleDoseRow(v, name: g.name, child: child)   // 1회 접종 — 펼치지 않고 행에서 바로 체크
+        } else {
+            multiDoseGroupRow(g, child: child)             // 다회(1·2·3차) — 펼쳐 회차별 체크
+        }
+    }
+
+    /// 접종 완료 토글 + 신규 완료 시 병원 입력 유도(회차/단일 공용).
+    private func toggleDose(_ v: VaccineRecord, child: Child) {
+        let wasDone = isDone(v)
+        Haptics.light()
+        withAnimation(.easeOut(duration: 0.18)) {
+            store.toggleVaccine(childId: child.id, vaccineId: v.vaccineId)
+        }
+        if !wasDone, store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId) == nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                presentHospitalPrompt(vaccineId: v.vaccineId, name: displayName(for: v.vaccineId))
+            }
+        }
+    }
+
+    /// 1회 접종 그룹 — 행 전체를 탭하면 바로 완료 토글(펼침 불필요).
+    @ViewBuilder
+    private func singleDoseRow(_ v: VaccineRecord, name: String, child: Child) -> some View {
+        let done = isDone(v)
+        Button { toggleDose(v, child: child) } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                        .fill(done ? AppColors.primarySoft : AppColors.surface3)
+                        .frame(width: 40, height: 40)
+                    Image(systemName: done ? "checkmark.circle.fill" : "syringe")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(done ? AppColors.primary : AppColors.ink3)
+                }
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(name)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(AppColors.ink)
+                    Text(ageLabel(for: v, birthDate: child.birthDate))
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink3)
+                }
+
+                Spacer(minLength: 0)
+
+                // 상태 배지
+                if done {
+                    BLBadge(tone: .mint, text: "완료", systemIcon: "checkmark").fixedSize()
+                } else if let d = dDayLabel(for: v) {
+                    BLBadge(tone: d == "D-Day" ? .coral : .amber, text: d, systemIcon: "calendar").fixedSize()
+                } else {
+                    BLBadge(tone: .grey, text: "예정", systemIcon: "clock").fixedSize()
+                }
+
+                // 체크 인디케이터(행 전체가 토글)
+                ZStack {
+                    Circle().strokeBorder(done ? AppColors.primary : AppColors.line2, lineWidth: 2)
+                        .frame(width: 24, height: 24)
+                    CheckDrawView(isOn: done, size: 14, color: AppColors.primary)
+                }
+                .frame(width: 32, height: 32)
+                .accessibilityHidden(true)
+            }
+            .padding(.horizontal, Spacing.s4)
+            .padding(.vertical, Spacing.s3)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.99))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(name), \(ageLabel(for: v, birthDate: child.birthDate)), \(done ? "접종 완료" : "미접종")")
+        .accessibilityHint(done ? "두 번 탭하면 완료 취소" : "두 번 탭하면 접종 완료로 표시")
+        .accessibilityAddTraits(done ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// 다회 접종 그룹 — 요약 행(회차 도트) + 탭하면 회차별 펼침.
+    @ViewBuilder
+    private func multiDoseGroupRow(_ g: VaccineGroup, child: Child) -> some View {
         let doneCount = g.doses.filter { isDone($0) }.count
         let total = g.doses.count
         let expanded = expandedGroups.contains(g.id)
@@ -398,18 +479,7 @@ struct VaccineSection: View {
             hospital: store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId),
             done: isDone(v),
             dDay: dDayLabel(for: v),
-            onToggle: {
-                let wasDone = isDone(v)
-                withAnimation(.easeOut(duration: 0.18)) {
-                    store.toggleVaccine(childId: child.id, vaccineId: v.vaccineId)
-                }
-                if !wasDone,
-                   store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId) == nil {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        presentHospitalPrompt(vaccineId: v.vaccineId, name: name)
-                    }
-                }
-            },
+            onToggle: { toggleDose(v, child: child) },
             onTapHospital: { openInMaps($0) },
             onEditHospital: { presentHospitalPrompt(vaccineId: v.vaccineId, name: name) }
         )
