@@ -21,6 +21,7 @@ struct SettingsScreen: View {
     @AppStorage("bl_caregiver_title")  private var caregiverTitle: String  = "양육자"
     @AppStorage("bl_nickname")         private var nickname: String        = "양육자님"
     @AppStorage("bl_cloud_sync")       private var cloudSync: Bool         = false
+    @AppStorage("bl_memory_notif")     private var memoryNotif: Bool       = true
     @ObservedObject private var auth = AuthStore.shared
     @State private var showDeleteAccount = false
     @State private var authAlert: String? = nil
@@ -73,6 +74,9 @@ struct SettingsScreen: View {
         .sensoryFeedback(.selection, trigger: fabSide)
         .sensoryFeedback(.selection, trigger: caregiverTitle)
         .sensoryFeedback(.impact(weight: .light), trigger: nightDim)
+        .sensoryFeedback(.impact(weight: .light), trigger: memoryNotif)
+        // 추억 알림 토글 — 실제로 알림을 등록/취소(체감되는 실동작)
+        .onChange(of: memoryNotif) { _, on in applyMemoryNotif(on) }
         .sheet(isPresented: $showShareSheet, onDismiss: {
             // 공유/저장 후 임시 파일 정리 — 반복 내보내기 시 tmp에 대용량 백업이 쌓이지 않도록.
             if let url = exportURL { try? FileManager.default.removeItem(at: url); exportURL = nil }
@@ -207,6 +211,14 @@ struct SettingsScreen: View {
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.ink3)
                             .fixedSize(horizontal: false, vertical: true)
+                        // 즉시 체감용 상태 — 낮엔 토글해도 화면이 안 어두워져 '안 됨'으로 보이는 오해 방지
+                        if nightDim {
+                            Text(isNightNow ? "● 지금 적용 중 — 화면이 어두워졌어요"
+                                            : "○ 켜짐 — 밤 22시가 되면 자동으로 어두워져요")
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .foregroundStyle(isNightNow ? AppColors.primary : AppColors.ink3)
+                                .padding(.top, 2)
+                        }
                     }
                     Spacer(minLength: 0)
                     Toggle("", isOn: $nightDim)
@@ -431,22 +443,31 @@ struct SettingsScreen: View {
 
     private var notificationSection: some View {
         settingsSection(eyebrow: "알림", title: "알림 관리") {
-            // 추억 알림 안내 (실제 발송되는 유일한 알림)
+            // 추억 알림 토글 (실제 발송되는 유일한 알림 — 직접 켜고 끔)
             settingsRow(
                 icon: "bell.badge.fill",
                 iconBg: Color(hex: 0xFAEEDA),
                 iconFg: Color(hex: 0x98711E)
             ) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("추억 알림")
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(AppColors.ink)
-                    Text("기록한 다이어리를 바탕으로 ‘N년 전 오늘’을 가끔 보여드려요. 광고·마케팅 알림은 보내지 않습니다.")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppColors.ink3)
-                        .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: Spacing.s3) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("추억 알림")
+                            .font(.system(size: 14.5, weight: .semibold))
+                            .foregroundStyle(AppColors.ink)
+                        Text("기록한 다이어리를 바탕으로 ‘N년 전 오늘’을 가끔 보여드려요. 광고·마케팅 알림은 없습니다.")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Toggle("", isOn: $memoryNotif)
+                        .labelsHidden()
+                        .tint(AppColors.primary)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("추억 알림. \(memoryNotif ? "켜짐" : "꺼짐")")
+            .accessibilityAddTraits(.isToggle)
 
             Divider()
                 .overlay(AppColors.line)
@@ -664,6 +685,29 @@ struct SettingsScreen: View {
     }
 
     // MARK: - Helpers
+
+    /// 현재 시각이 야간(22~06시)인지 — 야간모드 토글의 즉시 상태 표시용.
+    private var isNightNow: Bool {
+        let h = Calendar.current.component(.hour, from: Date())
+        return h >= 22 || h < 6
+    }
+
+    /// 추억 알림 토글 적용 — 켜면 권한 요청 후 실제 등록, 끄면 보류 중인 추억 알림을 모두 취소.
+    private func applyMemoryNotif(_ on: Bool) {
+        let scheduler = UNPendingScheduler()
+        if on {
+            let entries = store.diaryEntries
+            let childName = store.selectedChild?.name ?? "우리 아이"
+            Task {
+                guard await scheduler.requestAuthorization() else { return }
+                let reqs = NotificationScheduler.memoryReminders(
+                    diaryEntries: entries, childName: childName, now: Date())
+                scheduler.schedule(reqs)
+            }
+        } else {
+            scheduler.cancelMemoryReminders()
+        }
+    }
 
     /// 데이터 내보내기 실행
     private func handleExport() {

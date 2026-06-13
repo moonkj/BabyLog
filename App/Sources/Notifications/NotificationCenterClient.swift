@@ -69,4 +69,14 @@ final class UNPendingScheduler: PendingScheduler {
             }
         }
     }
+
+    // MARK: cancel
+
+    /// "memory-" prefix로 등록된 추억 알림을 모두 취소한다(설정에서 추억 알림 OFF 시).
+    func cancelMemoryReminders() {
+        center.getPendingNotificationRequests { reqs in
+            let ids = reqs.map(\.identifier).filter { $0.hasPrefix("memory-") }
+            self.center.removePendingNotificationRequests(withIdentifiers: ids)
+        }
+    }
 }

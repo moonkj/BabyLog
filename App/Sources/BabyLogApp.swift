@@ -74,6 +74,9 @@ struct BabyLogApp: App {
         // 실제 접종 알림은 추후 아이의 KDCA 스케줄 기반으로 스케줄링한다.
 
         // "N년 전 오늘" 추억 사진 알림 (월 1회, 실 다이어리 기반)
+        // 설정의 '추억 알림' 토글(bl_memory_notif, 기본 ON)이 꺼져 있으면 등록하지 않는다.
+        let memoryNotifOn = (UserDefaults.standard.object(forKey: "bl_memory_notif") as? Bool) ?? true
+        guard memoryNotifOn else { return }
         let memories = NotificationScheduler.memoryReminders(
             diaryEntries: store.diaryEntries,
             childName: store.selectedChild?.name ?? "우리 아이",
