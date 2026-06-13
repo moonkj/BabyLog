@@ -508,10 +508,12 @@ struct NearbyScreen: View {
 
     /// 카드에 넘길 영업 상태 — 실제 조회 결과 우선. 조회 중엔 확인중, 끝났는데 결과 없으면 미확인.
     private func openState(for h: HospitalInfo) -> HospitalOpenState {
-        if let s = openStatus[h.id] { return s ? .open : .closed }
+        // 약국: 목록 응답에 요일별 운영시간이 포함돼 hoursKnown=true → 바로 영업중/종료.
+        if h.hoursKnown { return h.isOpenNow ? .open : .closed }
+        if let s = openStatus[h.id] { return s ? .open : .closed }   // 병원: 상세조회 결과
         if openChecked.contains(h.id) { return .unknown }       // 조회했으나 영업시간 불명
         if openLoading && selectedCategory == .hospital { return .checking }  // 아직 조회 중
-        return .unknown                                          // 조회 끝(진료시간 데이터 없음)·약국
+        return .unknown                                          // 시간 데이터 없음(폴백·전화 확인)
     }
 
     /// 두 좌표 간 직선거리(미터) — 캐시 무효화 판단용.
@@ -831,9 +833,9 @@ struct NearbyScreen: View {
             .accessibilityLabel("주변을 살펴보는 중")
 
         case .loaded(let hospitals):
-            // 영업시간 데이터가 있는 곳이 하나라도 있으면 영업중 카운트, 아니면(기본 목록) 총 개수만 정직 표기.
-            // 병원은 실제 영업조회 결과로 카운트, 약국 등은 미확인이라 총 개수만.
-            let checksOpen = selectedCategory == .hospital
+            // 영업시간 데이터가 있으면 '영업중 N곳', 없으면 총 개수만 정직 표기.
+            // 병원=상세조회 결과 / 약국=목록에 시간 포함(hoursKnown) → 둘 다 영업 카운트.
+            let checksOpen = selectedCategory == .hospital || hospitals.contains { $0.hoursKnown }
             let openCount = hospitals.filter { openState(for: $0) == .open }.count
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 if ProviderFactory.isMock(APIConfig.hiraKeyName) {
