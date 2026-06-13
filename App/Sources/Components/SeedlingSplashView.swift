@@ -79,11 +79,18 @@ struct SeedlingSplashView: View {
                 }
                 .frame(width: discSize, height: discSize)
 
-                Text("베이비로그")
-                    .font(.system(size: 22, weight: .heavy))
-                    .tracking(-0.4)
-                    .foregroundStyle(AppColors.ink)
-                    .opacity(titleShow ? 1 : 0)
+                VStack(spacing: 6) {
+                    Text("베이비로그")
+                        .font(.system(size: 22, weight: .heavy))
+                        .tracking(-0.4)
+                        .foregroundStyle(AppColors.ink)
+
+                    Text("아이의 성장을 평생 담다")
+                        .font(.system(size: 13, weight: .semibold))
+                        .tracking(0.2)
+                        .foregroundStyle(AppColors.ink3)
+                }
+                .opacity(titleShow ? 1 : 0)
             }
         }
         .opacity(fade ? 0 : 1)
