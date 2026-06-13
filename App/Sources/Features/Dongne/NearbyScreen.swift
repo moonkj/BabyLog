@@ -1108,7 +1108,7 @@ private struct HospitalCard: View {
                         .lineSpacing(1)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    // 영업상태 뱃지(안 잘리게 고정) — 실제 상세조회 결과 기반
+                    // 영업상태 뱃지 — 자체 줄(넓은 '전화로 확인' 배지가 거리·과목을 밀어 짤리던 문제 수정)
                     HStack(spacing: Spacing.s2) {
                         switch openState {
                         case .open:
@@ -1121,15 +1121,15 @@ private struct HospitalCard: View {
                             // 공공데이터에 진료시간 레코드가 없는 곳 — 추측하지 않고 전화 확인을 안내.
                             BLBadge(tone: .grey, text: "전화로 확인", systemIcon: "phone.fill", dot: false).fixedSize()
                         }
-
-                        Text("\(Self.distanceText(hospital.distanceM)) · \(hospital.department)")
-                            .font(AppFont.caption)
-                            .foregroundStyle(AppColors.ink2)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-
                         Spacer(minLength: 0)
                     }
+
+                    // 거리 · 진료과목 — 배지와 분리된 줄(전폭 사용으로 짤림 방지)
+                    Text("\(Self.distanceText(hospital.distanceM)) · \(hospital.department)")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
 
                 Spacer(minLength: 0)

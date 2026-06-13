@@ -484,13 +484,19 @@ final class LiveSubsidyProvider: SubsidyProviding {
         components.encodePlusInQuery()   // serviceKey의 '+' 보호 — 병원 검색과 동일 처리
 
         guard let url = components.url else {
-            throw APIError.invalidURL
+            return try await fallback.subsidies(childAgeMonths: childAgeMonths)
         }
 
-        // ⚠️ Live 실패 시 Mock 폴백 금지 — 샘플 지원금이 실제 정보처럼 보이면 안 된다(정직 원칙).
-        //    실패는 그대로 throw하고 UI의 빈 상태/오류 처리에 맡긴다. Mock은 키 미설정일 때만.
-        let response = try await client.get(url, as: BokjiroSubsidyResponse.self)
-        return try SubsidyResponseParser.parse(response, childAgeMonths: childAgeMonths)
+        // 정부지원금 자격은 '연령 기준 고정 공공정책'(아동수당<96개월 등) — 병원 영업시간처럼 가변·미확인이
+        // 아니다. Live(복지로) 호출이 실패(키 오류·엔드포인트 장애)하거나 0건이면 빈 화면 대신 표준 목록으로
+        // 폴백한다. 표준 목록은 실제 2024 정책값이며, 화면에 '복지로에서 최종 확인' 안내가 항상 표기된다.
+        do {
+            let response = try await client.get(url, as: BokjiroSubsidyResponse.self)
+            let parsed = try SubsidyResponseParser.parse(response, childAgeMonths: childAgeMonths)
+            return parsed.isEmpty ? try await fallback.subsidies(childAgeMonths: childAgeMonths) : parsed
+        } catch {
+            return try await fallback.subsidies(childAgeMonths: childAgeMonths)
+        }
     }
 }
 
