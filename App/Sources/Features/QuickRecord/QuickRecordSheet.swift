@@ -585,7 +585,7 @@ struct QuickRecordSheet: View {
                 savedAnything = true
             }
         }
-        if let w = blDecimal(weightText) {
+        if let w = blDecimal(weightText), w > 0 {
             store.addPregnancyWeight(pregnancyId: preg.id, kg: w)
             savedAnything = true
         }
@@ -633,8 +633,11 @@ struct QuickRecordSheet: View {
                 for (idx, tid) in targetIds.enumerated() {
                     let refs = selectedImages.compactMap { PhotoStore.save($0) }
                     let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
+                    // 사진 저장이 모두 실패(디스크 오류 등)하고 메모·이정표도 없으면 빈 기록을
+                    // 만들지 않는다 — 성공 위장·쓰레기 기록 방지(정직 원칙).
+                    guard content != nil || milestoneText != nil || !refs.isEmpty || videoFile != nil else { continue }
                     // 가족 공유용 파일 URL은 첫 번째 아이 사본 기준으로 1세트만 수집(중복 공유 방지)
-                    if idx == 0 {
+                    if shareURLs.isEmpty {
                         shareURLs = refs.map { PhotoStore.photosDirectory.appendingPathComponent($0) }
                         if let vf = videoFile { shareURLs.append(PhotoStore.photosDirectory.appendingPathComponent(vf)) }
                     }
@@ -646,9 +649,9 @@ struct QuickRecordSheet: View {
                         photoRefs: refs,
                         videoRef:  videoFile
                     )
+                    didSave = true
                 }
                 pendingShareURLs = (shareToFamily && hasMedia) ? shareURLs : []
-                didSave = true
             }
             // 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
             // (showDetail 여부가 아니라 실제 입력 여부로 판단 — 상세를 접어도 입력값 누락 없음)

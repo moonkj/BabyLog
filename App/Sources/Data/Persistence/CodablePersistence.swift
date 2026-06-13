@@ -260,7 +260,13 @@ struct LocalPersistence {
         let legacy = LocalPersistence().url
         if !FileManager.default.fileExists(atPath: groupURL.path),
            FileManager.default.fileExists(atPath: legacy.path) {
-            try? FileManager.default.copyItem(at: legacy, to: groupURL)
+            do {
+                try FileManager.default.copyItem(at: legacy, to: groupURL)
+            } catch {
+                // 마이그레이션 복사 실패 시 그룹 URL로 진행하면 기존 사용자가 빈 상태로 시작하고
+                // 레거시 데이터가 고아가 된다 → 복사 성공 전까지는 레거시 경로를 계속 사용.
+                return LocalPersistence(url: legacy)
+            }
         }
         return LocalPersistence(url: groupURL)
     }

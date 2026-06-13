@@ -45,7 +45,7 @@ enum MarketItemGrade: String, CaseIterable {
 
 /// 판매자 티어
 enum MarketSellerTier: String {
-    case golden = "골든 맘"
+    case golden = "골든"          // 성별 중립 — '골든 맘' 금지(맘/파파는 사용자 호칭 설정으로만)
     case warm   = "따뜻한 이웃"
     case new    = "신규"
 
