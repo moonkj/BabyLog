@@ -1108,7 +1108,8 @@ private struct HospitalCard: View {
                         .lineSpacing(1)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    // 영업상태 뱃지 — 자체 줄(넓은 '전화로 확인' 배지가 거리·과목을 밀어 짤리던 문제 수정)
+                    // 영업상태 뱃지 — 병원·약국 공통. 시간 데이터를 알면 영업중/종료, 없으면 전화 확인.
+                    // (약국 시간은 응급의료포털 약국정보 서비스 구독 시 채워짐 → openState가 open/closed 반환)
                     HStack(spacing: Spacing.s2) {
                         switch openState {
                         case .open:
@@ -1118,7 +1119,7 @@ private struct HospitalCard: View {
                         case .checking:
                             BLBadge(tone: .grey, text: "영업시간 확인 중…", systemIcon: nil, dot: false).fixedSize()
                         case .unknown:
-                            // 공공데이터에 진료시간 레코드가 없는 곳 — 추측하지 않고 전화 확인을 안내.
+                            // 시간 데이터가 없는 곳 — 추측하지 않고 전화 확인을 안내.
                             BLBadge(tone: .grey, text: "전화로 확인", systemIcon: "phone.fill", dot: false).fixedSize()
                         }
                         Spacer(minLength: 0)
