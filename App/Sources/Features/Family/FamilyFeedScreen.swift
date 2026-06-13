@@ -74,7 +74,7 @@ struct FamilyFeedScreen: View {
                     .font(.system(size: 13)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
                 Button {
                     Task { busy = true; family = await FamilyFeedBackend.createFamily(name: "우리 가족"); busy = false
-                        if family == nil { errorMsg = "만들지 못했어요. 잠시 후 다시 시도해 주세요." } else { await load() } }
+                        if family == nil { errorMsg = FamilyFeedBackend.lastError ?? "만들지 못했어요. 잠시 후 다시 시도해 주세요." } else { await load() } }
                 } label: {
                     Text(busy ? "만드는 중…" : "가족 보관함 만들기")
                         .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)

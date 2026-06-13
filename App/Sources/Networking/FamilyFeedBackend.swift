@@ -8,6 +8,9 @@ import UIKit
 
 enum FamilyFeedBackend {
 
+    /// 마지막 실패 상세(진단용 — UI 알럿에 노출). 성공 시 nil.
+    nonisolated(unsafe) static var lastError: String?
+
     private static func authBearer() async -> String {
         if let t = await AuthStore.shared.validAccessToken() { return t }
         return SupabaseConfig.anonKey ?? ""
@@ -20,11 +23,25 @@ enum FamilyFeedBackend {
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // 이 프로젝트는 RLS에서 auth.uid()가 null로 떨어져, 소유자 식별을 x-device-id 헤더로도
+        // 받는다(coalesce(auth.uid, header) 패턴 — 크루/마켓과 동일). 로그인 시 ownerID()=uid.
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")
         return req
     }
 
     private static func decode<T: Decodable>(_ data: Data, _ type: T.Type) -> T? {
         try? JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// JWT payload(가운데 세그먼트) 디코딩 — 진단용(sub/role 확인).
+    private static func decodeJWT(_ token: String) -> [String: Any] {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return [:] }
+        var s = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while s.count % 4 != 0 { s += "=" }
+        guard let d = Data(base64Encoded: s),
+              let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return [:] }
+        return obj
     }
 
     // MARK: - 가족
@@ -40,15 +57,29 @@ enum FamilyFeedBackend {
 
     /// 가족 생성 + 본인을 parent 멤버로 추가. 생성된 가족 반환.
     static func createFamily(name: String) async -> BLFamily? {
-        guard let uid = await AuthStore.shared.userId else { return nil }
-        guard var req = await rest("/bl_family", method: "POST") else { return nil }
+        lastError = nil
+        guard let uid = await AuthStore.shared.userId else { lastError = "로그인 안 됨(uid 없음)"; return nil }
+        // 진단: 실제 보내는 토큰의 sub/role을 디코딩(auth.uid()=sub, role이 authenticated여야 RLS 통과).
+        guard let token = await AuthStore.shared.validAccessToken() else {
+            lastError = "유효 토큰 없음 — 다시 로그인 필요. uid=\(uid.prefix(8))"; return nil
+        }
+        let jwt = decodeJWT(token)
+        let diag = "[owner=\(uid.prefix(8)) sub=\((jwt["sub"] as? String ?? "nil").prefix(8)) role=\(jwt["role"] as? String ?? "nil")]"
+        guard var req = await rest("/bl_family", method: "POST") else { lastError = "서버 미구성"; return nil }
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "owner_uid": uid, "name": String(name.prefix(40)),
         ])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let fam = decode(data, [BLFamily].self)?.first else { return nil }
+              let http = resp as? HTTPURLResponse else { lastError = "네트워크 오류 \(diag)"; return nil }
+        guard (200...299).contains(http.statusCode) else {
+            lastError = "HTTP \(http.statusCode) \(diag): \(String(data: data, encoding: .utf8)?.prefix(120) ?? "")"
+            return nil
+        }
+        guard let fam = decode(data, [BLFamily].self)?.first else {
+            lastError = "생성됐지만 조회 0건(RLS 패치 미적용?). HTTP \(http.statusCode) body=\(String(data: data, encoding: .utf8)?.prefix(120) ?? "")"
+            return nil
+        }
         // 본인 멤버 등록(parent)
         let nickname = UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님"
         if var mreq = await rest("/bl_family_member", method: "POST") {

@@ -88,16 +88,26 @@ alter table public.bl_comment       enable row level security;
 
 -- ════════════════ ② 헬퍼 함수 (테이블 생성 후) ════════════════
 
+-- 소유자 식별 — 이 프로젝트는 RLS에서 auth.uid()가 null로 떨어지는 경우가 있어
+-- (크루/마켓도 동일), x-device-id 헤더로 폴백한다. 로그인 시 앱은 ownerID()=auth.uid를 헤더로 보냄.
+create or replace function public.bl_owner_id()
+returns text language sql stable as $$
+  select coalesce(
+    auth.uid()::text,
+    nullif(current_setting('request.headers', true)::json ->> 'x-device-id', '')
+  );
+$$;
+
 -- 소유자도 항상 '멤버'로 인정 — 가족 생성 직후(멤버 행 삽입 전)에도 본인이 자기 가족·
 -- 피드를 보고 멤버를 추가할 수 있게(RLS 닭-달걀 방지). 멤버 행 + 소유자 둘 다 허용.
 create or replace function public.bl_is_family_member(p_family uuid)
 returns boolean language sql security definer stable as $$
   select exists (
     select 1 from public.bl_family_member m
-    where m.family_id = p_family and m.uid = auth.uid()::text
+    where m.family_id = p_family and m.uid = public.bl_owner_id()
   ) or exists (
     select 1 from public.bl_family f
-    where f.id = p_family and f.owner_uid = auth.uid()::text
+    where f.id = p_family and f.owner_uid = public.bl_owner_id()
   );
 $$;
 
@@ -105,7 +115,7 @@ $$;
 
 -- bl_profile: 본인만 읽기. is_pro 쓰기는 service_role(Edge)만(정책 미부여 → 클라 위조 차단).
 drop policy if exists bl_profile_select_self on public.bl_profile;
-create policy bl_profile_select_self on public.bl_profile for select using (uid = auth.uid()::text);
+create policy bl_profile_select_self on public.bl_profile for select using (uid = public.bl_owner_id());
 
 -- bl_family
 drop policy if exists bl_family_select on public.bl_family;
@@ -113,16 +123,16 @@ drop policy if exists bl_family_insert on public.bl_family;
 drop policy if exists bl_family_update on public.bl_family;
 drop policy if exists bl_family_delete on public.bl_family;
 create policy bl_family_select on public.bl_family for select using (bl_is_family_member(id));
-create policy bl_family_insert on public.bl_family for insert with check (owner_uid = auth.uid()::text);
-create policy bl_family_update on public.bl_family for update using (owner_uid = auth.uid()::text);
-create policy bl_family_delete on public.bl_family for delete using (owner_uid = auth.uid()::text);
+create policy bl_family_insert on public.bl_family for insert with check (owner_uid = public.bl_owner_id());
+create policy bl_family_update on public.bl_family for update using (owner_uid = public.bl_owner_id());
+create policy bl_family_delete on public.bl_family for delete using (owner_uid = public.bl_owner_id());
 
 -- bl_family_member
 drop policy if exists bl_member_select on public.bl_family_member;
 drop policy if exists bl_member_insert on public.bl_family_member;
 create policy bl_member_select on public.bl_family_member for select using (bl_is_family_member(family_id));
 create policy bl_member_insert on public.bl_family_member for insert
-  with check (exists (select 1 from public.bl_family f where f.id = family_id and f.owner_uid = auth.uid()::text));
+  with check (exists (select 1 from public.bl_family f where f.id = family_id and f.owner_uid = public.bl_owner_id()));
 
 -- bl_feed_post
 drop policy if exists bl_post_select on public.bl_feed_post;
@@ -130,8 +140,8 @@ drop policy if exists bl_post_insert on public.bl_feed_post;
 drop policy if exists bl_post_delete on public.bl_feed_post;
 create policy bl_post_select on public.bl_feed_post for select using (bl_is_family_member(family_id));
 create policy bl_post_insert on public.bl_feed_post for insert
-  with check (author_uid = auth.uid()::text and bl_is_family_member(family_id));
-create policy bl_post_delete on public.bl_feed_post for delete using (author_uid = auth.uid()::text);
+  with check (author_uid = public.bl_owner_id() and bl_is_family_member(family_id));
+create policy bl_post_delete on public.bl_feed_post for delete using (author_uid = public.bl_owner_id());
 
 -- bl_post_media
 drop policy if exists bl_media_select on public.bl_post_media;
@@ -144,16 +154,16 @@ drop policy if exists bl_reaction_select on public.bl_reaction;
 drop policy if exists bl_reaction_write  on public.bl_reaction;
 drop policy if exists bl_reaction_delete on public.bl_reaction;
 create policy bl_reaction_select on public.bl_reaction for select using (bl_is_family_member(family_id));
-create policy bl_reaction_write  on public.bl_reaction for insert with check (uid = auth.uid()::text and bl_is_family_member(family_id));
-create policy bl_reaction_delete on public.bl_reaction for delete using (uid = auth.uid()::text);
+create policy bl_reaction_write  on public.bl_reaction for insert with check (uid = public.bl_owner_id() and bl_is_family_member(family_id));
+create policy bl_reaction_delete on public.bl_reaction for delete using (uid = public.bl_owner_id());
 
 -- bl_comment
 drop policy if exists bl_comment_select on public.bl_comment;
 drop policy if exists bl_comment_insert on public.bl_comment;
 drop policy if exists bl_comment_delete on public.bl_comment;
 create policy bl_comment_select on public.bl_comment for select using (bl_is_family_member(family_id));
-create policy bl_comment_insert on public.bl_comment for insert with check (uid = auth.uid()::text and bl_is_family_member(family_id));
-create policy bl_comment_delete on public.bl_comment for delete using (uid = auth.uid()::text);
+create policy bl_comment_insert on public.bl_comment for insert with check (uid = public.bl_owner_id() and bl_is_family_member(family_id));
+create policy bl_comment_delete on public.bl_comment for delete using (uid = public.bl_owner_id());
 
 -- ⚠️ 미디어 업로드는 Edge Function(media-upload-url)이 is_pro + 멤버십 확인 후
 --    R2 presigned PUT URL을 발급한다. Postgres엔 키만 기록(바이트 미경유).
