@@ -53,11 +53,11 @@ Deno.serve(async (req) => {
   if (kind !== "photo" && kind !== "video") return json({ error: "bad_kind" }, 400);
 
   // 3) Pro 여부 + 가족 멤버십 확인 (서버 권위 — 클라이언트 우회 차단)
-  const { data: profile } = await admin.from("profile").select("is_pro").eq("uid", uid).maybeSingle();
+  const { data: profile } = await admin.from("bl_profile").select("is_pro").eq("uid", uid).maybeSingle();
   if (!profile?.is_pro) return json({ error: "not_pro" }, 403);
 
   const { data: member } = await admin
-    .from("family_member").select("id").eq("family_id", familyId).eq("uid", uid).maybeSingle();
+    .from("bl_family_member").select("id").eq("family_id", familyId).eq("uid", uid).maybeSingle();
   if (!member) return json({ error: "not_member" }, 403);
 
   // 4) R2 presigned PUT URL (10분)

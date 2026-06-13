@@ -99,8 +99,8 @@ Deno.serve(async (req) => {
   const isPro = expiresMs > Date.now();
   const expiresAt = expiresMs > 0 ? new Date(expiresMs).toISOString() : null;
 
-  // profile.is_pro 갱신(서버 권위)
-  await admin.from("profile").upsert({ uid, is_pro: isPro, pro_expires_at: expiresAt }, { onConflict: "uid" });
+  // bl_profile.is_pro 갱신(서버 권위)
+  await admin.from("bl_profile").upsert({ uid, is_pro: isPro, pro_expires_at: expiresAt }, { onConflict: "uid" });
 
   return json({ isPro, expiresAt });
 });

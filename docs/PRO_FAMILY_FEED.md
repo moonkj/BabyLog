@@ -32,9 +32,11 @@
 
 핵심 분리: **무거운 바이트는 R2(트래픽 무료), 텍스트·관계·상호작용은 Supabase.** 미디어는 Supabase Storage를 절대 통과시키지 않는다(egress 과금 폭탄 방지).
 
-## 4. 데이터 모델 (Supabase Postgres) — `supabase/schema_family_feed.sql` 초안
+## 4. 데이터 모델 (Supabase Postgres) — `supabase/schema_family_feed.sql`
 
-| 테이블 | 핵심 컬럼 | 비고 |
+⚠️ **공유 프로젝트(rqlfyumzmpmhupjtroid, cafeVibe·noisespot 공용)라 모든 테이블·함수에 `bl_` 접두사**로 네임스페이스(충돌 방지). 아래 표의 이름은 실제로 `bl_family`, `bl_family_member`, `bl_feed_post`, `bl_post_media`, `bl_reaction`, `bl_comment`, `bl_profile`. 출시(결제 켜기) 전 BabyLog 전용 프로젝트로 분리 권장.
+
+| 테이블(실제명 bl_*) | 핵심 컬럼 | 비고 |
 |---|---|---|
 | `family` | id, owner_uid, name, created_at | Pro 부모가 생성 |
 | `family_member` | family_id, uid(nullable), invite_code, role(parent/grandparent), display_name, joined_at | 조부모 초대 |
