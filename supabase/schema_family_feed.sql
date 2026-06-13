@@ -4,6 +4,17 @@
 -- 원칙: 가족 멤버만 접근(아동안전), 미디어 바이트는 R2(여기엔 키만), 텍스트·관계만 Postgres.
 -- RLS: 행 접근 = auth.uid()가 해당 family의 멤버일 때만.
 
+-- ── profile (Pro 구독 상태 — verify-subscription Edge가 권위적으로 기록) ──
+create table if not exists public.profile (
+  uid            text primary key,            -- auth.uid
+  is_pro         boolean not null default false,
+  pro_expires_at timestamptz,
+  updated_at     timestamptz not null default now()
+);
+alter table public.profile enable row level security;
+-- 본인 프로필만 읽기. is_pro 쓰기는 service_role(Edge)만 — 클라이언트 위조 차단(정책 미부여).
+create policy profile_select_self on public.profile for select using (uid = auth.uid()::text);
+
 -- ── 멤버십 헬퍼 (SECURITY DEFINER로 RLS 재귀 회피) ─────────────────────
 create or replace function public.is_family_member(p_family uuid)
 returns boolean language sql security definer stable as $$
