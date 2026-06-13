@@ -2,34 +2,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-// MARK: - 사업자 정보 (전자상거래법 고지 · 카카오 비즈 심사 대응)
-//
-// ⚠️ 아래 값은 반드시 (1) 국세청 사업자등록증, (2) 카카오 비즈니스 정보에
-//    등록한 내용과 "정확히 동일"해야 합니다. 다르면 카카오 심사에서 또 반려됩니다.
-//    값을 채운 뒤 빌드→설치하고, [설정 > 사업자 정보] 화면을 캡처해 재제출하세요.
-private enum BusinessInfo {
-    static let company   = "바이브랩"             // 상호 (사업자등록증과 동일)
-    static let owner     = "문경주"               // 대표자명
-    static let regNumber = "874-04-03594"        // 사업자등록번호
-    static let mailOrder = "제2026-충북청주-0608호" // 통신판매업 신고번호
-    static let address   = ""                     // 사업장 소재지 (등록증값 입력 — 비우면 숨김)
-    static let tel       = ""                     // 고객센터 전화 (입력 — 비우면 숨김)
-    static let email     = "imurmkj@naver.com"   // 고객센터 이메일
-    static let host      = "Apple iCloud · Supabase" // 호스팅/인프라 제공
-
-    /// 빈 값은 자동 제외 — 화면에 가짜/플레이스홀더가 찍히지 않도록.
-    static var rows: [(String, String)] {
-        [("상호", company),
-         ("대표자", owner),
-         ("사업자등록번호", regNumber),
-         ("통신판매업 신고", mailOrder),
-         ("사업장 소재지", address),
-         ("고객센터", tel),
-         ("이메일", email),
-         ("호스팅 제공", host)]
-            .filter { !$0.1.isEmpty }
-    }
-}
+// 사업자 정보(BusinessInfo)·법적 고지 화면은 LegalNoticeScreen.swift로 분리.
 
 // MARK: - SettingsScreen
 
@@ -48,7 +21,6 @@ struct SettingsScreen: View {
     @AppStorage("bl_caregiver_title")  private var caregiverTitle: String  = "양육자"
     @AppStorage("bl_nickname")         private var nickname: String        = "양육자님"
     @AppStorage("bl_cloud_sync")       private var cloudSync: Bool         = false
-    @State private var showOpenSource = false
     @ObservedObject private var auth = AuthStore.shared
     @State private var showDeleteAccount = false
     @State private var authAlert: String? = nil
@@ -88,7 +60,6 @@ struct SettingsScreen: View {
                     iCloudSection
                     dataSection
                     infoSection
-                    businessInfoSection
                 }
                 .padding(.horizontal, Spacing.s5)   // 헤더(s5)와 좌우 정렬
                 .padding(.top, Spacing.s2)
@@ -97,11 +68,6 @@ struct SettingsScreen: View {
         }
         .background(AppColors.canvas.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
-        .alert("오픈소스 고지", isPresented: $showOpenSource) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text("BabyLog는 Apple 시스템 프레임워크(SwiftUI·Swift Charts·WidgetKit 등)로 제작되었습니다. 추가 서드파티 오픈소스를 도입하면 이 화면에 라이선스를 명시합니다.")
-        }
         // 설정 변경 미세 피드백 (§8.5)
         .sensoryFeedback(.selection, trigger: fabSide)
         .sensoryFeedback(.selection, trigger: caregiverTitle)
@@ -616,54 +582,6 @@ struct SettingsScreen: View {
                 }
             }
             .buttonStyle(.plain)
-
-            Divider()
-                .overlay(AppColors.line)
-                .padding(.leading, 62)
-
-            // 원칙 고지 카드
-            dataPrincipleNotice
-        }
-    }
-
-    private var dataPrincipleNotice: some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            HStack(spacing: Spacing.s2) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.primary)
-                    .accessibilityHidden(true)
-                Text("BabyLog 데이터 3대 원칙")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppColors.ink)
-            }
-
-            VStack(alignment: .leading, spacing: Spacing.s2) {
-                principleRow(icon: "hand.raised.slash.fill",
-                             text: "아동 데이터는 절대 외부에 판매하지 않습니다")
-                principleRow(icon: "archivebox.fill",
-                             text: "무료 사용자의 데이터도 영구 보존합니다 — 인질극 없이")
-                principleRow(icon: "icloud.slash.fill",
-                             text: "사진은 내 기기·iCloud에만 저장됩니다 (서버 비전송)")
-            }
-        }
-        .padding(Spacing.s4)
-        .background(AppColors.primaryTint, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("BabyLog 데이터 3대 원칙: 데이터 비매각, 영구 보존, 사진 서버 비전송")
-    }
-
-    private func principleRow(icon: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: Spacing.s2) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppColors.primary)
-                .frame(width: 16)
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.system(size: 12.5, weight: .regular))
-                .foregroundStyle(AppColors.ink2)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -693,20 +611,20 @@ struct SettingsScreen: View {
                 .overlay(AppColors.line)
                 .padding(.leading, 62)
 
-            // 오픈소스 고지
-            Button {
-                showOpenSource = true
+            // 법적 고지 및 약관 (개인정보처리방침·오픈소스·사업자 정보)
+            NavigationLink {
+                LegalNoticeScreen()
             } label: {
-            settingsRow(
-                icon: "doc.text.fill",
-                iconBg: Color(hex: 0xEFF1F4),
-                iconFg: AppColors.ink3,
-                showChevron: true
-            ) {
-                Text("오픈소스 고지")
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(AppColors.ink)
-            }
+                settingsRow(
+                    icon: "doc.text.fill",
+                    iconBg: Color(hex: 0xEFF1F4),
+                    iconFg: AppColors.ink3,
+                    showChevron: true
+                ) {
+                    Text("법적 고지 및 약관")
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(AppColors.ink)
+                }
             }
             .buttonStyle(.plain)
 
@@ -733,52 +651,6 @@ struct SettingsScreen: View {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(v) (\(b))"
-    }
-
-    // MARK: - 사업자 정보 섹션 (전자상거래법 고지 + 카카오 비즈 심사용 캡처 대상)
-
-    private var businessInfoSection: some View {
-        settingsSection(eyebrow: "사업자 정보", title: "통신판매 사업자 정보") {
-            VStack(alignment: .leading, spacing: 0) {
-                let rows = BusinessInfo.rows
-                ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
-                    if idx > 0 { businessDivider }
-                    businessRow(label: row.0, value: row.1)
-                }
-
-                Text("전자상거래 등에서의 소비자보호에 관한 법률에 따른 사업자 정보입니다. 거래·환불 분쟁은 고객센터로 문의해 주세요.")
-                    .font(.system(size: 11.5, weight: .regular))
-                    .foregroundStyle(AppColors.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, Spacing.s4)
-                    .padding(.top, Spacing.s3)
-                    .padding(.bottom, Spacing.s3)
-            }
-            .padding(.vertical, Spacing.s2)
-        }
-    }
-
-    private var businessDivider: some View {
-        Divider().overlay(AppColors.line).padding(.horizontal, Spacing.s4)
-    }
-
-    private func businessRow(label: String, value: String) -> some View {
-        HStack(alignment: .top, spacing: Spacing.s3) {
-            Text(label)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppColors.ink3)
-                .frame(width: 104, alignment: .leading)
-            Text(value)
-                .font(.system(size: 13.5, weight: .medium))
-                .foregroundStyle(AppColors.ink)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-        }
-        .padding(.horizontal, Spacing.s4)
-        .frame(minHeight: 44)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label): \(value)")
     }
 
     // MARK: - Helpers
