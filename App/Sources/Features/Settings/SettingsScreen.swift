@@ -55,6 +55,7 @@ struct SettingsScreen: View {
                 VStack(spacing: Spacing.s5) {
                     accountSection      // 로그인 — 최상단
                     caregiverSection    // 프로필 이름·호칭 — 최상단
+                    familyShareSection  // 조부모/가족 사진 공유 (아이폰·안드로이드 모두)
                     displaySection
                     quickRecordSection
                     notificationSection
@@ -189,6 +190,29 @@ struct SettingsScreen: View {
                     .padding(.vertical, Spacing.s3)
                 }
             }
+        }
+    }
+
+    // MARK: - 가족 공유 섹션
+
+    private var familyShareSection: some View {
+        settingsSection(eyebrow: "가족", title: "조부모님과 사진 공유") {
+            NavigationLink {
+                FamilyShareScreen()
+            } label: {
+                settingsRow(icon: "person.2.fill",
+                            iconBg: Color(hex: 0xFBEAF0), iconFg: Color(hex: 0xB5478A),
+                            showChevron: true) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("조부모님과 사진 공유")
+                            .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Text("내 iCloud로 무료 공유 — 조부모님이 아이폰·안드로이드 어느 쪽이어도 볼 수 있어요")
+                            .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 
