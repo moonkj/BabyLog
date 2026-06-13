@@ -1,0 +1,207 @@
+// FamilyFeedScreen.swift
+// BabyLog — Pro 가족 피드 UI(클라우드 가족 보관함).
+// 로그인 → 가족 생성/참여 → 사진 포스트·하트·댓글(양방향). 무료 미노출(AppFeatures.proFamilyFeed).
+// 이미지는 R2 공개 베이스(Secrets R2_PUBLIC_BASE, CDN/r2.dev 연결 후 점등) + 키로 구성.
+
+import SwiftUI
+import PhotosUI
+
+struct FamilyFeedScreen: View {
+    @ObservedObject private var auth = AuthStore.shared
+
+    @State private var family: BLFamily?
+    @State private var posts: [BLFeedPost] = []
+    @State private var loading = true
+    @State private var busy = false
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var caption = ""
+    @State private var errorMsg: String?
+
+    private var myUid: String? { auth.userId }
+    /// R2 공개 베이스(앱이 키로 이미지 URL 구성). 미설정이면 플레이스홀더.
+    private var publicBase: String? { APIConfig.key("R2_PUBLIC_BASE") }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s5) {
+                BLScreenHeader(title: "가족 보관함", eyebrow: "Pro · 함께 보는 피드")
+                content
+            }
+            .padding(.horizontal, Spacing.s5).padding(.top, Spacing.s2).padding(.bottom, Spacing.s8)
+        }
+        .background(AppColors.canvas.ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .onChange(of: pickerItem) { _, item in if item != nil { Task { await upload() } } }
+        .alert("가족 보관함", isPresented: Binding(get: { errorMsg != nil }, set: { if !$0 { errorMsg = nil } })) {
+            Button("확인", role: .cancel) {}
+        } message: { Text(errorMsg ?? "") }
+    }
+
+    @ViewBuilder private var content: some View {
+        if !SupabaseConfig.isConfigured {
+            BLEmptyState(icon: "icloud.slash", title: "서버 미구성", message: "백엔드 설정이 필요해요.")
+        } else if !auth.isLoggedIn {
+            BLCard {
+                VStack(alignment: .leading, spacing: Spacing.s3) {
+                    Text("가족과 함께 보려면 로그인하세요")
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                    Text("로그인하면 가족 보관함을 만들고, 조부모님을 초대해 함께 사진을 보고 반응할 수 있어요.")
+                        .font(.system(size: 13)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
+                    AppleSignInButton { ok in if ok { Task { await load() } } }
+                }
+            }
+        } else if loading {
+            ProgressView().frame(maxWidth: .infinity).padding(.top, Spacing.s7)
+        } else if family == nil {
+            createFamilyCard
+        } else {
+            composeBar
+            if posts.isEmpty {
+                BLEmptyState(icon: "photo.on.rectangle.angled", title: "첫 사진을 올려보세요",
+                             message: "위 ‘사진 올리기’로 가족과 나눌 첫 순간을 담아요.")
+            } else {
+                ForEach(posts) { post in postCard(post) }
+            }
+        }
+    }
+
+    private var createFamilyCard: some View {
+        BLCard {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                Text("가족 보관함 만들기").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                Text("우리 가족만의 비공개 공간을 만들어요. 만든 뒤 조부모님을 초대할 수 있어요.")
+                    .font(.system(size: 13)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Task { busy = true; family = await FamilyFeedBackend.createFamily(name: "우리 가족"); busy = false
+                        if family == nil { errorMsg = "만들지 못했어요. 잠시 후 다시 시도해 주세요." } else { await load() } }
+                } label: {
+                    Text(busy ? "만드는 중…" : "가족 보관함 만들기")
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                }.buttonStyle(LiquidPressStyle(scale: 0.98)).disabled(busy)
+            }
+        }
+    }
+
+    private var composeBar: some View {
+        BLCard {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                TextField("한 줄 메모 (선택)", text: $caption)
+                    .font(AppFont.body).padding(.horizontal, Spacing.s3).frame(height: 44)
+                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
+                    HStack(spacing: Spacing.s2) {
+                        if busy { ProgressView().tint(.white) }
+                        Image(systemName: "photo.badge.plus"); Text(busy ? "올리는 중…" : "사진 올리기")
+                    }
+                    .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                }.disabled(busy)
+            }
+        }
+    }
+
+    private func postCard(_ post: BLFeedPost) -> some View {
+        let liked = myUid != nil && post.reactions.contains { $0.uid == myUid }
+        return BLCard(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                // 사진
+                if let key = post.media.first?.r2Key, let base = publicBase,
+                   let url = URL(string: "\(base)/\(key)") {
+                    AsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: {
+                        Rectangle().fill(AppColors.surface2)
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 280).clipped()
+                } else {
+                    ZStack {
+                        Rectangle().fill(AppColors.surface2).frame(height: 200)
+                        VStack(spacing: 6) {
+                            Image(systemName: "photo").font(.system(size: 28)).foregroundStyle(AppColors.ink3)
+                            Text("사진 표시 준비 중 (CDN 연결 필요)").font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                        }
+                    }
+                }
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    HStack(spacing: Spacing.s4) {
+                        Button { Task { await toggleHeart(post, to: !liked) } } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: liked ? "heart.fill" : "heart")
+                                    .foregroundStyle(liked ? Color(hex: 0xE8607A) : AppColors.ink)
+                                Text("\(post.reactions.count)").font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
+                            }
+                        }.buttonStyle(.plain)
+                        HStack(spacing: 4) {
+                            Image(systemName: "bubble.right").foregroundStyle(AppColors.ink)
+                            Text("\(post.comments.count)").font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
+                        }
+                        Spacer()
+                    }
+                    if let cap = post.caption, !cap.isEmpty {
+                        Text(cap).font(.system(size: 14)).foregroundStyle(AppColors.ink).fixedSize(horizontal: false, vertical: true)
+                    }
+                    ForEach(post.comments) { c in
+                        (Text(c.authorName).font(.system(size: 13, weight: .bold))
+                         + Text("  ") + Text(c.text).font(.system(size: 13)))
+                            .foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
+                    }
+                    CommentField { text in Task { await addComment(post, text) } }
+                }
+                .padding(Spacing.s3)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func load() async {
+        guard SupabaseConfig.isConfigured, auth.isLoggedIn else { loading = false; return }
+        loading = true
+        family = await FamilyFeedBackend.myFamily()
+        if let f = family { posts = await FamilyFeedBackend.fetchFeed(familyId: f.id) }
+        loading = false
+    }
+
+    private func upload() async {
+        guard let f = family, let item = pickerItem else { return }
+        busy = true; defer { busy = false; pickerItem = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
+            errorMsg = "사진을 불러오지 못했어요."; return
+        }
+        let ok = await FamilyFeedBackend.createPhotoPost(familyId: f.id, image: img,
+                                                         caption: caption, childLabel: nil)
+        if ok { caption = ""; posts = await FamilyFeedBackend.fetchFeed(familyId: f.id) }
+        else { errorMsg = "올리지 못했어요. (Pro 권한·네트워크 확인)" }
+    }
+
+    private func toggleHeart(_ post: BLFeedPost, to on: Bool) async {
+        if await FamilyFeedBackend.setHeart(post: post, on: on), let f = family {
+            posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
+        }
+    }
+
+    private func addComment(_ post: BLFeedPost, _ text: String) async {
+        if await FamilyFeedBackend.addComment(post: post, text: text), let f = family {
+            posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
+        }
+    }
+}
+
+// 댓글 입력 한 줄
+private struct CommentField: View {
+    var onSubmit: (String) -> Void
+    @State private var text = ""
+    var body: some View {
+        HStack(spacing: Spacing.s2) {
+            TextField("댓글 달기…", text: $text)
+                .font(.system(size: 13)).padding(.horizontal, Spacing.s3).frame(height: 38)
+                .background(AppColors.surface2, in: Capsule())
+            Button {
+                let t = text; text = ""; if !t.trimmingCharacters(in: .whitespaces).isEmpty { onSubmit(t) }
+            } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 26)).foregroundStyle(AppColors.primary) }
+        }
+        .padding(.top, 2)
+    }
+}

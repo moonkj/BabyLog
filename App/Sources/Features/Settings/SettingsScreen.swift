@@ -213,6 +213,27 @@ struct SettingsScreen: View {
                 }
             }
             .buttonStyle(.plain)
+
+            // Pro 가족 보관함(클라우드 양방향 피드) — 피처플래그 ON 시에만 노출(개발/베타).
+            if AppFeatures.proFamilyFeed {
+                Divider().overlay(AppColors.line).padding(.leading, 62)
+                NavigationLink {
+                    FamilyFeedScreen()
+                } label: {
+                    settingsRow(icon: "heart.text.square.fill",
+                                iconBg: AppColors.primarySoft, iconFg: AppColors.primary,
+                                showChevron: true) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("가족 보관함 (Pro)")
+                                .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                            Text("클라우드에서 가족이 함께 보고 하트·댓글 — 풀화질 백업까지")
+                                .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
