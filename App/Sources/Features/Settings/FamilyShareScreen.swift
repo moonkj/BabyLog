@@ -49,6 +49,7 @@ struct FamilyShareScreen: View {
                 } else {
                     introCard
                     photoSummaryCard
+                    prerequisiteCard
                     shareCard
                     iphoneGuideCard
                     androidGuideCard
@@ -126,6 +127,25 @@ struct FamilyShareScreen: View {
         }
     }
 
+    // MARK: - 준비(공유 앨범 켜기)
+
+    private var prerequisiteCard: some View {
+        BLCard {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                Label {
+                    Text("준비 · ‘공유 앨범’ 켜기 (한 번만)")
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                } icon: { Image(systemName: "gearshape.fill").foregroundStyle(AppColors.ink3) }
+                guideStep(1, "아이폰 ‘설정’ 앱을 열어요.")
+                guideStep(2, "아래로 내려 ‘사진’을 눌러요.")
+                guideStep(3, "‘공유 앨범’ 스위치를 켜요(초록색).")
+                Text("이게 꺼져 있으면 아래 공유 화면에 ‘공유 앨범에 추가’ 항목이 안 보여요.")
+                    .font(.system(size: 11.5, weight: .regular)).foregroundStyle(AppColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 2)
+            }
+        }
+    }
+
     // MARK: - 공유하기
 
     private var shareCard: some View {
@@ -161,11 +181,18 @@ struct FamilyShareScreen: View {
         BLCard {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Label {
-                    Text("조부모님이 아이폰을 쓰면").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                    Text("조부모님이 아이폰을 쓰면 — 구성원 초대").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
                 } icon: { Image(systemName: "apple.logo").foregroundStyle(AppColors.ink) }
-                guideStep(1, "공유 시트에서 ‘공유 앨범에 추가’ → ‘새 공유 앨범’으로 만들어요.")
-                guideStep(2, "조부모님을 구성원으로 초대해요(전화번호/이메일).")
-                guideStep(3, "수락하면 조부모님 사진 앱에 자동으로 나타나요. 새 사진을 추가하면 그분들께도 자동 표시돼요.")
+                Text("처음 한 번 공유 앨범을 만들면서 조부모님을 초대하면 돼요.")
+                    .font(.system(size: 12.5, weight: .regular)).foregroundStyle(AppColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                guideStep(1, "위 ‘공유 앨범에 추가’를 누르면 나오는 화면에서, ‘공유 앨범:’ 줄을 눌러 ‘새 공유 앨범…’을 골라요.")
+                guideStep(2, "앨범 이름(예: ‘라온이 앨범’)을 적고 오른쪽 위 ‘다음’을 눌러요.")
+                guideStep(3, "‘받는 사람’ 칸에 조부모님 전화번호나 Apple ID 이메일을 입력하고 ‘만들기’ → 마지막으로 ‘게시’를 눌러요.")
+                guideStep(4, "조부모님 아이폰에 초대 알림이 가요. ‘수락’하면 그분들 사진 앱 > ‘앨범’ 탭 > ‘공유 앨범’에 자동으로 나타나고, 이후 새 사진도 자동 표시돼요.")
+                Text("나중에 더 초대하려면: 사진 앱 > ‘앨범’ 탭 > 아래 ‘공유 앨범’에서 그 앨범 열기 > 오른쪽 위 ‘사람 모양 아이콘’ > ‘사람 초대’.")
+                    .font(.system(size: 11.5, weight: .regular)).foregroundStyle(AppColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 2)
             }
         }
     }
@@ -174,11 +201,20 @@ struct FamilyShareScreen: View {
         BLCard {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Label {
-                    Text("조부모님이 안드로이드를 쓰면").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                    Text("조부모님이 안드로이드를 쓰면 — 웹 링크").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
                 } icon: { Image(systemName: "globe").foregroundStyle(AppColors.primary) }
-                guideStep(1, "사진 앱에서 그 공유 앨범 설정 → ‘공개 웹사이트’를 켜요.")
-                guideStep(2, "생긴 웹 주소를 복사해 카카오톡 등으로 조부모님께 한 번만 보내요.")
-                guideStep(3, "조부모님은 안드로이드·PC 브라우저로 열어 봐요(Apple ID 불필요). 같은 주소로 늘 최신 사진을 봅니다.")
+                Text("공유 앨범의 ‘공개 웹사이트’를 켜고 그 링크를 보내면 돼요.")
+                    .font(.system(size: 12.5, weight: .regular)).foregroundStyle(AppColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                guideStep(1, "사진 앱을 열고 화면 아래 ‘앨범’ 탭을 눌러요.")
+                guideStep(2, "아래로 내려 ‘공유 앨범’ 칸에서 만든 앨범을 열어요.")
+                guideStep(3, "오른쪽 위 ‘사람 모양 아이콘’(없으면 ‘⋯’)을 눌러 앨범 설정을 열어요.")
+                guideStep(4, "‘공개 웹사이트’ 스위치를 켜요(초록색).")
+                guideStep(5, "바로 아래 생긴 ‘링크 공유’를 눌러 카카오톡 등으로 조부모님께 주소를 보내요.")
+                guideStep(6, "조부모님은 안드로이드·PC 브라우저로 그 주소를 열면 사진을 봐요(Apple ID·로그인 불필요). 늘 같은 주소로 최신 사진이 보여요.")
+                Text("※ Apple 정책상 공개 링크는 앱이 자동으로 만들 수 없어, 사진 앱에서 위 단계를 한 번만 해주시면 됩니다.")
+                    .font(.system(size: 11.5, weight: .regular)).foregroundStyle(AppColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 2)
             }
         }
     }
