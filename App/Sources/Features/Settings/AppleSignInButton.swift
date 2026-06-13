@@ -17,7 +17,8 @@ struct AppleSignInButton: View {
         SignInWithAppleButton(.signIn) { request in
             let nonce = Self.randomNonce()
             currentNonce = nonce
-            request.requestedScopes = [.fullName]
+            // 이름은 받지 않는다 — 공개 닉네임은 사용자가 직접 설정(실명 비노출·프라이버시 원칙).
+            request.requestedScopes = []
             request.nonce = Self.sha256(nonce)
         } onCompletion: { result in
             switch result {
@@ -26,12 +27,9 @@ struct AppleSignInButton: View {
                       let tokenData = cred.identityToken,
                       let idToken = String(data: tokenData, encoding: .utf8),
                       let nonce = currentNonce else { onResult(false); return }
-                // Apple은 이름을 최초 1회만 제공 — 한국어 순서(성+이름)로 구성.
-                let name = [cred.fullName?.familyName, cred.fullName?.givenName]
-                    .compactMap { $0 }.joined()
                 Task {
                     let ok = await AuthStore.shared.appleSignIn(
-                        idToken: idToken, nonce: nonce, fullName: name.isEmpty ? nil : name)
+                        idToken: idToken, nonce: nonce, fullName: nil)
                     onResult(ok)
                 }
             case .failure(let error):

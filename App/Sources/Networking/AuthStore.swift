@@ -64,11 +64,9 @@ final class AuthStore: ObservableObject {
         ])
         guard let parsed = await exchange(req) else { return false }
         persist(parsed)
-        // 닉네임은 Apple이 최초 1회만 제공 → 비어 있을 때만 기본값으로 채움.
-        if let fullName, !fullName.isEmpty,
-           (UserDefaults.standard.string(forKey: "bl_nickname") ?? "").isEmpty {
-            UserDefaults.standard.set(fullName, forKey: "bl_nickname")
-        }
+        // ⚠️ Apple 실명을 공개 닉네임으로 자동 저장하지 않는다(프라이버시·성별중립·실명 비노출 원칙).
+        //    닉네임은 사용자가 설정에서 직접 정하는 값. fullName은 인증에만 쓰고 보관하지 않음.
+        _ = fullName
         await claimDevice()
         return true
     }
