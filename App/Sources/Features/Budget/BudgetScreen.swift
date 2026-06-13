@@ -177,8 +177,7 @@ struct BudgetScreen: View {
 
                         // 2~3. 카테고리별 지출 (선택 기간에 지출 있을 때만)
                         if hasPeriodExpenses {
-                            donutDashboard
-                            categoryListSection
+                            categoryTreemapSection
                         }
 
                         // 4. 최근 지출 거래 리스트 (전체 지출 있을 때만)
@@ -418,146 +417,93 @@ struct BudgetScreen: View {
 
     // MARK: 2. 도넛 차트 대시보드 (카테고리 비중)
 
-    private var donutDashboard: some View {
-        BLCard {
-            HStack(alignment: .center, spacing: Spacing.s4) {
-                donutChart
+    // MARK: 카테고리 트리맵 (도넛+리스트 통합 — 면적 ∝ 지출 비중)
 
-                // 카테고리 범례
-                VStack(alignment: .leading, spacing: Spacing.s3) {
-                    ForEach(categoryBreakdown, id: \.category) { item in
-                        HStack(spacing: Spacing.s2) {
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(item.category.badgeTone.ink)
-                                .frame(width: 9, height: 9)
-                                .accessibilityHidden(true)
-
-                            Image(systemName: item.category.systemIcon)
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(item.category.badgeTone.ink)
-                                .accessibilityHidden(true)
-
-                            Text(item.category.displayName)
-                                .font(AppFont.caption)
-                                .foregroundStyle(AppColors.ink2)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            Text(amountShort(item.amount))
-                                .font(AppFont.num(12.5, weight: .bold))
-                                .foregroundStyle(AppColors.ink)
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("\(item.category.accessibilityLabel) \(amountFull(item.amount))")
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var donutChart: some View {
-        let total = Double(periodTotal == 0 ? 1 : periodTotal)
-        ZStack {
-            Chart(categoryBreakdown, id: \.category) { item in
-                SectorMark(
-                    angle: .value("금액", item.amount),
-                    innerRadius: .ratio(0.58),
-                    angularInset: 1.5
-                )
-                .foregroundStyle(item.category.badgeTone.ink)
-                .cornerRadius(3)
-                .accessibilityLabel("\(item.category.accessibilityLabel) \(Int(Double(item.amount) / total * 100))%")
-            }
-            .frame(width: 130, height: 130)
-
-            VStack(spacing: 3) {
-                Text("카테고리")
-                    .font(AppFont.micro)
-                    .tracking(0.5)
-                    .foregroundStyle(AppColors.ink3)
-                Text(amountShort(periodTotal))
-                    .font(AppFont.num(17, weight: .heavy))
-                    .foregroundStyle(AppColors.ink)
-            }
-            .accessibilityHidden(true)
-        }
-        .accessibilityLabel("카테고리별 지출 비중 도넛 차트. \(rangeLabel) 총 \(amountFull(periodTotal))")
-    }
-
-    // MARK: 3. 카테고리 분해 리스트
-
-    private var categoryListSection: some View {
+    private var categoryTreemapSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             BLSectionHead(eyebrow: rangeLabel, title: "카테고리별 지출")
                 .accessibilityAddTraits(.isHeader)
+            BLCard {
+                categoryTreemap.frame(height: 176)
+            }
+        }
+    }
 
-            BLCard(padding: 0) {
-                VStack(spacing: 0) {
-                    ForEach(Array(categoryBreakdown.enumerated()), id: \.element.category) { index, item in
-                        if index > 0 {
-                            Divider()
-                                .background(AppColors.line)
-                                .padding(.horizontal, Spacing.s4)
-                        }
-
-                        let pct = periodTotal > 0
-                            ? Int(Double(item.amount) / Double(periodTotal) * 100)
-                            : 0
-
-                        VStack(spacing: Spacing.s2) {
-                            HStack(spacing: Spacing.s3) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                        .fill(item.category.badgeTone.bg)
-                                        .frame(width: 40, height: 40)
-                                    Image(systemName: item.category.systemIcon)
-                                        .font(.system(size: 18, weight: .medium))
-                                        .foregroundStyle(item.category.badgeTone.ink)
-                                }
-                                .accessibilityHidden(true)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.category.displayName)
-                                        .font(AppFont.subhead)
-                                        .foregroundStyle(AppColors.ink)
-                                    Text("\(pct)%")
-                                        .font(AppFont.micro)
-                                        .foregroundStyle(AppColors.ink3)
-                                }
-
-                                Spacer()
-
-                                Text(amountFull(item.amount))
-                                    .font(AppFont.num(15, weight: .heavy))
-                                    .foregroundStyle(AppColors.ink)
-                            }
-
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule()
-                                        .fill(AppColors.surface3)
-                                        .frame(height: 4)
-                                    Capsule()
-                                        .fill(item.category.badgeTone.ink)
-                                        .frame(width: max(4, geo.size.width * CGFloat(pct) / 100), height: 4)
-                                }
-                            }
-                            .frame(height: 4)
-                            .padding(.leading, 40 + Spacing.s3)
-                            .accessibilityHidden(true)
-                        }
-                        .padding(.horizontal, Spacing.s4)
-                        .padding(.vertical, Spacing.s3)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("\(item.category.accessibilityLabel) \(amountFull(item.amount)), \(pct)퍼센트")
-                    }
+    /// slice-and-dice 3열 트리맵 — 1열=최대 카테고리, 2열=다음 2개, 3열=나머지. 면적이 금액 비중에 비례.
+    private var categoryTreemap: some View {
+        let cats = categoryBreakdown
+        let cols = treemapColumns(cats)
+        let colSums = cols.map { col in col.reduce(0) { $0 + $1.amount } }
+        let grand = max(1, colSums.reduce(0, +))
+        let topCat = cats.first?.category
+        return GeometryReader { geo in
+            let gap: CGFloat = 6
+            let availW = geo.size.width - gap * CGFloat(max(0, cols.count - 1))
+            HStack(spacing: gap) {
+                ForEach(cols.indices, id: \.self) { ci in
+                    treemapColumn(cols[ci],
+                                  width: availW * CGFloat(colSums[ci]) / CGFloat(grand),
+                                  height: geo.size.height,
+                                  topCat: topCat)
                 }
             }
         }
+    }
+
+    private func treemapColumns(_ cats: [(category: ExpenseCategory, amount: Int)])
+        -> [[(category: ExpenseCategory, amount: Int)]] {
+        guard !cats.isEmpty else { return [] }
+        var cols: [[(category: ExpenseCategory, amount: Int)]] = [[cats[0]]]
+        let mid = Array(cats.dropFirst().prefix(2))
+        if !mid.isEmpty { cols.append(mid) }
+        let small = Array(cats.dropFirst(3))
+        if !small.isEmpty { cols.append(small) }
+        return cols
+    }
+
+    @ViewBuilder
+    private func treemapColumn(_ col: [(category: ExpenseCategory, amount: Int)],
+                               width: CGFloat, height: CGFloat, topCat: ExpenseCategory?) -> some View {
+        let sum = max(1, col.reduce(0) { $0 + $1.amount })
+        let gap: CGFloat = 6
+        let availH = height - gap * CGFloat(max(0, col.count - 1))
+        VStack(spacing: gap) {
+            ForEach(col, id: \.category) { item in
+                treemapCell(item, isBig: item.category == topCat)
+                    .frame(height: max(28, availH * CGFloat(item.amount) / CGFloat(sum)))
+            }
+        }
+        .frame(width: max(0, width))
+    }
+
+    private func treemapCell(_ item: (category: ExpenseCategory, amount: Int), isBig: Bool) -> some View {
+        let pct = periodTotal > 0 ? Int((Double(item.amount) / Double(periodTotal) * 100).rounded()) : 0
+        return ZStack(alignment: .topTrailing) {
+            // 큰 셀에만 카테고리 아이콘(은은하게)
+            if isBig {
+                Image(systemName: item.category.systemIcon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(item.category.badgeTone.ink.opacity(0.45))
+                    .padding(11)
+                    .accessibilityHidden(true)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.category.displayName)
+                    .font(.system(size: isBig ? 13.5 : 12, weight: .bold))
+                    .foregroundStyle(item.category.badgeTone.ink)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 2)
+                Text(amountShort(item.amount))
+                    .font(AppFont.num(isBig ? 16 : 13.5, weight: .heavy))
+                    .foregroundStyle(item.category.badgeTone.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(isBig ? 13 : 10)
+        }
+        .background(item.category.badgeTone.bg, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(item.category.accessibilityLabel) \(amountFull(item.amount)), \(pct)퍼센트")
     }
 
     // MARK: 4. 최근 지출 거래 리스트
