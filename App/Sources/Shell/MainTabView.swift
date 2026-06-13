@@ -176,10 +176,10 @@ struct MainTabView: View {
             }
         }
         .sheet(isPresented: $showAddChild) {
-            AddChildSheet().environmentObject(store)
+            AddChildSheet().environmentObject(store).nightDimmable()
         }
         .sheet(isPresented: $showAddPregnancy) {
-            AddPregnancySheet().environmentObject(store)
+            AddPregnancySheet().environmentObject(store).nightDimmable()
         }
         .alert("기록이 잠시 멈춰 있어요", isPresented: $showPausedNotice) {
             Button("확인", role: .cancel) {}
@@ -190,6 +190,7 @@ struct MainTabView: View {
             QuickRecordSheet(mode: mode, onSave: {}, onClose: { showQuickRecord = false })
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+                .nightDimmable()
         }
         .onAppear {
             // 최초 1회 모드 기본값: 활성 임신 있고 아이 없으면 임신 모드로(이후엔 사용자 선택 유지)
@@ -235,4 +236,28 @@ struct MainTabView: View {
         }
         .accessibilityLabel(mode == .baby ? "육아 모드, 탭하면 임신 모드로 전환" : "임신 모드, 탭하면 육아 모드로 전환")
     }
+}
+
+// MARK: - 야간 디밍 (시트용)
+// SwiftUI .sheet은 별도 레이어로 떠서 루트의 nightDimOverlay를 벗어난다.
+// → 새벽 수유 시 빠른기록·아이등록 시트가 풀밝기로 번쩍이지 않게 시트 콘텐츠에 직접 적용.
+private struct NightDimmable: ViewModifier {
+    @AppStorage("bl_night_dim") private var nightDim = false
+    func body(content: Content) -> some View {
+        content.overlay {
+            if nightDim {
+                TimelineView(.periodic(from: .now, by: 300)) { ctx in
+                    let h = Calendar.current.component(.hour, from: ctx.date)
+                    Color(hex: 0x282118)
+                        .opacity((h >= 22 || h < 6) ? 0.34 : 0)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+}
+extension View {
+    /// 야간(22–06시) 저휘도 모드일 때 시트 콘텐츠를 따뜻하게 디밍.
+    func nightDimmable() -> some View { modifier(NightDimmable()) }
 }

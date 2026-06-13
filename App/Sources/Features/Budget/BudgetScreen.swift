@@ -634,6 +634,23 @@ struct BudgetScreen: View {
                     message: "아이 등록 후 월령에 맞는 지원금을\n자동으로 안내해드려요."
                 )
             } else {
+                // 아직 안 받은 지원금 환기 배너 — 금액 합산은 월지급/일시금이 섞여 오해 소지라
+                // '개수'만 정직하게 표시(받을 수 있는 가장 강한 가치를 전면화).
+                let unclaimed = subsidies.filter { !store.isSubsidyClaimed(id: $0.id) }.count
+                if unclaimed > 0 {
+                    HStack(spacing: Spacing.s2) {
+                        Image(systemName: "gift.fill")
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.gold)
+                        Text("아직 안 받은 지원금 \(unclaimed)개 — 잊지 말고 챙기세요")
+                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Spacing.s3).padding(.vertical, Spacing.s2)
+                    .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("아직 안 받은 지원금 \(unclaimed)개")
+                }
+
                 ForEach(sortedSubsidies) { subsidy in
                     SubsidyCard(
                         info: subsidy,

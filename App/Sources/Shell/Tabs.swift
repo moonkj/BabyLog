@@ -546,15 +546,30 @@ struct HomeTab: View {
                         }
                     }
                     if selectedChild == nil {
-                        Text("아이를 등록하면 성장 기록이 시작돼요")
-                            .font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.85))
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus.circle.fill").font(.system(size: 14, weight: .bold))
+                            Text("아이 등록하고 성장 기록 시작하기")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12).frame(height: 34)
+                        .background(AppColors.primary, in: Capsule())
                     }
                 }
                 .padding(16)
             }
+            // 사진을 주인공으로 — 흰 매트 액자 테두리 + 따뜻한 깊은 그림자.
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 3)
+            }
             .blShadow(.card)
+            .contentShape(Rectangle())
+            .onTapGesture { if selectedChild == nil { showAddChild = true } }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessLabel)
+            .accessibilityAddTraits(selectedChild == nil ? .isButton : [])
+            .accessibilityHint(selectedChild == nil ? "탭하면 아이를 등록합니다" : "")
     }
 
     /// 우선순위 종류별 CTA 라벨 — 종류에 맞는 행동 카피.
