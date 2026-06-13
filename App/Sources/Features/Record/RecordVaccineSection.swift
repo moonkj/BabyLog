@@ -159,10 +159,10 @@ struct VaccineSection: View {
         if isLoading {
             vaccineSkeletonView
         } else if vaccines.isEmpty {
-            BLEmptyState(
-                icon: "syringe",
-                title: "접종 일정을 불러오지 못했어요",
-                message: "네트워크 상태를 확인하고\n잠시 후 다시 시도해주세요."
+            // 표준 일정은 폴백으로 거의 항상 채워지나, 만일 비면 빈 상태 대신 '재시도' 표준 패턴.
+            BLErrorState(
+                message: "접종 일정을 불러오지 못했어요.\n네트워크 상태를 확인하고 다시 시도해 주세요.",
+                retry: { Task { await loadVaccines(birthDate: child.birthDate) } }
             )
         } else {
             VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -216,7 +216,7 @@ struct VaccineSection: View {
     private var vaccineSkeletonView: some View {
         VStack(spacing: Spacing.s3) {
             // 배너 스켈레톤
-            BLCard(padding: 16) {
+            BLCard(padding: Spacing.s4) {
                 HStack(spacing: 12) {
                     BLSkeleton(width: 46, height: 46, cornerRadius: Radius.sm)
                     VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -245,7 +245,7 @@ struct VaccineSection: View {
                 to: Calendar.current.startOfDay(for: d)).day ?? 0
         }()
 
-        BLCard(padding: 16) {
+        BLCard(padding: Spacing.s4) {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
@@ -311,7 +311,7 @@ private struct VaccineRow: View {
     let onEditHospital: () -> Void
 
     var body: some View {
-        BLCard(padding: 14, flat: true) {
+        BLCard(padding: Spacing.s4, flat: true) {
             HStack(spacing: 12) {
                 // 색+아이콘 3중 인코딩
                 ZStack {

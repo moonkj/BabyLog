@@ -96,17 +96,8 @@ struct RecordScreen: View {
     // MARK: 세그먼트 피커
 
     private var segmentPicker: some View {
-        HStack(spacing: Spacing.s3) {
-            ForEach(RecordSegment.allCases) { seg in
-                BLChip(text: seg.label, on: segment == seg) {
-                    guard segment != seg else { return }
-                    Haptics.selection()
-                    withAnimation(.easeOut(duration: 0.18)) { segment = seg }
-                }
-                .frame(maxWidth: .infinity)
-                .accessibilityAddTraits(segment == seg ? .isSelected : [])
-            }
-        }
+        // 앱 표준 세그먼트(캡슐 트랙) — 가계부 기간 전환과 동일 언어로 통일.
+        BLSegmented(segments: RecordSegment.allCases.map { ($0, $0.label) }, selection: $segment)
     }
 }
 

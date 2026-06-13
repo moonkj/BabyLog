@@ -251,26 +251,16 @@ struct GrowthChartSection: View {
                 message: "\(child.name)의 키와 몸무게를 기록하면\nWHO 성장곡선과 함께 확인할 수 있어요."
             )
         } else {
-            VStack(alignment: .leading, spacing: Spacing.s3) {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
                 // 정성적 안심 메시지 카드 (백분위 숫자 강조 금지)
                 assuranceCard
 
-                // 키/몸무게 토글
-                HStack(spacing: Spacing.s2) {
-                    ForEach(GrowthMetric.allCases) { m in
-                        BLChip(text: m.label, on: metric == m) {
-                            guard metric != m else { return }
-                            Haptics.selection()
-                            withAnimation(.easeOut(duration: 0.18)) { metric = m }
-                        }
-                        .accessibilityAddTraits(metric == m ? .isSelected : [])
-                    }
-                    Spacer()
-                }
+                // 키/몸무게 토글 — 앱 표준 세그먼트로 통일
+                BLSegmented(segments: GrowthMetric.allCases.map { ($0, $0.label) }, selection: $metric)
 
                 // 1개 데이터 단일 포인트 안내
                 if records.count == 1 {
-                    BLCard(padding: 14, flat: true) {
+                    BLCard(padding: Spacing.s4, flat: true) {
                         HStack(spacing: 12) {
                             Image(systemName: "info.circle.fill")
                                 .font(.system(size: 16, weight: .medium))
@@ -284,7 +274,7 @@ struct GrowthChartSection: View {
                 }
 
                 // 차트 카드
-                BLCard(padding: 16) {
+                BLCard(padding: Spacing.s4) {
                     VStack(alignment: .leading, spacing: Spacing.s3) {
                         HStack {
                             Label(metric.label, systemImage: metric.icon)
@@ -317,7 +307,7 @@ struct GrowthChartSection: View {
     // MARK: 안심 메시지 카드
 
     private var assuranceCard: some View {
-        BLCard(padding: 16, flat: true) {
+        BLCard(padding: Spacing.s4, flat: true) {
             HStack(alignment: .top, spacing: 12) {
                 // 성장 링 (§8.4 기능 진입) — 차오름 + 잔잔한 호흡(상시)
                 ZStack {
@@ -402,13 +392,14 @@ struct GrowthChartSection: View {
                     .accessibilityHidden(true)
                 }
 
-                // WHO p50 중앙선 — LineMark (점선)
+                // WHO p50 중앙선 — LineMark (점선). 측정선(primary 실선)과 색약 구분을 위해
+                // 같은 녹색 농담이 아닌 '다른 hue(중성 회색)'로 분리(색+패턴 이중 인코딩).
                 ForEach(bands) { band in
                     LineMark(
                         x: .value("월령", band.month),
                         y: .value("p50", band.p50)
                     )
-                    .foregroundStyle(AppColors.primary.opacity(0.45))
+                    .foregroundStyle(AppColors.ink3)
                     .lineStyle(StrokeStyle(lineWidth: 1.3, dash: [4, 4]))
                     .interpolationMethod(.catmullRom)
                     .accessibilityHidden(true)
@@ -492,7 +483,7 @@ struct GrowthChartSection: View {
             legendItem(color: AppColors.primary, style: .solid, label: child.name)
             if showsBand {
                 let genderLabel = child.gender == .girl ? "여아" : "남아"
-                legendItem(color: AppColors.primary.opacity(0.45), style: .dashed, label: "WHO \(genderLabel) 중앙(p50)")
+                legendItem(color: AppColors.ink3, style: .dashed, label: "WHO \(genderLabel) 중앙(p50)")
                 legendItem(color: AppColors.primary.opacity(0.10), style: .area, label: "WHO \(genderLabel) 정상범위")
             } else {
                 // 성별 미상 — 권위 있는 정상범위 대신 안내

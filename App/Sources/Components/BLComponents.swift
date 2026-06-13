@@ -67,6 +67,39 @@ struct BLChip: View {
     }
 }
 
+/// 앱 표준 세그먼트 컨트롤 — 상호배타 '뷰 전환'용.
+/// surface2 캡슐 트랙 + 선택 알약(surface+옅은 그림자). 가계부 기간 전환과 동일 언어로 통일.
+struct BLSegmented<Tag: Hashable>: View {
+    /// (태그, 표시 레이블) 순서대로.
+    let segments: [(tag: Tag, label: String)]
+    @Binding var selection: Tag
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
+                let on = seg.tag == selection
+                Button {
+                    guard !on else { return }
+                    Haptics.light()
+                    withAnimation(.easeInOut(duration: 0.2)) { selection = seg.tag }
+                } label: {
+                    Text(seg.label)
+                        .font(.system(size: 14, weight: on ? .bold : .medium))
+                        .foregroundStyle(on ? AppColors.ink : AppColors.ink3)
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background(on ? AppColors.surface : Color.clear, in: Capsule())
+                        .shadow(color: on ? Color(hex: 0x282118).opacity(0.08) : .clear, radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.96))
+                .accessibilityLabel(seg.label)
+                .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
+            }
+        }
+        .padding(4)
+        .background(AppColors.surface2, in: Capsule())
+    }
+}
+
 /// 섹션 헤더 (아이브로/타이틀 + 액션)
 struct BLSectionHead: View {
     var eyebrow: String? = nil

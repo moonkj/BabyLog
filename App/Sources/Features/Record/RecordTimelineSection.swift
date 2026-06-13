@@ -110,6 +110,7 @@ private struct DateGroupHeader: View {
         .padding(.top, Spacing.s1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
+        .accessibilityAddTraits(.isHeader)   // VoiceOver 로터로 날짜 그룹 탐색 가능
     }
 }
 
@@ -118,16 +119,16 @@ private struct GrowthTimelineCard: View {
     @EnvironmentObject private var store: AppStore
     var record: GrowthRecord
     var body: some View {
-        BLCard(padding: 14) {
+        BLCard(padding: Spacing.s4) {
             HStack(spacing: 12) {
-                // 색+아이콘 인코딩
+                // 색+아이콘 인코딩 — 박스 배경과 아이콘 색을 같은 tone(primary)으로 일치
                 ZStack {
                     RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                         .fill(AppColors.primaryTint)
                         .frame(width: 46, height: 46)
                     Image(systemName: "ruler.fill")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Color(hex: 0x3B6FA8))
+                        .foregroundStyle(AppColors.primary)
                 }
                 .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
@@ -207,6 +208,12 @@ private struct DiaryTimelineCard: View {
                                 .onTapGesture(count: 2) { likeWithPop() }
                                 .onTapGesture { fullPhoto = img }
                                 .tag(idx)
+                                // VoiceOver: 침묵하던 사진에 라벨·동작 부여(좋아요는 액션바 버튼으로도 가능)
+                                .accessibilityElement()
+                                .accessibilityLabel("\(child.name) 사진 \(idx + 1)\(photos.count > 1 ? ", 전체 \(photos.count)장" : "")")
+                                .accessibilityAddTraits(.isImage)
+                                .accessibilityHint("두 번 탭하면 전체화면")
+                                .accessibilityAction { fullPhoto = img }
                         }
                         if let videoURL {
                             VideoPreviewView(url: videoURL)
@@ -225,6 +232,7 @@ private struct DiaryTimelineCard: View {
                                 .padding(.horizontal, 8).frame(height: 22)
                                 .background(.black.opacity(0.45), in: Capsule())
                                 .padding(10)
+                                .accessibilityHidden(true)   // 시각 전용 페이지 표시(사진 라벨이 장수 안내)
                         }
                     }
                 } else if isMilestone {
@@ -242,7 +250,7 @@ private struct DiaryTimelineCard: View {
             Button { Haptics.light(); showEdit = true } label: {
                 Label("수정", systemImage: "pencil")
             }
-            Button(role: .destructive) { store.deleteDiaryEntry(id: entry.id) } label: {
+            Button(role: .destructive) { Haptics.warning(); store.deleteDiaryEntry(id: entry.id) } label: {
                 Label("기록 삭제", systemImage: "trash")
             }
         }
@@ -277,15 +285,17 @@ private struct DiaryTimelineCard: View {
                 Button { Haptics.light(); showEdit = true } label: {
                     Label("수정", systemImage: "pencil")
                 }
-                Button(role: .destructive) { store.deleteDiaryEntry(id: entry.id) } label: {
+                Button(role: .destructive) { Haptics.warning(); store.deleteDiaryEntry(id: entry.id) } label: {
                     Label("기록 삭제", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(AppColors.ink3)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)   // 44pt 터치 타깃
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel("기록 메뉴 — 수정·삭제")
             .accessibilityLabel("더보기")
         }
         .padding(.horizontal, 12)
@@ -389,7 +399,8 @@ private struct DiaryTimelineCard: View {
 
     @ViewBuilder
     private var heartPopOverlay: some View {
-        if heartPop {
+        // reduceMotion이면 90pt 스프링 팝을 생략(전정장애 배려). 좋아요 자체는 정상 동작.
+        if heartPop && !reduceMotion {
             Image(systemName: "heart.fill")
                 .font(.system(size: 90, weight: .bold))
                 .foregroundStyle(.white.opacity(0.9))
@@ -401,10 +412,11 @@ private struct DiaryTimelineCard: View {
     private func likeWithPop() {
         if !liked { Haptics.success() } else { Haptics.light() }
         store.toggleDiaryLike(entry.id)
-        if store.isDiaryLiked(entry.id) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { heartPop = true }
+        if store.isDiaryLiked(entry.id) && !reduceMotion {
+            // 앱 공통 보상 모션 토큰(Motion.reward)으로 다른 축하와 질감 통일
+            withAnimation(Motion.reward) { heartPop = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                withAnimation(.easeOut(duration: 0.25)) { heartPop = false }
+                withAnimation(Motion.micro) { heartPop = false }
             }
         }
     }
