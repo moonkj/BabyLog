@@ -79,10 +79,10 @@ struct SettingsScreen: View {
                 BLScreenHeader(title: "설정", eyebrow: "환경설정")
 
                 VStack(spacing: Spacing.s5) {
+                    accountSection      // 로그인 — 최상단
+                    caregiverSection    // 프로필 이름·호칭 — 최상단
                     displaySection
                     quickRecordSection
-                    caregiverSection
-                    accountSection
                     notificationSection
                     backupSection
                     iCloudSection
