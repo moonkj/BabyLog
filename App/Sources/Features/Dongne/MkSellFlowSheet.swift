@@ -325,8 +325,17 @@ struct MkSellFlowSheet: View {
     private func registerToServer() {
         submitting = true
         Task {
-            // 무료 한도 확인 (무료 회원 1매물)
-            if await MarketBackend.freeLimitReached() {
+            // 무료 한도 확인 (무료 회원 1매물). 네트워크로 개수를 확인 못 하면(nil) '한도 초과'로
+            // 단정하지 않고 재시도를 안내한다 — 0개인데도 "1개까지" 오안내가 뜨던 문제 방지.
+            let activeCount = await MarketBackend.myActiveListingCount()
+            if activeCount == nil {
+                await MainActor.run {
+                    submitting = false
+                    alertMessage = "지금은 연결 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요."
+                }
+                return
+            }
+            if let c = activeCount, c >= MarketBackend.freeListingLimit {
                 await MainActor.run {
                     submitting = false
                     alertMessage = "무료 회원은 매물을 1개까지 올릴 수 있어요. 기존 매물을 판매완료하거나 삭제한 뒤 다시 등록해 주세요."
@@ -343,7 +352,7 @@ struct MkSellFlowSheet: View {
                 }
                 return
             }
-            // 사진은 서버에서 업로드하므로 photoRefs는 비움(로컬 캐시는 store에서 별도 보존)
+            // 사진은 서버 업로드 + 로컬 캐시 둘 다 보존(photoRefs는 즉시 표시용 로컬 캐시).
             let item = MarketItem(
                 title: title.trimmingCharacters(in: .whitespaces),
                 category: selectedCategory,
@@ -353,7 +362,7 @@ struct MkSellFlowSheet: View {
                 originalPrice: nil,
                 isFree: isFree,
                 hasRecall: false,
-                isGraduate: true,
+                isGraduate: false,   // '동네 졸업템'은 판매자가 선택해야 — 자동 부여 금지(정직)
                 sellerName: nickname,
                 sellerTier: .new,
                 distanceText: "내 동네",
@@ -393,7 +402,7 @@ struct MkSellFlowSheet: View {
             originalPrice: nil,
             isFree: isFree,
             hasRecall: false,
-            isGraduate: true,
+            isGraduate: false,   // '동네 졸업템' 자동 부여 금지 — 판매자 선택 항목
             sellerName: nickname,
             sellerTier: .new,
             distanceText: "내 동네",
@@ -437,27 +446,8 @@ struct MkSellFlowSheet: View {
                     .lineSpacing(4)
             }
 
-            // 보상 뱃지
-            BLCard(padding: 13, flat: true) {
-                HStack(spacing: 10) {
-                    Image(systemName: "trophy.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(AppColors.gold)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("첫 매물 등록 뱃지 획득!")
-                            .font(.system(size: 13.5, weight: .bold))
-                            .foregroundStyle(AppColors.gold)
-                        Text("따뜻한 이웃이 되어주셔서 감사해요.")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(Color(hex: 0xA8813A))
-                    }
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-            .accessibilityLabel("첫 매물 등록 뱃지 획득! 따뜻한 이웃이 되어주셔서 감사해요.")
+            // 뱃지 축하는 전역 윈도우 카드(BadgeOverlayWindow)가 '첫 매물 등록' 시 1회만 띄운다.
+            // 여기서 하드코딩하면 2번째·3번째 등록에도 "첫 매물 등록 뱃지 획득!"이 거짓으로 떠서 제거.
 
             LiquidButton(action: { dismiss() }) {
                 Text("확인")
