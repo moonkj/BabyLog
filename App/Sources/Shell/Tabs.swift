@@ -87,12 +87,6 @@ struct HomeLayoutGlyph: Shape {
                 p.addRoundedRect(in: CGRect(x: x * s, y: y * s, width: 7 * s, height: 7 * s),
                                  cornerSize: CGSize(width: 2 * s, height: 2 * s))
             }
-        case .timeline:
-            p.addEllipse(in: CGRect(x: (6 - 2) * s, y: (7 - 2) * s, width: 4 * s, height: 4 * s))
-            p.addEllipse(in: CGRect(x: (6 - 2) * s, y: (17 - 2) * s, width: 4 * s, height: 4 * s))
-            p.move(to: P(6, 9));  p.addLine(to: P(6, 15))
-            p.move(to: P(11, 7)); p.addLine(to: P(19, 7))
-            p.move(to: P(11, 17)); p.addLine(to: P(19, 17))
         }
         return p
     }
@@ -115,13 +109,12 @@ struct HomeLayoutIcon: View {
 enum HomeLayout: String, CaseIterable {
     case hero      = "hero"
     case dashboard = "dashboard"
-    case timeline  = "timeline"
+    // 타임라인 레이아웃 제거 — 기록 탭에 동일 타임라인이 있어 중복이었다.
 
     var label: String {
         switch self {
         case .hero:      return "히어로"
         case .dashboard: return "대시보드"
-        case .timeline:  return "타임라인"
         }
     }
 
@@ -130,7 +123,6 @@ enum HomeLayout: String, CaseIterable {
         switch self {
         case .hero:      return "person.crop.rectangle"
         case .dashboard: return "square.grid.2x2"
-        case .timeline:  return "list.bullet"
         }
     }
 }
@@ -189,63 +181,6 @@ struct HomeTab: View {
             return man == man.rounded() ? "\(Int(man))만원" : String(format: "%.1f만원", man)
         }
         return "\(amount)원"
-    }
-
-    // MARK: 홈 타임라인 실데이터
-    struct HomeRecentItem: Identifiable {
-        let id: UUID
-        let badge: String?
-        let caption: String
-        let date: Date
-        let tone: BadgeTone
-        let icon: String?
-        var photoRef: String? = nil
-    }
-
-    /// 선택 아이의 최근 기록(다이어리+성장) 최신순 최대 5건
-    private var recentHomeRecords: [HomeRecentItem] {
-        guard let cid = selectedChild?.id else { return [] }
-        let diaries = store.diaryEntries(for: cid).map { e in
-            HomeRecentItem(
-                id: e.id,
-                badge: e.milestone,
-                caption: e.content ?? (e.recordType == "photo" ? "사진을 남겼어요" : "오늘의 기록"),
-                date: e.date,
-                tone: e.milestone != nil ? .amber : .mint,
-                icon: e.recordType == "photo" ? nil : "text.alignleft",
-                photoRef: e.photoRef
-            )
-        }
-        let growth = store.growthRecords(for: cid).map { g in
-            HomeRecentItem(id: g.id, badge: nil, caption: growthCaption(g),
-                           date: g.date, tone: .blue, icon: "ruler")
-        }
-        return Array((diaries + growth).sorted { $0.date > $1.date }.prefix(5))
-    }
-
-    private func growthCaption(_ g: GrowthRecord) -> String {
-        var parts: [String] = []
-        if let h = g.heightCm { parts.append("키 \(formatMeasure(h))cm") }
-        if let w = g.weightKg { parts.append("몸무게 \(formatMeasure(w))kg") }
-        if let hc = g.headCircumferenceCm { parts.append("머리둘레 \(formatMeasure(hc))cm") }
-        return parts.isEmpty ? "성장 기록" : parts.joined(separator: " · ")
-    }
-
-    private func formatMeasure(_ v: Double) -> String {
-        v == v.rounded() ? "\(Int(v))" : String(format: "%.1f", v)
-    }
-
-    private func relativeDay(_ date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "오늘" }
-        if cal.isDateInYesterday(date) { return "어제" }
-        let days = cal.dateComponents([.day], from: cal.startOfDay(for: date),
-                                      to: cal.startOfDay(for: Date())).day ?? 0
-        if days < 7 { return "\(days)일 전" }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "M월 d일"
-        return f.string(from: date)
     }
 
     // MARK: Priority Engine — 실데이터(아이 생년월일 기반 표준 접종 일정)
@@ -387,8 +322,6 @@ struct HomeTab: View {
             heroLayout
         case .dashboard:
             dashboardLayout
-        case .timeline:
-            timelineLayout
         }
     }
 
@@ -535,11 +468,19 @@ struct HomeTab: View {
     private var heroLayout: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             heroCard
-            priorityCard
+            // 단순 '기록 권유'는 아래 nudgeCard가 담당 — 금색 '지금 가장 중요해요' 카드는
+            // 접종·지원금·추억 등 진짜 우선순위일 때만(중복·과장 제거).
+            if showsHeroPriority { priorityCard }
             nudgeCard
             peerCard
             if memoryEntry != nil { memoryCard }
         }
+    }
+
+    /// 금색 우선순위 카드 노출 여부 — 단순 기록 권유(.recordNudge)는 제외.
+    private var showsHeroPriority: Bool {
+        guard let kind = priorityItem?.kind else { return false }
+        return kind != .recordNudge
     }
 
     /// 1년 전 오늘(±3일)의 다이어리 기록 — 있으면 추억 카드 노출
@@ -671,19 +612,10 @@ struct HomeTab: View {
                             .accessibilityLabel("디데이 \(dDay)일 전")
                     }
                 }
-                HStack(spacing: 10) {
-                    LiquidButton(fill: AppColors.gold, action: { priorityAction(item.kind) }) {
-                        Text(priorityActionLabel(item.kind))
-                    }
-                    Button { priorityAction(item.kind) } label: {
-                        Image(systemName: "bell.fill").font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.gold)
-                            .frame(width: 52, height: 52)
-                            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                    }
-                    .buttonStyle(LiquidPressStyle())
-                    .accessibilityLabel(priorityActionLabel(item.kind))
-                    .fixedSize()
+                // CTA 단일 버튼 — 종(알람) 버튼은 실제 리마인더 기능이 없어 같은 동작을 중복하던
+                // 가짜 버튼이라 제거(정직 원칙). 리마인더가 필요하면 별도 기능으로.
+                LiquidButton(fill: AppColors.gold, action: { priorityAction(item.kind) }) {
+                    Text(priorityActionLabel(item.kind))
                 }
             }
             .padding(18)
@@ -1009,87 +941,6 @@ struct HomeTab: View {
         .accessibilityLabel(accessLabel)
     }
 
-    // MARK: ═══════════════════════════════════
-    // MARK: C — 타임라인 레이아웃 (인라인 리스트)
-    // MARK: ═══════════════════════════════════
-    private var timelineLayout: some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            // compact 헤더 재사용
-            dashboardChildHeader
-            // 우선순위 카드 compact — PriorityEngine 연결 유지
-            priorityCardCompact
-            // 또래 이야기
-            peerCard
-            // 최근 기록 섹션 — 선택 아이의 실 기록
-            BLSectionHead(title: "최근 기록", action: "전체", onAction: { onNavigate(.record) })
-            if recentHomeRecords.isEmpty {
-                BLEmptyState(
-                    icon: "camera.fill",
-                    title: "첫 순간을 담아볼까요?",
-                    message: "사진이 여기 차곡차곡 쌓일 거예요."
-                )
-            } else {
-                VStack(spacing: 12) {
-                    ForEach(Array(recentHomeRecords.enumerated()), id: \.element.id) { idx, item in
-                        timelineRecord(seed: idx + 1, badge: item.badge, caption: item.caption,
-                                       day: relativeDay(item.date), tone: item.tone, icon: item.icon,
-                                       photoRef: item.photoRef)
-                    }
-                }
-            }
-        }
-    }
-
-    private func timelineRecord(
-        seed: Int,
-        badge: String?,
-        caption: String,
-        day: String,
-        tone: BadgeTone,
-        icon: String?,
-        photoRef: String? = nil
-    ) -> some View {
-        Button { onNavigate(.record) } label: {
-            HStack(spacing: 12) {
-                Group {
-                    if let photo = PhotoStore.image(photoRef) {
-                        Image(uiImage: photo)
-                            .resizable().scaledToFill()
-                            .frame(width: 54, height: 54)
-                            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    } else if let icon {
-                        HomeIconBadge(symbol: icon, tint: tone.ink, size: 54)
-                    } else {
-                        PhotoPlaceholder(seed: seed, cornerRadius: 11)
-                            .frame(width: 54, height: 54)
-                    }
-                }
-                .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    if let badge {
-                        BLBadge(tone: tone, text: badge)
-                    }
-                    Text(caption)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.ink)
-                        .lineLimit(1)
-                    Text(day)
-                        .font(AppFont.micro)
-                        .foregroundStyle(AppColors.ink3)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.primary)
-                    .accessibilityHidden(true)
-            }
-            .padding(10)
-            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-            .blShadow(.chip)
-        }
-        .buttonStyle(LiquidPressStyle(scale: 0.98))
-        .accessibilityLabel("\(day): \(caption)\(badge != nil ? ", \(badge!)" : "")")
-    }
 }
 
 // MARK: - 동네 (주변/마켓/크루 세그먼트)
