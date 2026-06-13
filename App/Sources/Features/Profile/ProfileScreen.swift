@@ -19,6 +19,8 @@ struct ProfileScreen: View {
 
     // 성별 중립 닉네임 (설정에서 변경 — 맘/파파/양육자)
     @AppStorage("bl_nickname") private var nickname = "양육자님"
+    // 설정에서 고른 호칭 — 프로필 헤더에 역할로 표시(맘/파파만, 양육자는 중립 기본이라 생략)
+    @AppStorage("bl_caregiver_title") private var caregiverTitle = "양육자"
     // 닉네임 옆에 장착한 뱃지 (TickLab 스타일)
     @AppStorage("bl_equipped_badge") private var equippedBadgeId = ""
     @State private var detailBadge: BadgeCatalogItem? = nil
@@ -28,6 +30,12 @@ struct ProfileScreen: View {
         guard let c = store.selectedChild else { return "아이를 등록해보세요" }
         let m = AgeCalculator.childAgeMonths(birthDate: c.birthDate, asOf: Date()).months
         return "\(c.name) · \(m)개월"
+    }
+
+    /// 프로필 헤더 캡션 — 선택한 호칭(맘/파파)을 역할로 함께 보여준다.
+    private var caregiverRoleAgeText: String {
+        guard caregiverTitle == "맘" || caregiverTitle == "파파" else { return childAgeText }
+        return store.selectedChild == nil ? caregiverTitle : "\(caregiverTitle) · \(childAgeText)"
     }
 
     // 거래·크루 수는 뱃지 엔진과 동일 소스(로컬 기준)로 산정 — 티어 카드와 뱃지 불일치 방지.
@@ -197,7 +205,7 @@ struct ProfileScreen: View {
                                     systemIcon: equippedBadge.systemIcon, dot: false)
                                 .accessibilityLabel("장착한 뱃지: \(equippedBadge.name)")
                         }
-                        Text(childAgeText)
+                        Text(caregiverRoleAgeText)
                             .font(AppFont.caption)
                             .foregroundStyle(AppColors.ink2)
                     }

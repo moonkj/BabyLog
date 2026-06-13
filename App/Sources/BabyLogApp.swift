@@ -39,7 +39,15 @@ struct BabyLogApp: App {
                 // 백그라운드 전환 시 즉시 저장 — debounce(0.5s) 대기 중 강제종료로 마지막 기록이 유실되지 않게.
                 // 포그라운드 복귀 시 미업로드 신고 재시도(증거 서버 보존).
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .background || phase == .inactive { store.persistNow() }
+                    if phase == .background || phase == .inactive {
+                        store.persistNow()
+                        // iCloud '자동 백업'이 켜져 있고 CloudKit이 빌드에 활성화된 경우에만
+                        // 앱을 닫을 때 스냅샷을 자동 푸시(엔타이틀먼트 없으면 isAvailableInBuild=false → no-op).
+                        if CloudSyncService.isAvailableInBuild && CloudSyncService.isEnabled {
+                            let snapshot = store.snapshot()
+                            Task { try? await CloudSyncService.shared.push(snapshot) }
+                        }
+                    }
                     else if phase == .active { Task { await flushPendingReports() } }
                 }
         }

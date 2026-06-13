@@ -7,11 +7,11 @@ import UniformTypeIdentifiers
 // MARK: - SettingsScreen
 
 /// 앱 설정 화면 — ProfileScreen 기어 버튼에서 진입.
+/// (앱은 라이트 모드 고정 — BabyLogApp.preferredColorScheme(.light). 테마 설정 없음.)
 /// AppStorage 키 목록:
-///   bl_theme          "system|light|dark"      화면 테마
 ///   bl_night_dim      Bool                     야간 초저휘도 모드
 ///   bl_fab_side       "right|left"             FAB 위치
-///   bl_caregiver_title "양육자|맘|파파"          호칭
+///   bl_caregiver_title "양육자|맘|파파"          호칭(프로필 헤더에 역할로 표시)
 struct SettingsScreen: View {
 
     // MARK: AppStorage
@@ -26,6 +26,7 @@ struct SettingsScreen: View {
     @State private var authAlert: String? = nil
     @State private var cloudStatus: String? = nil
     @State private var cloudBusy = false
+    @State private var showCloudRestoreConfirm = false
 
     // MARK: Environment
 
@@ -72,7 +73,10 @@ struct SettingsScreen: View {
         .sensoryFeedback(.selection, trigger: fabSide)
         .sensoryFeedback(.selection, trigger: caregiverTitle)
         .sensoryFeedback(.impact(weight: .light), trigger: nightDim)
-        .sheet(isPresented: $showShareSheet) {
+        .sheet(isPresented: $showShareSheet, onDismiss: {
+            // 공유/저장 후 임시 파일 정리 — 반복 내보내기 시 tmp에 대용량 백업이 쌓이지 않도록.
+            if let url = exportURL { try? FileManager.default.removeItem(at: url); exportURL = nil }
+        }) {
             if let url = exportURL {
                 SettingsShareSheet(activityItems: [url])
             }
@@ -120,6 +124,12 @@ struct SettingsScreen: View {
         .alert("계정", isPresented: Binding(get: { authAlert != nil }, set: { if !$0 { authAlert = nil } })) {
             Button("확인", role: .cancel) {}
         } message: { Text(authAlert ?? "") }
+        .confirmationDialog("iCloud 백업으로 덮어쓸까요?", isPresented: $showCloudRestoreConfirm, titleVisibility: .visible) {
+            Button("iCloud에서 복원", role: .destructive) { Task { await runCloud(.restore) } }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("이 기기의 현재 기록을 iCloud 백업으로 덮어씁니다. iCloud 백업이 더 오래된 것이면 최근 기록이 사라질 수 있어요.")
+        }
     }
 
     // MARK: - 계정 섹션 (Apple 로그인 — Supabase 연동 시에만 노출)
@@ -349,7 +359,7 @@ struct SettingsScreen: View {
     // MARK: - iCloud 가족 백업 (CloudKit)
 
     private var iCloudSection: some View {
-        settingsSection(eyebrow: "백업", title: "iCloud 가족 백업") {
+        settingsSection(eyebrow: "백업", title: "iCloud 백업") {
             if CloudSyncService.isAvailableInBuild {
                 // 자동 백업 토글
                 settingsRow(icon: "icloud.fill", iconBg: Color(hex: 0xE6F1FB), iconFg: Color(hex: 0x3B6FA8)) {
@@ -359,7 +369,7 @@ struct SettingsScreen: View {
                             Spacer(minLength: 0)
                             Toggle("", isOn: $cloudSync).labelsHidden().tint(AppColors.primary)
                         }
-                        Text("가족(조부모)이 같은 iCloud 계정에서 사진·영상·기록을 함께 봐요")
+                        Text("켜두면 앱을 닫을 때 기록을 내 iCloud에 자동 백업해요. 새 기기에서도 같은 iCloud 계정으로 복원할 수 있어요.")
                             .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -371,7 +381,7 @@ struct SettingsScreen: View {
                     }
                 }.buttonStyle(.plain).disabled(cloudBusy).opacity(cloudBusy ? 0.5 : 1)
                 Divider().overlay(AppColors.line).padding(.leading, 62)
-                Button { Task { await runCloud(.restore) } } label: {
+                Button { showCloudRestoreConfirm = true } label: {
                     settingsRow(icon: "arrow.down.circle.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
                         Text("iCloud에서 복원").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
                     }
@@ -383,8 +393,8 @@ struct SettingsScreen: View {
             } else {
                 settingsRow(icon: "icloud", iconBg: Color(hex: 0xE6F1FB), iconFg: Color(hex: 0x3B6FA8)) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("iCloud 가족 백업 (준비됨)").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                        Text("유료 Apple Developer 계정 + iCloud(CloudKit) 연결 시 켜져요. 켜면 조부모님도 같은 계정에서 사진·영상·기록을 함께 봅니다.")
+                        Text("iCloud 백업 (준비됨)").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Text("유료 Apple Developer 계정 + iCloud(CloudKit) 연결 시 켜져요. 켜면 기록을 내 iCloud에 자동 백업하고, 새 기기에서 복원할 수 있습니다.")
                             .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -421,17 +431,17 @@ struct SettingsScreen: View {
 
     private var notificationSection: some View {
         settingsSection(eyebrow: "알림", title: "알림 관리") {
-            // 필수 알림 안내
+            // 추억 알림 안내 (실제 발송되는 유일한 알림)
             settingsRow(
                 icon: "bell.badge.fill",
                 iconBg: Color(hex: 0xFAEEDA),
                 iconFg: Color(hex: 0x98711E)
             ) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("필수 알림 (접종 · 지원금)")
+                    Text("추억 알림")
                         .font(.system(size: 14.5, weight: .semibold))
                         .foregroundStyle(AppColors.ink)
-                    Text("예방접종·정부 지원금 등 중요 알림. 개인화 추천·마케팅과 완전히 분리됩니다")
+                    Text("기록한 다이어리를 바탕으로 ‘N년 전 오늘’을 가끔 보여드려요. 광고·마케팅 알림은 보내지 않습니다.")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.ink3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -442,17 +452,17 @@ struct SettingsScreen: View {
                 .overlay(AppColors.line)
                 .padding(.leading, 62)
 
-            // 권유 알림 안내
+            // 민감 시기 보호 (민감영역 원칙)
             settingsRow(
-                icon: "bell.slash.fill",
+                icon: "heart.slash.fill",
                 iconBg: Color(hex: 0xEFF1F4),
                 iconFg: AppColors.ink3
             ) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("권유 알림 (기록 유도 · 콘텐츠)")
+                    Text("민감 시기 보호")
                         .font(.system(size: 14.5, weight: .semibold))
                         .foregroundStyle(AppColors.ink)
-                    Text("오래 미접속 시 자동으로 빈도를 줄여요. 상실·민감 시기엔 즉시 중단됩니다")
+                    Text("‘기록 멈춤’이나 상실 시 임신 주차·태아 가이드 알림을 즉시 중단합니다. 절대 닦달하지 않아요.")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.ink3)
                         .fixedSize(horizontal: false, vertical: true)
