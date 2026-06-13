@@ -74,24 +74,29 @@ struct SettingsScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Spacing.s4) {
-                displaySection
-                quickRecordSection
-                caregiverSection
-                accountSection
-                notificationSection
-                backupSection
-                iCloudSection
-                dataSection
-                infoSection
-                businessInfoSection
+            VStack(alignment: .leading, spacing: 0) {
+                // 앱 공용 헤더(28pt) — 다른 탭과 통일
+                BLScreenHeader(title: "설정", eyebrow: "환경설정")
+
+                VStack(spacing: Spacing.s5) {
+                    displaySection
+                    quickRecordSection
+                    caregiverSection
+                    accountSection
+                    notificationSection
+                    backupSection
+                    iCloudSection
+                    dataSection
+                    infoSection
+                    businessInfoSection
+                }
+                .padding(.horizontal, Spacing.s5)   // 헤더(s5)와 좌우 정렬
+                .padding(.top, Spacing.s2)
+                .padding(.bottom, Spacing.s8)
             }
-            .padding(.horizontal, Spacing.s4)
-            .padding(.bottom, Spacing.s8)
         }
         .background(AppColors.canvas.ignoresSafeArea())
-        .navigationTitle("설정")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .alert("오픈소스 고지", isPresented: $showOpenSource) {
             Button("확인", role: .cancel) {}
         } message: {
@@ -839,6 +844,8 @@ struct SettingsScreen: View {
             }
         }
         .padding(.horizontal, Spacing.s4)
+        // 세로 패딩 추가 — 버튼·세그먼트가 든 행에서 카드가 콘텐츠에 딱 붙던 문제 해결(여백 확보).
+        .padding(.vertical, Spacing.s3)
         .frame(minHeight: 64)
     }
 }
