@@ -12,7 +12,6 @@ struct CrewMeetupDetail: View {
     let meetup: CrewMeetup
 
     @EnvironmentObject private var store: AppStore
-    @State private var showGroupChatGuide = false
     @State private var showChat = false
     @State private var showDeleteConfirm = false
     @State private var joinBusy = false   // 참가 토글 중복 탭 방지(서버 정합)
@@ -58,10 +57,6 @@ struct CrewMeetupDetail: View {
                     .accessibilityLabel("모임 관리")
                 }
             }
-        }
-        .sheet(isPresented: $showGroupChatGuide) {
-            CrewGroupChatGuideSheet(meetup: meetup)
-                .presentationDetents([.medium])
         }
         .sheet(isPresented: $showLogin) {
             AppleLoginSheet(message: "모임 참가·채팅은 로그인이 필요해요.") {}

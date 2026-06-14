@@ -40,13 +40,15 @@ drop policy if exists market_item_read on public.market_item;
 drop policy if exists market_item_ins  on public.market_item;
 drop policy if exists market_item_upd  on public.market_item;
 drop policy if exists market_item_del  on public.market_item;
+-- 소유자 = 로그인 uid 또는 익명 기기ID(x-device-id 헤더). 앱은 모든 쓰기에 헤더를 보냄.
 create policy market_item_read on public.market_item for select to anon, authenticated using (true);
 create policy market_item_ins  on public.market_item for insert to anon, authenticated
-  with check ( seller = coalesce(auth.uid()::text, seller) );
+  with check ( seller = coalesce(auth.uid()::text, nullif(current_setting('request.headers', true)::json ->> 'x-device-id', '')) );
 create policy market_item_upd  on public.market_item for update to anon, authenticated
-  using ( seller = coalesce(auth.uid()::text, seller) ) with check ( seller = coalesce(auth.uid()::text, seller) );
+  using ( seller = coalesce(auth.uid()::text, nullif(current_setting('request.headers', true)::json ->> 'x-device-id', '')) )
+  with check ( seller = coalesce(auth.uid()::text, nullif(current_setting('request.headers', true)::json ->> 'x-device-id', '')) );
 create policy market_item_del  on public.market_item for delete to anon, authenticated
-  using ( seller = coalesce(auth.uid()::text, seller) );
+  using ( seller = coalesce(auth.uid()::text, nullif(current_setting('request.headers', true)::json ->> 'x-device-id', '')) );
 
 -- ───────── 30일 자동 만료 삭제 ─────────
 -- pg_cron(권장): 매일 03시 만료분 + 그 사진 정리. (Edge Function 스케줄로 대체 가능)
@@ -66,10 +68,13 @@ drop policy if exists market_photos_ins  on storage.objects;
 drop policy if exists market_photos_del  on storage.objects;
 create policy market_photos_read on storage.objects for select to anon, authenticated
   using ( bucket_id = 'market-photos' );
+-- 업로드·삭제는 자기 소유 폴더(첫 경로 세그먼트 = ownerID)만. 경로: {ownerID}/{uuid}.jpg
 create policy market_photos_ins  on storage.objects for insert to anon, authenticated
-  with check ( bucket_id = 'market-photos' );
+  with check ( bucket_id = 'market-photos'
+    and (storage.foldername(name))[1] = coalesce(auth.uid()::text, nullif(current_setting('request.headers', true)::json ->> 'x-device-id', '')) );
 create policy market_photos_del  on storage.objects for delete to anon, authenticated
-  using ( bucket_id = 'market-photos' );
+  using ( bucket_id = 'market-photos'
+    and (storage.foldername(name))[1] = coalesce(auth.uid()::text, nullif(current_setting('request.headers', true)::json ->> 'x-device-id', '')) );
 
 -- ───────── 1:1 거래 채팅(매물별 구매자↔판매자 1:1 스레드) ─────────
 -- ⚠️ 공개방 아님: 스레드 키 = (item_id, buyer). 그 대화의 '해당 구매자'와 '그 매물 판매자'만 열람.

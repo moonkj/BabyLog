@@ -162,12 +162,16 @@ enum MarketBackend {
         for img in photos.prefix(5) {
             if let u = await uploadPhoto(img) { urls.append(u) }
         }
+        let me = await SupabaseConfig.ownerID()
+        let newId = UUID().uuidString   // 클라 생성 id → return=minimal(되읽기 RLS 42501 회피)
         var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 15
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(me, forHTTPHeaderField: "x-device-id")   // 익명 소유자 RLS 바인딩
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "id": newId,
             "hood": dong,    // 판매자 동(표시)
             "city": city,    // 노출 범위 시
             "title": String(item.title.prefix(120)),
@@ -181,14 +185,12 @@ enum MarketBackend {
             "description": String(item.description.prefix(2000)),
             "hygiene_checks": item.hygieneChecks,
             "photo_urls": urls,
-            "seller": await SupabaseConfig.ownerID(),
+            "seller": me,
             "seller_name": String(item.sellerName.prefix(40)),
             "status": item.status.rawValue,
         ])
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let rows = try? JSONDecoder().decode([ItemDTO].self, from: data),
-              let newId = rows.first?.id else {
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             for u in urls { await deletePhoto(u) }   // 행 저장 실패 시 업로드된 사진 고아 객체 정리
             return nil
         }
@@ -297,15 +299,17 @@ enum MarketBackend {
         let transcript: [[String: Any]] = report.transcript.map {
             ["text": $0.text, "mine": $0.mine, "date": iso.string(from: $0.date)]
         }
+        let me = await SupabaseConfig.ownerID()
         var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 15
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(me, forHTTPHeaderField: "x-device-id")   // 신고자 RLS 바인딩
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "item_id": report.itemId,
             "item_title": String(report.itemTitle.prefix(120)),
-            "reporter": await SupabaseConfig.ownerID(),
+            "reporter": me,
             "counterpart": String(report.counterpartName.prefix(40)),
             "reason": String(report.reason.prefix(120)),
             "note": String(report.note.prefix(2000)),

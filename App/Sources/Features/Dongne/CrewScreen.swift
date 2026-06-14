@@ -618,6 +618,7 @@ private struct CrewPostListScreen: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var selectedPost: CrewPost?
+    @State private var showLogin = false
     var posts: [CrewPost]
     var body: some View {
         NavigationStack {
@@ -626,7 +627,7 @@ private struct CrewPostListScreen: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(posts.enumerated()), id: \.element.id) { idx, post in
                             Button { Haptics.light(); selectedPost = post } label: {
-                                CrewPostRow(post: post)
+                                CrewPostRow(post: post, onRequireLogin: { showLogin = true })
                                     .padding(.horizontal, Spacing.s4).padding(.vertical, 14)
                                     .overlay(alignment: .top) {
                                         if idx > 0 {
@@ -647,6 +648,9 @@ private struct CrewPostListScreen: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { dismiss() } } }
             .sheet(item: $selectedPost) { post in
                 CrewPostDetailSheet(post: post).environmentObject(store).presentationDetents([.large])
+            }
+            .sheet(isPresented: $showLogin) {
+                AppleLoginSheet(message: "좋아요는 로그인이 필요해요.") {}
             }
         }
     }

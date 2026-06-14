@@ -534,6 +534,22 @@ struct MarketScreen: View {
                                 MkItemCard(item: item, isSaved: store.isMarketSaved(item.id))
                             }
                             .buttonStyle(PlainButtonStyle())
+                            // 관심(찜) — NavigationLink 위에 별도 버튼으로 올려 탭이 네비로 새지 않게.
+                            .overlay(alignment: .bottomTrailing) {
+                                Button {
+                                    Haptics.selection()
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { store.toggleMarketSaved(item) }
+                                } label: {
+                                    Image(systemName: store.isMarketSaved(item.id) ? "heart.fill" : "heart")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(store.isMarketSaved(item.id) ? AppColors.danger : AppColors.ink3.opacity(0.55))
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.trailing, Spacing.s4).padding(.bottom, 2)
+                                .accessibilityLabel(store.isMarketSaved(item.id) ? "관심 해제" : "관심 등록")
+                            }
                         }
                     }
                 }
@@ -696,14 +712,7 @@ private struct MkItemCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 내 관심 표시 (우하단) — 상세에서 누른 하트가 여기 반영된다.
-            // 서버는 좋아요 수를 집계하지 않으므로(항상 0) 가짜 카운트 대신 '내 저장' 상태만 정직 표시.
-            VStack {
-                Spacer(minLength: 0)
-                Image(systemName: isSaved ? "heart.fill" : "heart")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isSaved ? AppColors.danger : AppColors.ink3.opacity(0.5))
-            }
+            // 관심(찜) 하트는 목록 행 위에 오버레이 버튼으로 표시(탭 가능) — 카드 자체엔 두지 않음.
         }
         .frame(minHeight: photoSide)
         .padding(.vertical, Spacing.s3)
