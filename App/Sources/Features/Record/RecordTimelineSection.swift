@@ -15,19 +15,32 @@ private struct IdentifiableImage: Identifiable {
 struct TimelineSection: View {
     @EnvironmentObject private var store: AppStore
     let child: Child
+    /// ⭐ 즐겨찾기만 모아보기 토글.
+    @State private var favoritesOnly = false
 
-    // store에서 실데이터 (일기 + 성장, date 내림차순 통합)
+    // store에서 실데이터 (일기 + 성장, date 내림차순 통합). 즐겨찾기 필터 시 ⭐ 일기만.
     private var allItems: [(date: Date, item: TimelineItem)] {
         let diaries = store.diaryEntries
             .filter { $0.childId == child.id }
+            .filter { !favoritesOnly || store.isDiaryLiked($0.id) }
             .map { (date: $0.date, item: TimelineItem.diary($0)) }
-        let growth = store.growthRecords
+        // 성장 기록은 즐겨찾기 대상이 아니므로 필터 시 제외.
+        let growth = favoritesOnly ? [] : store.growthRecords
             .filter { $0.childId == child.id }
             .map { (date: $0.date, item: TimelineItem.growth($0)) }
         return (diaries + growth).sorted { $0.date > $1.date }
     }
 
     private var totalCount: Int { allItems.count }
+    /// 이 아이의 즐겨찾기(⭐) 일기 수 — 필터 칩 노출 여부·배지 수.
+    private var favoriteCount: Int {
+        store.diaryEntries.filter { $0.childId == child.id && store.isDiaryLiked($0.id) }.count
+    }
+    /// 필터와 무관한 전체 기록 유무 — '첫 기록' 빈 상태 판단용.
+    private var hasAnyRecords: Bool {
+        store.diaryEntries.contains { $0.childId == child.id }
+            || store.growthRecords.contains { $0.childId == child.id }
+    }
 
     // 날짜별 그룹 (최신일 우선, 일자 내 최신순)
     private var groupedItems: [(String, [TimelineItem])] {
@@ -44,7 +57,7 @@ struct TimelineSection: View {
     }
 
     var body: some View {
-        if allItems.isEmpty {
+        if !hasAnyRecords {
             BLEmptyState(
                 icon: "book.closed.fill",
                 title: "첫 기록을 남겨볼까요?",
@@ -52,29 +65,71 @@ struct TimelineSection: View {
             )
         } else {
             VStack(alignment: .leading, spacing: Spacing.s5) {
-                ForEach(groupedItems, id: \.0) { (day, items) in
-                    VStack(alignment: .leading, spacing: Spacing.s3) {
-                        // 날짜 그룹 헤더
-                        DateGroupHeader(label: day)
-                        // 카드 목록
-                        ForEach(Array(items.enumerated()), id: \.element.id) { _, item in
-                            switch item {
-                            case .growth(let r):
-                                GrowthTimelineCard(record: r)
-                            case .diary(let e):
-                                DiaryTimelineCard(entry: e, child: child)
+                if favoriteCount > 0 { filterBar }
+                if allItems.isEmpty {
+                    // 즐겨찾기 필터인데 결과가 비어있을 때(전체엔 기록 있음)
+                    BLEmptyState(
+                        icon: "star",
+                        title: "즐겨찾기한 기록이 없어요",
+                        message: "사진의 ⭐를 눌러 베스트 순간을 모아보세요."
+                    )
+                } else {
+                    ForEach(groupedItems, id: \.0) { (day, items) in
+                        VStack(alignment: .leading, spacing: Spacing.s3) {
+                            // 날짜 그룹 헤더
+                            DateGroupHeader(label: day)
+                            // 카드 목록
+                            ForEach(Array(items.enumerated()), id: \.element.id) { _, item in
+                                switch item {
+                                case .growth(let r):
+                                    GrowthTimelineCard(record: r)
+                                case .diary(let e):
+                                    DiaryTimelineCard(entry: e, child: child)
+                                }
                             }
                         }
                     }
+                    // 하단 안내
+                    Text(favoritesOnly
+                         ? "\(child.name)의 즐겨찾기 \(totalCount)개 💛"
+                         : "\(child.name)의 \(totalCount)개 순간이 기록되었어요 💛")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink3)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, Spacing.s2)
                 }
-                // 하단 안내
-                Text("\(child.name)의 \(totalCount)개 순간이 기록되었어요 💛")
-                    .font(AppFont.caption)
-                    .foregroundStyle(AppColors.ink3)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, Spacing.s2)
             }
         }
+    }
+
+    // ⭐ 즐겨찾기 필터 칩 — 전체 / 즐겨찾기 N (즐겨찾기가 1개 이상일 때만 노출)
+    private var filterBar: some View {
+        HStack(spacing: Spacing.s2) {
+            filterPill(title: "전체", icon: nil, active: !favoritesOnly,
+                       tint: AppColors.primary) { favoritesOnly = false }
+            filterPill(title: "즐겨찾기 \(favoriteCount)", icon: "star.fill", active: favoritesOnly,
+                       tint: AppColors.gold) { favoritesOnly = true }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func filterPill(title: String, icon: String?, active: Bool,
+                            tint: Color, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.light()
+            withAnimation(.easeInOut(duration: 0.18)) { action() }
+        } label: {
+            HStack(spacing: 5) {
+                if let icon { Image(systemName: icon).font(.system(size: 12, weight: .bold)) }
+                Text(title).font(.system(size: 13.5, weight: .semibold))
+            }
+            .foregroundStyle(active ? .white : AppColors.ink2)
+            .padding(.horizontal, 14).frame(height: 34)
+            .background(active ? tint : AppColors.surface2, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title) 보기")
+        .accessibilityAddTraits(active ? [.isSelected] : [])
     }
 }
 
