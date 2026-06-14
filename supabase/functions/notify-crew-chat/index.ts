@@ -57,8 +57,8 @@ Deno.serve(async (req) => {
       if (g?.name) title = g.name;
     }
 
-    // 보낸 사람만 멤버면 보낼 곳 없음 / 스팸 방지(보낸 사람이 멤버여야 함)
-    if (sender && !participants.includes(sender)) return new Response("not member", { status: 403 });
+    // 보낸 사람 제외하고 참여자 전원에게. (채팅 입장 시 자동 참가가 비동기라 sender의 멤버 행이
+    //  아직 커밋 안 됐을 수 있어 '멤버 필수' 403을 두지 않는다 — 메시지는 이미 저장된 정당 발신.)
     const recipients = participants.filter((d) => d && d !== sender);
     if (!recipients.length) return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
 

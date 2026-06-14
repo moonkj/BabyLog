@@ -10,7 +10,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 Deno.serve(async (req) => {
   try {
     const { pass } = await req.json().catch(() => ({}));
-    const expected = Deno.env.get("ADMIN_PASS") ?? "1639316";
+    const expected = Deno.env.get("ADMIN_PASS");
+    if (!expected) return new Response("admin pass not configured", { status: 500 });  // 폴백 비번 제거(fail closed)
     if (!pass || pass !== expected) return new Response("forbidden", { status: 403 });
 
     const supabase = createClient(

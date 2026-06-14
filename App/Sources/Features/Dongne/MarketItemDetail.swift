@@ -309,7 +309,7 @@ struct MarketItemDetail: View {
         statusBusy = true
         Task { @MainActor in
             let ok = await MarketBackend.completeSale(id: item.id, buyer: buyer)
-            if !ok { overrideStatus = nil; overrideSoldTo = nil; showStatusFailAlert = true }
+            if !ok { overrideStatus = nil; overrideSoldTo = nil; overrideBuyerConfirmed = nil; showStatusFailAlert = true }
             else if buyer != nil { await MarketBackend.notifyTradeConfirm(id: item.id) }  // 구매자에게 확인 푸시
             statusBusy = false
         }
@@ -326,6 +326,7 @@ struct MarketItemDetail: View {
 
     /// 구매자: 거래 확인 → 양쪽 확인 완료(인증 거래).
     private func confirmTrade() {
+        guard LoginGate.ready() else { showLogin = true; return }   // 로그인 필수(신상 특정)
         guard !confirmBusy else { return }
         confirmBusy = true
         overrideBuyerConfirmed = true   // 낙관 반영

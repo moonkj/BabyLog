@@ -132,6 +132,7 @@ struct CrewPostDetailSheet: View {
     @State private var commentText = ""
     @State private var commentError = false   // 댓글 전송 실패(서버) — 다시 입력하면 자동 해제
     @State private var lastFailedComment = "" // 실패 시 복원된 본문 — onChange가 오류를 즉시 지우는 것 방지
+    @State private var showLogin = false      // 로그인 게이트(좋아요·댓글)
     @State private var showDeleteConfirm = false
     @State private var deleteBusy = false     // 삭제 요청 중(중복 탭 방지)
     @State private var deleteFailed = false   // 서버 삭제 실패 안내
@@ -157,6 +158,7 @@ struct CrewPostDetailSheet: View {
     }
 
     private func sendComment() {
+        guard LoginGate.ready() else { showLogin = true; return }   // 로그인 필수
         let text = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         commentText = ""
@@ -182,6 +184,7 @@ struct CrewPostDetailSheet: View {
     }
 
     private func toggleLike() {
+        guard LoginGate.ready() else { showLogin = true; return }   // 로그인 필수
         Haptics.selection()
         let willLike = !isLiked
         store.toggleCrewPostLike(post.id)   // 낙관적 반영
@@ -257,6 +260,9 @@ struct CrewPostDetailSheet: View {
             Button("확인", role: .cancel) { }
         } message: {
             Text("글을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.")
+        }
+        .sheet(isPresented: $showLogin) {
+            AppleLoginSheet(message: "좋아요·댓글은 로그인이 필요해요.") {}
         }
     }
 

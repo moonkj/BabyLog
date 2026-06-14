@@ -538,7 +538,7 @@ private struct CrewActiveContent: View {
                                 Haptics.light()
                                 selectedPost = post
                             } label: {
-                                CrewPostRow(post: post)
+                                CrewPostRow(post: post, onRequireLogin: { showLogin = true })
                                     .padding(.horizontal, Spacing.s4)
                                     .padding(.vertical, 14)
                                     .overlay(alignment: .top) {
@@ -706,33 +706,19 @@ private struct CrewMeetupCard: View {
 
                 Spacer(minLength: 0)
 
-                // 참가 버튼 (토글 / 마감)
-                Button {
-                    Haptics.selection()
-                    let willJoin = !isJoined
-                    store.toggleJoinCrew(meetup.id)   // 낙관적 토글
-                    // 상세 화면과 동일하게 서버에도 반영 — 카드에서만 누르면 이웃에게 안 보이던 버그 수정
-                    if SupabaseConfig.isConfigured {
-                        Task {
-                            let ok = willJoin
-                                ? await CrewBackend.joinMeetup(meetupId: meetup.id)
-                                : await CrewBackend.leaveMeetup(meetupId: meetup.id)
-                            if !ok { store.toggleJoinCrew(meetup.id) }   // 실패 시 롤백
-                        }
+                // 참가 상태 표시(참가/마감은 상세에서 — 로그인 게이트 일원화 + NavigationLink 내 버튼 충돌 방지)
+                VStack(spacing: 3) {
+                    if isJoined {
+                        Text("참가중").font(.system(size: 11, weight: .heavy)).foregroundStyle(AppColors.primary)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(AppColors.primarySoft, in: Capsule())
+                    } else if isFull {
+                        Text("마감").font(.system(size: 11, weight: .heavy)).foregroundStyle(AppColors.ink3)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(AppColors.surface3, in: Capsule())
                     }
-                } label: {
-                    Text(isFull ? "마감" : (isJoined ? "참가중" : "참가"))
-                        .font(.system(size: 13.5, weight: .bold))
-                        .foregroundStyle(isFull ? AppColors.ink3 : (isJoined ? AppColors.ink2 : Color.white))
-                        .padding(.horizontal, Spacing.s4)
-                        .frame(height: 44)
-                        .background(isFull ? AppColors.surface3 : (isJoined ? AppColors.surface2 : AppColors.ink),
-                                    in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(AppColors.ink3)
                 }
-                .buttonStyle(LiquidPressStyle(scale: 0.94))
-                .disabled(isFull)
-                .accessibilityLabel(isFull ? "마감" : (isJoined ? "참가 취소" : "참가"))
-                .accessibilityHint(isFull ? "\(meetup.place) 모임. 정원이 가득 찼습니다" : "\(meetup.place) 모임. 남은 자리 \(spotsLeft)자리")
             }
         }
         .accessibilityElement(children: .contain)
@@ -810,6 +796,7 @@ private struct CrewGroupCard: View {
 private struct CrewPostRow: View {
     @EnvironmentObject private var store: AppStore
     let post: CrewPost
+    var onRequireLogin: () -> Void = {}
     private var isLiked: Bool { store.isCrewPostLiked(post.id) }
     private var likeCount: Int { post.likeCount + (isLiked ? 1 : 0) }
     // 서버 연동 시 댓글 수는 서버 카운트(post.replyCount)만 사용 — 로컬 댓글 중복 가산 금지.
@@ -848,6 +835,7 @@ private struct CrewPostRow: View {
                 .accessibilityLabel("댓글 \(replyCount)개")
 
                 Button {
+                    guard LoginGate.ready() else { onRequireLogin(); return }   // 로그인 필수
                     Haptics.selection()
                     let willLike = !isLiked
                     store.toggleCrewPostLike(post.id)

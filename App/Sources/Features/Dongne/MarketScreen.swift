@@ -326,8 +326,10 @@ struct MarketScreen: View {
         guard serverMode else { return }
         if let s = await MarketBackend.fetchItems(city: city) {
             // 내 매물은 시(city)와 무관하게 항상 포함 — city 없는 옛 매물도 보고 관리/삭제 가능.
+            // 단 판매완료분은 둘러보기 목록에서 제외(프로필 '내가 올린 물품'엔 전체 표시).
             let cityIDs = Set(s.map { $0.id })
-            let mineExtra = (await MarketBackend.fetchMyItems() ?? []).filter { !cityIDs.contains($0.id) }
+            let mineExtra = (await MarketBackend.fetchMyItems() ?? [])
+                .filter { !cityIDs.contains($0.id) && $0.status != .sold }
             sharedItems = (s + mineExtra).sorted { $0.createdAt > $1.createdAt }
             loadFailed = false
         } else {

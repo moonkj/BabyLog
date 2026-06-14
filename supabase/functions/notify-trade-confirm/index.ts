@@ -59,8 +59,8 @@ Deno.serve(async (req) => {
       .eq("id", itemId).maybeSingle();
     if (!item) return new Response("no item", { status: 404 });
 
-    // 2) 스팸 방지 — 호출자가 그 매물의 판매자여야 함(익명은 x-device-id, 로그인은 동일 식별자)
-    if (caller && item.seller && caller !== item.seller) {
+    // 2) 스팸 방지 — 호출자(헤더)가 그 매물 판매자여야 함. 헤더 누락 시에도 거부(우회 차단).
+    if (!caller || caller !== item.seller) {
       return new Response("not seller", { status: 403 });
     }
     // 3) 보낼 조건: 판매완료 + 구매자 지정 + 아직 미확인
