@@ -343,9 +343,11 @@ struct MkSellFlowSheet: View {
                 return
             }
 
-            let hood = store.selectedHood ?? location.localityName ?? ""
+            // 판매자 동(표시) + 시(노출 범위). 내 동네 우선, 미설정 시 현재 GPS.
+            let dong = store.selectedDong ?? location.localityName ?? ""
+            let city = store.selectedCity ?? location.cityName ?? ""
             // 위치 미확보 시 서버 등록이 실패하므로 시도하지 않고 안내(CrewCreateSheet와 동일 가드).
-            guard !hood.isEmpty, hood != "우리 동네" else {
+            guard !dong.isEmpty, dong != "우리 동네", !city.isEmpty else {
                 await MainActor.run {
                     submitting = false
                     alertMessage = "위치를 확인하고 있어요. 잠시 후 다시 시도해 주세요."
@@ -375,7 +377,7 @@ struct MkSellFlowSheet: View {
                 hygieneChecks: MarketItem.hygieneOptions.filter { hygiene.contains($0) }
             )
 
-            let newID = await MarketBackend.createItem(hood: hood, item: item, photos: photos)
+            let newID = await MarketBackend.createItem(dong: dong, city: city, item: item, photos: photos)
             await MainActor.run {
                 submitting = false
                 if let newID {

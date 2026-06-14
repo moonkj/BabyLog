@@ -127,8 +127,10 @@ final class NearbyLocationProvider: NSObject, ObservableObject, CLLocationManage
     static let shared = NearbyLocationProvider()
 
     @Published var coordinate: CLLocationCoordinate2D?
-    /// 역지오코딩된 현재 행정동(동/읍/면/리) — 제목 옆 표시용.
+    /// 역지오코딩된 현재 행정동(동/읍/면/리) — 크루 범위·표시용.
     @Published var localityName: String?
+    /// 현재 시/군(예: 순천시) — 마켓 노출 범위용. 광역시는 시 자체.
+    @Published var cityName: String?
     private let manager = CLLocationManager()
     private let geocoder = CLGeocoder()
     private var lastGeocodedCoord: CLLocationCoordinate2D?
@@ -156,7 +158,9 @@ final class NearbyLocationProvider: NSObject, ObservableObject, CLLocationManage
             guard let self, let p = placemarks?.first else { return }
             // 동/읍/면/리는 보통 subLocality, 없으면 locality(시·군·구) 폴백
             let name = p.subLocality ?? p.locality ?? p.administrativeArea
-            DispatchQueue.main.async { self.localityName = name }
+            // 시/군 — 마켓 노출 범위. locality(시/군)가 정석, 없으면 광역시(administrativeArea).
+            let city = p.locality ?? p.administrativeArea
+            DispatchQueue.main.async { self.localityName = name; self.cityName = city }
         }
     }
 

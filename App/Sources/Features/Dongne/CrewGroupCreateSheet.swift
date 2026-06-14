@@ -106,7 +106,7 @@ struct CrewGroupCreateSheet: View {
         let nm = name.trimmingCharacters(in: .whitespaces)
         let age = ageRange.isEmpty ? "전체" : ageRange
         let tags = parsedTags
-        let hood = store.selectedHood ?? location.localityName ?? ""
+        let hood = store.selectedDong ?? location.localityName ?? ""
         // 위치 미확보 시 서버 생성이 실패하므로 시도하지 않고 안내.
         guard !hood.isEmpty, hood != "우리 동네" else {
             alertMessage = "위치를 확인하고 있어요. 잠시 후 다시 시도해 주세요."

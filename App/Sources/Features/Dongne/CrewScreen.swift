@@ -243,8 +243,8 @@ private struct CrewActiveContent: View {
     var refreshTick: Int = 0
 
     private let sectionLimit = 5
-    // 크루는 '내 동네'(선택) 기준. 미설정 시에만 현재 GPS로 폴백.
-    private var hood: String { store.selectedHood ?? location.localityName ?? "우리 동네" }
+    // 크루는 '내 동네'(동 단위). 미설정 시에만 현재 GPS 동으로 폴백.
+    private var hood: String { store.selectedDong ?? location.localityName ?? "우리 동네" }
     // 서버 연동 시엔 서버 데이터만(시드 폴백 금지 — 정직 원칙). 미구성 시에만 로컬/목업.
     private var posts: [CrewPost] { SupabaseConfig.isConfigured ? (sharedPosts ?? []) : store.crewPosts }
     private var meetups: [CrewMeetup] { SupabaseConfig.isConfigured ? (sharedMeetups ?? []) : store.crews }
@@ -891,8 +891,8 @@ private struct CrewColdStartContent: View {
         return SupabaseConfig.isConfigured ? target : 22
     }
 
-    /// 내 동네(선택) 기준 — 미설정 시 현재 GPS 폴백
-    private var hood: String { store.selectedHood ?? location.localityName ?? "우리 동네" }
+    /// 내 동네(동) 기준 — 미설정 시 현재 GPS 동 폴백
+    private var hood: String { store.selectedDong ?? location.localityName ?? "우리 동네" }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {

@@ -1057,11 +1057,11 @@ struct DongneTab: View {
             .background(AppColors.canvas)
             .toolbar(.hidden, for: .navigationBar)
             .onAppear { location.start() }   // 주변 라벨 + '현재 위치 추가' 인증용 GPS 확보
-            // 크루 자동 카운트·알림은 '내 동네'(선택) 기준 — 지나가는 동네에 자동 등록 안 함(스팸 방지)
-            .onChange(of: store.selectedHood) { _, hood in
-                if let hood { Task { await CrewBackend.syncNeighborhood(hood: hood) } }
+            // 크루(동) 자동 카운트·알림은 '내 동네'(선택 동) 기준 — 지나가는 동네 자동등록 안 함(스팸 방지)
+            .onChange(of: store.selectedDong) { _, dong in
+                if let dong { Task { await CrewBackend.syncNeighborhood(hood: dong) } }
             }
-            .task { if let hood = store.selectedHood { await CrewBackend.syncNeighborhood(hood: hood) } }
+            .task { if let dong = store.selectedDong { await CrewBackend.syncNeighborhood(hood: dong) } }
             .fullScreenCover(isPresented: $showEmergency) {
                 EmergencyScreen(onClose: { showEmergency = false })
             }
@@ -1072,66 +1072,72 @@ struct DongneTab: View {
     private var currentSeg: DongneSeg { segItems[min(seg, segItems.count - 1)] }
     private var isNearbySeg: Bool { currentSeg == .nearby }
 
-    // 내 동네 스위처(마켓·크루) — 선택 전환 + 현재 위치로 추가(인증) + 관리
+    /// 현재 GPS로 내 동네를 추가할 수 있는지(2개 미만 + 동·시 확보 + 중복 아님)
+    private var canAddCurrentHood: Bool {
+        guard store.myHoods.count < 2, let d = location.localityName, location.cityName != nil else { return false }
+        return !store.myHoods.contains(where: { $0.dong == d })
+    }
+
+    // 내 동네 스위처(마켓·크루) — 선택 전환 + 현재 위치로 추가(인증) + 관리. 표시는 동.
     private var hoodSwitcher: some View {
         Menu {
-            ForEach(Array(store.myNeighborhoods.enumerated()), id: \.offset) { idx, h in
-                Button { store.selectNeighborhood(idx); Haptics.selection() } label: {
-                    Label(h, systemImage: idx == store.selectedHoodIndex ? "checkmark" : "mappin.circle")
+            ForEach(Array(store.myHoods.enumerated()), id: \.offset) { idx, h in
+                Button { store.selectHood(idx); Haptics.selection() } label: {
+                    Label("\(h.dong) · \(h.city)", systemImage: idx == store.selectedHoodIndex ? "checkmark" : "mappin.circle")
                 }
             }
-            if store.myNeighborhoods.count < 2, let gps = location.localityName,
-               !store.myNeighborhoods.contains(gps) {
+            if canAddCurrentHood, let d = location.localityName {
                 Divider()
-                Button { store.addNeighborhood(gps); Haptics.success() } label: {
-                    Label("현재 위치 ‘\(gps)’ 추가", systemImage: "plus.circle")
+                Button { store.addHood(dong: d, city: location.cityName ?? ""); Haptics.success() } label: {
+                    Label("현재 위치 ‘\(d)’ 추가", systemImage: "plus.circle")
                 }
             }
-            if !store.myNeighborhoods.isEmpty {
+            if !store.myHoods.isEmpty {
                 Divider()
                 Button { showHoodManage = true } label: { Label("동네 관리", systemImage: "slider.horizontal.3") }
             }
         } label: {
             HStack(spacing: 4) {
                 LocationPinIcon(color: MotionIconPalette.green, size: 17)
-                Text(store.selectedHood ?? "내 동네 설정")
+                Text(store.selectedDong ?? "내 동네 설정")
                     .font(.system(size: 13.5, weight: .bold)).foregroundStyle(AppColors.ink2).lineLimit(1)
                 Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)).foregroundStyle(AppColors.ink3)
             }
         }
-        .accessibilityLabel("내 동네 \(store.selectedHood ?? "미설정"). 탭하면 전환·추가")
+        .accessibilityLabel("내 동네 \(store.selectedDong ?? "미설정"). 탭하면 전환·추가")
     }
 
     private var hoodManageSheet: some View {
         NavigationStack {
             List {
                 Section("내 동네 (최대 2개)") {
-                    ForEach(Array(store.myNeighborhoods.enumerated()), id: \.offset) { idx, h in
+                    ForEach(Array(store.myHoods.enumerated()), id: \.offset) { idx, h in
                         HStack(spacing: 8) {
                             LocationPinIcon(color: MotionIconPalette.green, size: 16)
-                            Text(h).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppColors.ink)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(h.dong).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppColors.ink)
+                                Text(h.city).font(.system(size: 11.5)).foregroundStyle(AppColors.ink3)
+                            }
                             if idx == store.selectedHoodIndex {
                                 Spacer()
                                 Text("사용 중").font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.primary)
                             }
                         }
                         .contentShape(Rectangle())
-                        .onTapGesture { store.selectNeighborhood(idx) }
+                        .onTapGesture { store.selectHood(idx) }
                     }
-                    .onDelete { idx in if let i = idx.first { store.removeNeighborhood(at: i) } }
-                    if store.myNeighborhoods.count < 2 {
-                        if let gps = location.localityName, !store.myNeighborhoods.contains(gps) {
-                            Button { store.addNeighborhood(gps); Haptics.success() } label: {
-                                Label("현재 위치 ‘\(gps)’ 추가", systemImage: "plus.circle.fill")
-                            }
-                        } else {
-                            Text("동네를 추가하려면 그 동네에 있을 때 추가하세요 (위치 인증).")
-                                .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                    .onDelete { idx in if let i = idx.first { store.removeHood(at: i) } }
+                    if canAddCurrentHood, let d = location.localityName {
+                        Button { store.addHood(dong: d, city: location.cityName ?? ""); Haptics.success() } label: {
+                            Label("현재 위치 ‘\(d)’ 추가", systemImage: "plus.circle.fill")
                         }
+                    } else if store.myHoods.count < 2 {
+                        Text("동네를 추가하려면 그 동네에 있을 때 추가하세요 (위치 인증).")
+                            .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
                     }
                 }
                 Section {
-                    Text("마켓·크루는 내 동네 기준으로 보여요. 주변·응급은 현재 위치를 따릅니다.")
+                    Text("크루는 ‘동’ 단위, 마켓은 ‘시’ 단위로 보여요. 주변·응급은 현재 위치를 따릅니다.")
                         .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
                 }
             }

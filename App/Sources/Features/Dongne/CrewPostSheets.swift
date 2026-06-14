@@ -77,7 +77,7 @@ struct CrewPostWriteSheet: View {
                         if SupabaseConfig.isConfigured {
                             // 서버 모드: 목록이 서버 기준이므로 성공을 확인한 뒤에만 닫는다(소리없는 실패 방지)
                             submitting = true
-                            let hood = store.selectedHood ?? location.localityName ?? ""
+                            let hood = store.selectedDong ?? location.localityName ?? ""
                             let cat = category.rawValue, t = title, b = body_, nm = nickname
                             Task { @MainActor in
                                 let ok = await CrewBackend.createPost(hood: hood, category: cat, title: t, body: b, authorName: nm)

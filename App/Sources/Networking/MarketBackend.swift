@@ -20,6 +20,8 @@ enum MarketBackend {
 
     private struct ItemDTO: Decodable {
         let id: String
+        let hood: String?      // 판매자 동(표시)
+        let city: String?      // 노출 범위 시
         let title: String?
         let category: String?
         let grade: String?
@@ -37,13 +39,14 @@ enum MarketBackend {
         let created_at: String?
     }
 
-    /// 동네 매물(미만료) 최신순 조회. 미구성/실패 시 nil(→ 로컬 폴백).
-    static func fetchItems(hood: String) async -> [MarketItem]? {
+    /// 시(city) 단위 매물(미만료) 최신순 조회. 미구성/실패 시 nil(→ 로컬 폴백).
+    /// 마켓은 시 단위로 노출(동은 좁음). 각 매물에는 판매자 동을 함께 표시.
+    static func fetchItems(city: String) async -> [MarketItem]? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
-              !hood.isEmpty, hood != "우리 동네",
-              let h = hood.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
-        let cols = "id,title,category,grade,months_tag,price,is_free,is_graduate,has_recall,description,hygiene_checks,photo_urls,seller,seller_name,status,created_at"
-        guard let url = URL(string: "\(base)/rest/v1/market_item?hood=eq.\(h)&expires_at=gt.now()&select=\(cols)&order=created_at.desc&limit=100") else { return nil }
+              !city.isEmpty, city != "우리 동네",
+              let h = city.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let cols = "id,hood,city,title,category,grade,months_tag,price,is_free,is_graduate,has_recall,description,hygiene_checks,photo_urls,seller,seller_name,status,created_at"
+        guard let url = URL(string: "\(base)/rest/v1/market_item?city=eq.\(h)&expires_at=gt.now()&select=\(cols)&order=created_at.desc&limit=100") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
@@ -73,7 +76,7 @@ enum MarketBackend {
                 isGraduate: d.is_graduate ?? false,
                 sellerName: d.seller_name ?? "이웃",
                 sellerTier: .new,   // 서버 매물: 실제 판매자 티어 미산정 → '신규'로 정직 표기
-                distanceText: "내 동네",
+                distanceText: d.hood ?? "내 동네",   // 판매자 동 표시(시 단위 노출 안에서)
                 favoriteCount: 0,
                 photoSeed: 0,
                 description: d.description ?? "",
@@ -116,9 +119,9 @@ enum MarketBackend {
     // MARK: - 등록 / 상태 / 삭제
 
     /// 매물 등록. 사진(UIImage)은 Storage 업로드 후 URL 저장. 새 id 반환(실패 nil).
-    static func createItem(hood: String, item: MarketItem, photos: [UIImage]) async -> String? {
+    static func createItem(dong: String, city: String, item: MarketItem, photos: [UIImage]) async -> String? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
-              !hood.isEmpty, hood != "우리 동네",
+              !dong.isEmpty, dong != "우리 동네", !city.isEmpty,
               let url = URL(string: "\(base)/rest/v1/market_item") else { return nil }
         // 사진 업로드(최대 5장)
         var urls: [String] = []
@@ -131,7 +134,8 @@ enum MarketBackend {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("return=representation", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "hood": hood,
+            "hood": dong,    // 판매자 동(표시)
+            "city": city,    // 노출 범위 시
             "title": String(item.title.prefix(120)),
             "category": item.category.rawValue,
             "grade": item.grade.rawValue,

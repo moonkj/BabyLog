@@ -37,35 +37,54 @@ final class AppStore: ObservableObject {
     func markFeedShared(_ id: String)   { sharedFeedEntryIds.insert(id) }
     func unmarkFeedShared(_ id: String) { sharedFeedEntryIds.remove(id) }
 
-    // MARK: - 내 동네 (당근식 대표 동네 — 마켓·크루 기준. 주변/응급은 실시간 GPS)
-    /// 내 동네(행정동 이름) — 최대 2개. 현재 위치에서만 추가(인증) → 어뷰징·스팸 방지.
-    @Published var myNeighborhoods: [String] =
-        (UserDefaults.standard.array(forKey: "bl_my_hoods") as? [String]) ?? [] {
-        didSet { UserDefaults.standard.set(myNeighborhoods, forKey: "bl_my_hoods") }
+    // MARK: - 내 동네 (당근식 대표 동네. 크루=동 단위, 마켓=시 단위. 주변/응급은 실시간 GPS)
+    /// 내 동네 한 개 = 동(인증·표시·크루 범위) + 시(마켓 노출 범위).
+    struct MyHood: Codable, Equatable, Identifiable {
+        let dong: String     // 미평동 — 표시/인증/크루
+        let city: String     // 순천시 — 마켓 노출 범위
+        var id: String { dong }
     }
-    /// 마켓·크루에 적용 중인 내 동네 인덱스(0/1).
+    /// 내 동네 — 최대 2개. 현재 위치에서만 추가(인증) → 어뷰징·스팸 방지.
+    @Published var myHoods: [MyHood] = AppStore.loadMyHoods() {
+        didSet {
+            if let data = try? JSONEncoder().encode(myHoods) {
+                UserDefaults.standard.set(data, forKey: "bl_my_hoods_v2")
+            }
+        }
+    }
+    private static func loadMyHoods() -> [MyHood] {
+        guard let d = UserDefaults.standard.data(forKey: "bl_my_hoods_v2"),
+              let arr = try? JSONDecoder().decode([MyHood].self, from: d) else { return [] }
+        return arr
+    }
+    /// 적용 중인 내 동네 인덱스(0/1).
     @Published var selectedHoodIndex: Int = UserDefaults.standard.integer(forKey: "bl_selected_hood") {
         didSet { UserDefaults.standard.set(selectedHoodIndex, forKey: "bl_selected_hood") }
     }
-    /// 현재 선택된 내 동네(없으면 nil → 화면이 GPS 폴백/설정 유도).
-    var selectedHood: String? {
-        guard !myNeighborhoods.isEmpty else { return nil }
-        return myNeighborhoods[min(max(0, selectedHoodIndex), myNeighborhoods.count - 1)]
+    private var selectedHoodEntry: MyHood? {
+        guard !myHoods.isEmpty else { return nil }
+        return myHoods[min(max(0, selectedHoodIndex), myHoods.count - 1)]
     }
-    /// 내 동네 추가(현재 위치 기준 인증). 최대 2개·중복 불가. 추가하면 자동 선택.
-    func addNeighborhood(_ name: String) {
-        let t = name.trimmingCharacters(in: .whitespaces)
-        guard !t.isEmpty, t != "우리 동네", !myNeighborhoods.contains(t), myNeighborhoods.count < 2 else { return }
-        myNeighborhoods.append(t)
-        selectedHoodIndex = myNeighborhoods.count - 1
+    /// 선택된 동(크루 범위·표시). 미설정 시 nil → 화면이 GPS 폴백/설정 유도.
+    var selectedDong: String? { selectedHoodEntry?.dong }
+    /// 선택된 시(마켓 노출 범위).
+    var selectedCity: String? { selectedHoodEntry?.city }
+    /// 내 동네 추가(현재 위치 동+시). 최대 2개·동 중복 불가. 추가하면 자동 선택.
+    func addHood(dong: String, city: String) {
+        let d = dong.trimmingCharacters(in: .whitespaces)
+        let c = city.trimmingCharacters(in: .whitespaces)
+        guard !d.isEmpty, !c.isEmpty, d != "우리 동네",
+              !myHoods.contains(where: { $0.dong == d }), myHoods.count < 2 else { return }
+        myHoods.append(MyHood(dong: d, city: c))
+        selectedHoodIndex = myHoods.count - 1
     }
-    func removeNeighborhood(at index: Int) {
-        guard myNeighborhoods.indices.contains(index) else { return }
-        myNeighborhoods.remove(at: index)
-        if selectedHoodIndex >= myNeighborhoods.count { selectedHoodIndex = max(0, myNeighborhoods.count - 1) }
+    func removeHood(at index: Int) {
+        guard myHoods.indices.contains(index) else { return }
+        myHoods.remove(at: index)
+        if selectedHoodIndex >= myHoods.count { selectedHoodIndex = max(0, myHoods.count - 1) }
     }
-    func selectNeighborhood(_ index: Int) {
-        guard myNeighborhoods.indices.contains(index) else { return }
+    func selectHood(_ index: Int) {
+        guard myHoods.indices.contains(index) else { return }
         selectedHoodIndex = index
     }
     // 마켓 (로컬 백본)

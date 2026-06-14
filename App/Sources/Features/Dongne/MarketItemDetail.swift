@@ -132,9 +132,9 @@ struct MarketItemDetail: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         // 현재 상태에 체크 표시 + 같은 상태/변경 중엔 비활성(currentStatus 경유)
-                        statusMenuButton(.selling, "판매중으로")
-                        statusMenuButton(.reserved, "예약중으로")
-                        statusMenuButton(.sold, "판매완료로")
+                        statusMenuButton(.selling, "판매중")
+                        statusMenuButton(.reserved, "예약중")
+                        statusMenuButton(.sold, "판매완료")
                         Divider()
                         Button("매물 삭제", role: .destructive) { deleteItem() }
                             .disabled(deleteBusy)

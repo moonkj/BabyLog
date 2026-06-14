@@ -259,12 +259,11 @@ struct MarketScreen: View {
 
     /// 서버 공유 모드(Supabase 구성됨). 미구성 시 로컬(기기 저장) 폴백.
     private var serverMode: Bool { SupabaseConfig.isConfigured }
-    // 마켓은 '내 동네'(선택) 기준. 미설정 시에만 현재 GPS로 폴백.
-    private var hood: String { store.selectedHood ?? location.localityName ?? "우리 동네" }
-    /// 동네 확정 전엔 로딩 유지 — 폴백("우리 동네")으로 조회한 빈 목록이
-    /// "0개 매물"로 플래시되는 것 방지. 내 동네 설정돼 있으면 GPS와 무관하게 바로 로드.
+    // 마켓은 '시' 단위 노출. 내 동네(시) 우선, 미설정 시 현재 GPS 시로 폴백.
+    private var city: String { store.selectedCity ?? location.cityName ?? "우리 동네" }
+    /// 시 확정 전엔 로딩 유지 — 폴백으로 조회한 빈 목록이 "0개 매물"로 플래시되는 것 방지.
     private var isLoading: Bool {
-        serverMode && (!didLoad || (hood == "우리 동네" && !location.denied))
+        serverMode && (!didLoad || (city == "우리 동네" && !location.denied))
     }
 
     /// 선택된 아이의 월령(없으면 nil) — "곧 필요해요" 월령 기반 추천에 사용.
@@ -294,7 +293,7 @@ struct MarketScreen: View {
 
     private func loadItems() async {
         guard serverMode else { return }
-        if let s = await MarketBackend.fetchItems(hood: hood) {
+        if let s = await MarketBackend.fetchItems(city: city) {
             sharedItems = s
             loadFailed = false
         } else {
@@ -338,7 +337,7 @@ struct MarketScreen: View {
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
-        .task(id: hood) { didLoad = false; loadFailed = false; await loadItems() }
+        .task(id: city) { didLoad = false; loadFailed = false; await loadItems() }
         .onChange(of: showSellSheet) { _, open in if !open { Task { await loadItems() } } }
         // 상세에서 상태 변경(예약중/판매완료)·삭제 후 돌아오면 목록을 갱신해 반영한다.
         // (첫 등장은 .task가 처리하므로 재등장부터)

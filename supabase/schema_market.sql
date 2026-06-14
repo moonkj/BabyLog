@@ -5,7 +5,8 @@
 
 create table if not exists public.market_item (
     id             uuid primary key default gen_random_uuid(),
-    hood           text not null,
+    hood           text not null,                 -- 판매자 동(표시용)
+    city           text,                          -- 노출 범위(시/군) — 마켓은 시 단위 조회
     title          text not null,
     category       text,
     grade          text,
@@ -23,7 +24,10 @@ create table if not exists public.market_item (
     created_at     timestamptz not null default now(),
     expires_at     timestamptz not null default now() + interval '30 days'
 );
+-- 기존 테이블에 city 컬럼이 없으면 추가(멱등)
+alter table public.market_item add column if not exists city text;
 create index if not exists market_item_hood_idx    on public.market_item (hood, created_at desc);
+create index if not exists market_item_city_idx    on public.market_item (city, created_at desc);
 create index if not exists market_item_expires_idx on public.market_item (expires_at);
 create index if not exists market_item_seller_idx  on public.market_item (seller);
 
