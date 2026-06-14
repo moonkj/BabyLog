@@ -85,6 +85,7 @@ enum MarketBackend {
                 photoRefs: [],
                 photoURLs: d.photo_urls ?? [],
                 mine: d.seller == me,
+                sellerId: d.seller,
                 status: MarketStatus(rawValue: d.status ?? "") ?? .selling,
                 createdAt: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date(),
                 soldTo: d.sold_to, buyerConfirmed: d.buyer_confirmed ?? false
@@ -135,7 +136,7 @@ enum MarketBackend {
                 isGraduate: d.is_graduate ?? false, sellerName: d.seller_name ?? "이웃",
                 sellerTier: .new, distanceText: d.hood ?? "내 동네", favoriteCount: 0, photoSeed: 0,
                 description: d.description ?? "", photoRefs: [], photoURLs: d.photo_urls ?? [],
-                mine: true, status: MarketStatus(rawValue: d.status ?? "") ?? .selling,
+                mine: true, sellerId: d.seller, status: MarketStatus(rawValue: d.status ?? "") ?? .selling,
                 createdAt: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date(),
                 soldTo: d.sold_to, buyerConfirmed: d.buyer_confirmed ?? false
             )

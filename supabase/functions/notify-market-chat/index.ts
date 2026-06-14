@@ -48,6 +48,12 @@ Deno.serve(async (req) => {
     if (caller !== item.seller && caller !== buyer) return new Response("not participant", { status: 403 });
     const recipient = caller === item.seller ? buyer : item.seller;
 
+    // 백스톱: 수신자 == 보낸 사람(= 판매자와 구매자가 동일 신원 = 자기 자신과의 대화)이면 푸시 생략.
+    // 재설치/로그인으로 신원이 꼬여 본인 매물에 본인이 문의한 옛 스레드를 방어한다.
+    if (!recipient || recipient === caller) {
+      return new Response(JSON.stringify({ sent: 0, reason: "self" }), { status: 200 });
+    }
+
     const { data: tokens, error: tokErr } = await supabase
       .from("crew_push_token").select("apns_token, env").eq("device_id", recipient);
     if (tokErr) throw tokErr;

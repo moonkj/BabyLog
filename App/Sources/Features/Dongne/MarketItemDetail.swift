@@ -34,7 +34,31 @@ struct MarketItemDetail: View {
     @State private var heroFull: UIImage? = nil          // 사진 전체화면
     @State private var readTick = 0                       // 읽음 표시 갱신 트리거
     @State private var showLogin = false                 // 로그인 게이트(채팅·구매)
+    @State private var pendingBuyerAction: BuyerAction?   // 로그인 게이트 통과 후 이어서 할 동작
+    @State private var showMineAlert = false              // 본인 매물 구매/채팅 차단 안내
     @Environment(\.dismiss) private var dismiss
+
+    private enum BuyerAction { case chat, buy }
+
+    /// '내 매물' 실시간 판정 — 현재 신원(myID)과 판매자 원본 식별자(sellerId)를 비교.
+    /// 재설치·로그아웃 시점에 fetch된 mine 스냅샷이 false여도, 로그인하면 여기서 본인으로 다시 잡힌다.
+    private var isMineLive: Bool {
+        if let sid = liveItem.sellerId, !sid.isEmpty, !myID.isEmpty { return sid == myID }
+        return liveItem.mine
+    }
+
+    /// 구매자 동작 진입 — 본인 매물이면 차단, 비로그인이면 로그인 후 이어서 실행.
+    private func startBuyerAction(_ action: BuyerAction) {
+        if isMineLive { showMineAlert = true; return }
+        guard LoginGate.ready() else { pendingBuyerAction = action; showLogin = true; return }
+        openBuyerAction(action)
+    }
+    private func openBuyerAction(_ action: BuyerAction) {
+        switch action {
+        case .chat: showChatSheet = true
+        case .buy:  showBuySheet = true
+        }
+    }
 
     // MARK: 채팅 안 읽음(로컬 추적) — 스레드 최신 메시지가 마지막 확인 이후면 '안 읽음'.
     private func seenKey(_ buyer: String) -> String { "bl_chat_seen_\(item.id)_\(buyer)" }
@@ -67,7 +91,7 @@ struct MarketItemDetail: View {
 
     /// 구매자(나)가 거래 확인을 해야 하는 상태인지 — 판매완료 + 내가 지정된 구매자 + 미확인.
     private var needsBuyerConfirm: Bool {
-        !displayItem.mine && currentStatus == .sold
+        !isMineLive && currentStatus == .sold
             && displayItem.soldTo != nil && displayItem.soldTo == myID
             && !displayItem.buyerConfirmed
     }
@@ -149,9 +173,9 @@ struct MarketItemDetail: View {
                     get: { store.isMarketSaved(item.id) },
                     set: { _ in store.toggleMarketSaved(displayItem) }   // 스냅샷 저장(관심 목록 보존)
                 ),
-                isMine: liveItem.mine,
-                onChat: { if LoginGate.ready() { showChatSheet = true } else { showLogin = true } },
-                onBuy: { if LoginGate.ready() { showBuySheet = true } else { showLogin = true } },
+                isMine: isMineLive,
+                onChat: { startBuyerAction(.chat) },
+                onBuy: { startBuyerAction(.buy) },
                 onThreads: { markThreadsSeen(); showThreads = true },
                 threadCount: unreadThreadCount
             )
@@ -159,7 +183,7 @@ struct MarketItemDetail: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(false)
         .toolbar {
-            if liveItem.mine {
+            if isMineLive {
                 // 판매자 전용 — 들어온 문의(구매자별 1:1 스레드) 바로가기
                 // (상단 채팅 아이콘 제거 — 하단 '들어온 문의' 버튼과 중복)
                 ToolbarItem(placement: .topBarTrailing) {
@@ -190,7 +214,7 @@ struct MarketItemDetail: View {
         }
         .sheet(isPresented: $showThreads, onDismiss: {
             // 닫을 때 스레드 재조회 + 본 것으로 표시(배지 갱신)
-            Task { if liveItem.mine { threads = (await MarketBackend.fetchThreads(itemId: item.id)) ?? []; markThreadsSeen() } }
+            Task { if isMineLive { threads = (await MarketBackend.fetchThreads(itemId: item.id)) ?? []; markThreadsSeen() } }
         }) {
             // 판매자 화면 — 내 매물에 들어온 구매자별 1:1 문의 목록.
             MarketThreadListSheet(item: displayItem)
@@ -215,6 +239,27 @@ struct MarketItemDetail: View {
         .sheet(isPresented: $showLogin) {
             AppleLoginSheet(message: "채팅·구매는 로그인이 필요해요.") {}
         }
+        // 로그인 시트가 닫히면 현재 신원을 다시 읽어 본인 매물 여부를 재판정한다.
+        // (재설치/로그아웃 상태에서 본 '내 매물'을 로그인 후 본인으로 다시 잡아 자기 자신과의 거래를 차단.)
+        .onChange(of: showLogin) { _, showing in
+            guard !showing else { return }
+            let action = pendingBuyerAction
+            pendingBuyerAction = nil
+            Task { @MainActor in
+                myID = await SupabaseConfig.ownerID()
+                if isMineLive {
+                    if action != nil { showMineAlert = true }   // 로그인하고 보니 내 매물 → 차단
+                    threads = (await MarketBackend.fetchThreads(itemId: item.id)) ?? []
+                    return
+                }
+                if let action, LoginGate.ready() { openBuyerAction(action) }
+            }
+        }
+        .alert("내 매물이에요", isPresented: $showMineAlert) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("본인이 올린 매물에는 구매·채팅을 할 수 없어요. 들어온 문의는 ‘내 매물 관리’에서 확인할 수 있어요.")
+        }
         // 사진 전체화면
         .fullScreenCover(item: Binding(
             get: { heroFull.map { IdentifiableUIImage(image: $0) } },
@@ -233,7 +278,7 @@ struct MarketItemDetail: View {
         }
         .task {
             myID = await SupabaseConfig.ownerID()
-            if liveItem.mine { threads = (await MarketBackend.fetchThreads(itemId: item.id)) ?? [] }
+            if isMineLive { threads = (await MarketBackend.fetchThreads(itemId: item.id)) ?? [] }
             if needsBuyerConfirm { showConfirmPrompt = true }   // 진입 시 확인 알람
         }
         .accessibilityElement(children: .contain)

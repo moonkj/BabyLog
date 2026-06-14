@@ -126,6 +126,9 @@ struct MarketItem: Identifiable, Hashable, Codable {
     var photoRefs: [String] = []          // 로컬 PhotoStore 참조(무료·오프라인)
     var photoURLs: [String] = []          // 서버 공개 사진 URL(마켓 공유 시)
     var mine: Bool = false
+    /// 판매자 원본 식별자(ownerID = auth.uid 또는 기기ID). 로그인/재설치로 신원이 바뀌어도
+    /// 현재 신원과 비교해 '내 매물'을 다시 판정하기 위해 보관(서버 매물만 채워짐).
+    var sellerId: String? = nil
     var status: MarketStatus = .selling
     var createdAt: Date = Date()
     /// 판매자가 직접 체크한 위생 항목 (선택한 것만 상세에 표시)
@@ -150,7 +153,7 @@ extension MarketItem {
     enum CodingKeys: String, CodingKey {
         case id, title, category, grade, monthsTag, price, originalPrice, isFree, hasRecall
         case isGraduate, sellerName, sellerTier, distanceText, favoriteCount, photoSeed
-        case description, photoRefs, photoURLs, mine, status, createdAt, hygieneChecks
+        case description, photoRefs, photoURLs, mine, sellerId, status, createdAt, hygieneChecks
         case soldTo, buyerConfirmed
     }
     init(from decoder: Decoder) throws {
@@ -174,6 +177,7 @@ extension MarketItem {
         photoRefs     = try c.decodeIfPresent([String].self, forKey: .photoRefs) ?? []
         photoURLs     = try c.decodeIfPresent([String].self, forKey: .photoURLs) ?? []
         mine          = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? false
+        sellerId      = try c.decodeIfPresent(String.self, forKey: .sellerId)
         status        = MarketStatus(rawValue: (try? c.decode(String.self, forKey: .status)) ?? "") ?? .selling
         createdAt     = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         hygieneChecks = try c.decodeIfPresent([String].self, forKey: .hygieneChecks) ?? []
