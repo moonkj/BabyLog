@@ -237,6 +237,19 @@ enum MarketBackend {
         return true
     }
 
+    /// 판매완료(구매자 지정) 후 구매자에게 거래확인 푸시(앱 꺼져 있어도 수신). best-effort.
+    static func notifyTradeConfirm(id: String) async {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let url = URL(string: "\(base)/functions/v1/notify-trade-confirm") else { return }
+        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 판매자 검증용
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["item_id": id])
+        _ = try? await URLSession.shared.data(for: req)
+    }
+
     /// 구매자 거래 확인 — RPC(security definer)로 sold_to==본인 행만 buyer_confirmed=true.
     @discardableResult
     static func confirmTrade(id: String) async -> Bool {

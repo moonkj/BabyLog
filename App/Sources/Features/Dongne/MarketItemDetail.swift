@@ -290,6 +290,7 @@ struct MarketItemDetail: View {
         Task { @MainActor in
             let ok = await MarketBackend.completeSale(id: item.id, buyer: buyer)
             if !ok { overrideStatus = nil; overrideSoldTo = nil; showStatusFailAlert = true }
+            else if buyer != nil { await MarketBackend.notifyTradeConfirm(id: item.id) }  // 구매자에게 확인 푸시
             statusBusy = false
         }
     }
