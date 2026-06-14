@@ -487,7 +487,14 @@ struct NearbyScreen: View {
                 // (결과는 provider에서 이미 거리순. 30 초과는 너무 멀어 실효성 낮음.)
                 finalResults = Array((pediatric.isEmpty ? results : pediatric).prefix(30))
             } else {
-                finalResults = results   // 약국은 필터 없이 전체
+                // 약국: 목록에 운영시간 포함(hoursKnown) → 문 연 약국을 먼저(영업중 우선, 동일 상태면 거리순 유지).
+                // 가장 다급한 순간 닫힌 약국이 위에 오지 않게.
+                finalResults = results.enumerated()
+                    .sorted { l, r in
+                        if l.element.isOpenNow != r.element.isOpenNow { return l.element.isOpenNow }
+                        return l.offset < r.offset   // 기존(거리) 순서 유지
+                    }
+                    .map { $0.element }
             }
             // 응답이 늦게 와도 그 사이 카테고리가 바뀌었으면 무시
             guard category == selectedCategory else { return }
