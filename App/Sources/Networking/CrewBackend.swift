@@ -362,6 +362,8 @@ enum CrewBackend {
         let name: String?
         let age_range: String?
         let interest_tags: [String]?
+        let creator: String?
+        let creator_name: String?
         let crew_group_member: [CrewPostDTO.CountRow]?
     }
 
@@ -370,7 +372,7 @@ enum CrewBackend {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               !hood.isEmpty, hood != "우리 동네",
               let h = hood.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
-        let select = "id,name,age_range,interest_tags,crew_group_member(count)"
+        let select = "id,name,age_range,interest_tags,creator,creator_name,crew_group_member(count)"
         guard let url = URL(string: "\(base)/rest/v1/crew_group?hood=eq.\(h)&select=\(select)&order=created_at.desc&limit=50") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
@@ -384,6 +386,7 @@ enum CrewBackend {
             return nil
         }
         guard let dtos = try? JSONDecoder().decode([CrewGroupDTO].self, from: data) else { return nil }
+        let me = await SupabaseConfig.ownerID()
         return dtos.map { d in
             CrewGroup(
                 id: d.id,
@@ -391,9 +394,54 @@ enum CrewBackend {
                 memberCount: d.crew_group_member?.first?.count ?? 0,
                 distanceText: "우리 동네",
                 ageRange: (d.age_range?.isEmpty == false ? d.age_range! : "전체"),
-                interestTags: d.interest_tags ?? []
+                interestTags: d.interest_tags ?? [],
+                creatorId: d.creator,
+                creatorName: d.creator_name,
+                mine: d.creator == me
             )
         }
+    }
+
+    /// 그룹 삭제(크루장 본인만 — RLS creator 검증). 자식(멤버·채팅) FK cascade.
+    @discardableResult
+    static func deleteGroup(groupId: String) async -> Bool {
+        guard SupabaseConfig.isConfigured,
+              let g = groupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              var req = await request("/rest/v1/crew_group?id=eq.\(g)", method: "DELETE") else { return false }
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
+    /// 다음 크루장 후보 — 가입 시간이 가장 빠른 '나 제외' 멤버의 device_id. 없으면 nil.
+    static func nextGroupMember(groupId: String, excluding me: String) async -> String? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let g = groupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let url = URL(string: "\(base)/rest/v1/crew_group_member?group_id=eq.\(g)&select=device_id,joined_at&order=joined_at.asc&limit=20") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        struct MemberRow: Decodable { let device_id: String }
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([MemberRow].self, from: data) else { return nil }
+        return rows.first(where: { $0.device_id != me })?.device_id
+    }
+
+    /// 크루장 위임 — crew_group.creator를 새 멤버로 변경.
+    /// ⚠️ 정책상 update with_check가 'creator==본인'을 요구해 클라 PATCH로는 타인에게 못 넘긴다 →
+    ///    security definer RPC(crew_transfer_group)로 현재 크루장 검증 후 위임(schema_crew_transfer.sql).
+    @discardableResult
+    static func transferGroupCreator(groupId: String, to newCreator: String, name: String?) async -> Bool {
+        guard SupabaseConfig.isConfigured,
+              var req = await request("/rest/v1/rpc/crew_transfer_group", method: "POST") else { return false }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_group": groupId, "p_to": newCreator])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        if let b = (try? JSONSerialization.jsonObject(with: data)) as? Bool { return b }
+        if let s = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) { return s == "true" }
+        return false
     }
 
     /// 동네 그룹 생성(+개설자 자동 가입). 새 그룹 id 반환(실패 시 nil).

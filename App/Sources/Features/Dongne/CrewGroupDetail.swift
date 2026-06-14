@@ -11,6 +11,9 @@ struct CrewGroupDetail: View {
     @State private var showChat = false
     @State private var joinBusy = false
     @State private var showLogin = false   // 로그인 게이트(가입·채팅)
+    @State private var showDeleteConfirm = false      // 크루장: 크루 삭제 확인
+    @State private var showLastMemberLeave = false    // 크루장이 마지막 멤버일 때 탈퇴=삭제 안내
+    @State private var notice: String? = nil
 
     private var isJoined: Bool { store.isJoinedGroup(group.id) }
     private var memberCount: Int { group.memberCount + (isJoined ? 1 : 0) }
@@ -32,12 +35,37 @@ struct CrewGroupDetail: View {
             bottomBar
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if group.mine {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive) { showDeleteConfirm = true } label: {
+                        Image(systemName: "trash")
+                    }
+                    .accessibilityLabel("크루 삭제")
+                }
+            }
+        }
         .sheet(isPresented: $showChat) {
             CrewGroupChatSheet(group: group).environmentObject(store)
         }
         .sheet(isPresented: $showLogin) {
             AppleLoginSheet(message: "그룹 가입·채팅은 로그인이 필요해요.") {}
         }
+        .confirmationDialog("이 크루를 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("삭제", role: .destructive) { deleteGroup() }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("크루와 그룹 채팅이 모두 사라져요. 되돌릴 수 없어요.")
+        }
+        .confirmationDialog("크루의 마지막 멤버예요", isPresented: $showLastMemberLeave, titleVisibility: .visible) {
+            Button("크루 삭제하고 나가기", role: .destructive) { deleteGroup() }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("혼자 남은 크루예요. 나가면 크루가 사라져요.")
+        }
+        .alert("크루", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
+            Button("확인", role: .cancel) {}
+        } message: { Text(notice ?? "") }
     }
 
     private var hero: some View {
@@ -51,6 +79,16 @@ struct CrewGroupDetail: View {
                 .multilineTextAlignment(.center)
             Text("\(memberCount)명 · \(group.distanceText) · \(group.ageRange)")
                 .font(AppFont.num(13)).foregroundStyle(AppColors.ink3)
+            // 크루장(개설자) 표시 — 처음 만든 사람이 크루장
+            if let leader = group.mine ? "나" : group.creatorName, !leader.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "crown.fill").font(.system(size: 10, weight: .bold))
+                    Text("크루장 \(leader)").font(.system(size: 11.5, weight: .bold))
+                }
+                .foregroundStyle(AppColors.gold)
+                .padding(.horizontal, 9).frame(height: 22)
+                .background(AppColors.goldTint, in: Capsule())
+            }
             if !group.interestTags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 5) {
@@ -116,15 +154,8 @@ struct CrewGroupDetail: View {
         Button {
             guard !joinBusy else { return }
             guard LoginGate.ready() else { showLogin = true; return }   // 로그인 필수(신상 특정)
-            let willJoin = !isJoined
             Haptics.light()
-            store.toggleJoinGroup(group.id)
-            joinBusy = true
-            Task { @MainActor in
-                let ok = await CrewBackend.setGroupMembership(groupId: group.id, join: willJoin)
-                if !ok { store.toggleJoinGroup(group.id) }   // 실패 롤백
-                joinBusy = false
-            }
+            handleMembershipTap()
         } label: {
             Text(isJoined ? "가입 취소" : "가입하기")
                 .font(.system(size: 16, weight: .bold))
@@ -136,6 +167,55 @@ struct CrewGroupDetail: View {
         .buttonStyle(LiquidPressStyle(scale: 0.98))
         .padding(.horizontal, Spacing.s5).padding(.top, 12).padding(.bottom, 26)
         .background(AppColors.surface.ignoresSafeArea(edges: .bottom))
+    }
+
+    /// 가입/탈퇴 처리. 크루장이 탈퇴하면 다음 가입자에게 크루장을 위임(없으면 크루 삭제 안내).
+    private func handleMembershipTap() {
+        if !isJoined {
+            store.toggleJoinGroup(group.id); joinBusy = true
+            Task { @MainActor in
+                let ok = await CrewBackend.setGroupMembership(groupId: group.id, join: true)
+                if !ok { store.toggleJoinGroup(group.id) }
+                joinBusy = false
+            }
+            return
+        }
+        // 탈퇴 — 크루장이면 위임 우선
+        if group.mine {
+            joinBusy = true
+            Task { @MainActor in
+                let me = await SupabaseConfig.ownerID()
+                guard let next = await CrewBackend.nextGroupMember(groupId: group.id, excluding: me) else {
+                    joinBusy = false
+                    showLastMemberLeave = true   // 혼자 남음 → 삭제 안내
+                    return
+                }
+                let transferred = await CrewBackend.transferGroupCreator(groupId: group.id, to: next, name: nil)
+                guard transferred else { joinBusy = false; notice = "잠시 후 다시 시도해 주세요."; return }
+                store.toggleJoinGroup(group.id)
+                let left = await CrewBackend.setGroupMembership(groupId: group.id, join: false)
+                if !left { store.toggleJoinGroup(group.id) }
+                joinBusy = false
+                notice = "크루장을 다음 멤버에게 넘기고 나갔어요."
+            }
+            return
+        }
+        // 일반 멤버 탈퇴
+        store.toggleJoinGroup(group.id); joinBusy = true
+        Task { @MainActor in
+            let ok = await CrewBackend.setGroupMembership(groupId: group.id, join: false)
+            if !ok { store.toggleJoinGroup(group.id) }
+            joinBusy = false
+        }
+    }
+
+    private func deleteGroup() {
+        joinBusy = true
+        Task { @MainActor in
+            let ok = await CrewBackend.deleteGroup(groupId: group.id)
+            joinBusy = false
+            if ok { dismiss() } else { notice = "삭제하지 못했어요. 잠시 후 다시 시도해 주세요." }
+        }
     }
 }
 

@@ -83,6 +83,10 @@ struct CrewGroup: Identifiable, Hashable {
     let distanceText: String
     let ageRange: String
     let interestTags: [String]
+    /// 크루장(개설자) 식별자·표시명 + 내가 개설자인지(삭제·위임 권한)
+    var creatorId: String? = nil
+    var creatorName: String? = nil
+    var mine: Bool = false
 }
 
 struct CrewPost: Identifiable, Codable, Hashable {
