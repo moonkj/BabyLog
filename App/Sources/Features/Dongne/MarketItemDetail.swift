@@ -32,7 +32,23 @@ struct MarketItemDetail: View {
     @State private var confirmBusy = false
     @State private var showConfirmPrompt = false         // 구매자: 거래 확인 알람
     @State private var heroFull: UIImage? = nil          // 사진 전체화면
+    @State private var readTick = 0                       // 읽음 표시 갱신 트리거
     @Environment(\.dismiss) private var dismiss
+
+    // MARK: 채팅 안 읽음(로컬 추적) — 스레드 최신 메시지가 마지막 확인 이후면 '안 읽음'.
+    private func seenKey(_ buyer: String) -> String { "bl_chat_seen_\(item.id)_\(buyer)" }
+    private func threadSeen(_ buyer: String) -> Date {
+        let t = UserDefaults.standard.double(forKey: seenKey(buyer))
+        return t > 0 ? Date(timeIntervalSince1970: t) : .distantPast
+    }
+    private var unreadThreadCount: Int {
+        _ = readTick   // 갱신 의존
+        return threads.filter { $0.lastDate > threadSeen($0.buyer) }.count
+    }
+    private func markThreadsSeen() {
+        for t in threads { UserDefaults.standard.set(t.lastDate.timeIntervalSince1970, forKey: seenKey(t.buyer)) }
+        readTick += 1
+    }
 
     private var liveItem: MarketItem { store.marketItems.first(where: { $0.id == item.id }) ?? item }
 
@@ -135,8 +151,8 @@ struct MarketItemDetail: View {
                 isMine: liveItem.mine,
                 onChat: { showChatSheet = true },
                 onBuy: { showBuySheet = true },
-                onThreads: { showThreads = true },
-                threadCount: threads.count
+                onThreads: { markThreadsSeen(); showThreads = true },
+                threadCount: unreadThreadCount
             )
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -171,7 +187,10 @@ struct MarketItemDetail: View {
                 .environmentObject(store)
                 .presentationDetents([.large])
         }
-        .sheet(isPresented: $showThreads) {
+        .sheet(isPresented: $showThreads, onDismiss: {
+            // 닫을 때 스레드 재조회 + 본 것으로 표시(배지 갱신)
+            Task { if liveItem.mine { threads = (await MarketBackend.fetchThreads(itemId: item.id)) ?? []; markThreadsSeen() } }
+        }) {
             // 판매자 화면 — 내 매물에 들어온 구매자별 1:1 문의 목록.
             MarketThreadListSheet(item: displayItem)
                 .environmentObject(store)
