@@ -82,6 +82,17 @@ struct CrewCreateSheet: View {
                         }
                     }
 
+                    // 단발성 안내 — 10일 후 자동 삭제
+                    HStack(alignment: .top, spacing: 7) {
+                        Image(systemName: "clock.badge.xmark")
+                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppColors.ink3)
+                        Text("단발성 모임이에요 — 만든 뒤 10일이 지나면 자동으로 사라져요.")
+                            .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, Spacing.s2)
+
                     LiquidButton(fill: canSave ? AppColors.primary : AppColors.ink3, action: save) {
                         Text(submitting ? "만드는 중…" : "모임 만들기").frame(maxWidth: .infinity)
                     }

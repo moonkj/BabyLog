@@ -256,7 +256,7 @@ enum CrewBackend {
               !hood.isEmpty, hood != "우리 동네",
               let h = hood.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
         let select = "id,place,when_text,meetup_type,capacity,host,host_name,crew_meetup_join(count)"
-        guard let url = URL(string: "\(base)/rest/v1/crew_meetup?hood=eq.\(h)&select=\(select)&order=created_at.desc&limit=50") else { return nil }
+        guard let url = URL(string: "\(base)/rest/v1/crew_meetup?hood=eq.\(h)&expires_at=gt.now()&select=\(select)&order=created_at.desc&limit=50") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")

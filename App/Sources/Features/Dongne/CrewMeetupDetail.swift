@@ -303,11 +303,13 @@ struct CrewMeetupDetail: View {
     private var groupChatCard: some View {
         Button {
             Haptics.selection()
-            if isJoined {
-                showChat = true
-            } else {
-                showGroupChatGuide = true
+            // 누구나 채팅 가능(참석 희망자·이웃 코디네이션). 미참가 상태면 채팅 입장과 함께 자동 참가
+            // 처리해 알림 대상에 포함시킨다(crew_meetup_join). 호스트는 이미 참가 상태.
+            if !isJoined {
+                store.toggleJoinCrew(meetup.id)
+                Task { _ = await CrewBackend.joinMeetup(meetupId: meetup.id) }
             }
+            showChat = true
         } label: {
             BLCard(padding: 14, flat: true) {
                 HStack(spacing: 12) {
@@ -322,31 +324,27 @@ struct CrewMeetupDetail: View {
                     .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(isJoined ? "채팅방 열기" : "그룹 채팅 자동 생성")
+                        Text("채팅방 열기")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(AppColors.ink)
-                        Text(isJoined
-                             ? "모임 참가자들과 바로 대화해보세요."
-                             : "참가하면 채팅방이 열려요.")
+                        Text("모임 참가자들과 바로 대화해보세요.")
                             .font(.system(size: 12.5, weight: .regular))
                             .foregroundStyle(AppColors.ink2)
                     }
 
                     Spacer(minLength: 0)
 
-                    Image(systemName: isJoined ? "arrow.right.circle.fill" : "chevron.right")
-                        .font(.system(size: isJoined ? 18 : 13, weight: .semibold))
-                        .foregroundStyle(isJoined ? AppColors.primary : AppColors.ink3)
+                    Image(systemName: "arrow.right.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.primary)
                         .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .buttonStyle(LiquidPressStyle(scale: 0.99))
-        .accessibilityLabel(isJoined ? "채팅방 열기" : "그룹 채팅 자동 생성")
-        .accessibilityHint(isJoined
-                           ? "모임 참가자들과 대화하는 채팅방을 엽니다."
-                           : "참가하면 모임 전용 채팅방이 열립니다. 자세히 보기")
+        .accessibilityLabel("채팅방 열기")
+        .accessibilityHint("모임 채팅방을 엽니다. 미참가 시 참가 처리됩니다.")
     }
 
     // MARK: 안전 수칙

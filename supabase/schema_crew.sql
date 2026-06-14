@@ -34,10 +34,13 @@ create table if not exists public.crew_meetup (
     capacity    int not null default 8,
     host        text not null,              -- 익명 기기 UUID
     host_name   text,                       -- 표시용 닉네임(개인정보 아님)
-    created_at  timestamptz not null default now()
+    created_at  timestamptz not null default now(),
+    expires_at  timestamptz not null default now() + interval '10 days'  -- 단발성: 10일 후 만료
 );
 create index if not exists crew_meetup_hood_idx on public.crew_meetup (hood);
 alter table public.crew_meetup add column if not exists host_name text;
+-- 모임은 단발성 — 생성 10일 후 자동 만료(조회에서 제외). 기존 행도 기본값으로 채움.
+alter table public.crew_meetup add column if not exists expires_at timestamptz not null default now() + interval '10 days';
 
 create table if not exists public.crew_meetup_join (
     meetup_id  uuid not null references public.crew_meetup(id) on delete cascade,
