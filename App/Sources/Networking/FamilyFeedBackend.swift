@@ -223,13 +223,34 @@ enum FamilyFeedBackend {
         return anyMedia
     }
 
-    /// 포스트 삭제 — 기록 삭제 시 가족 피드에서도 제거(미디어·반응·댓글은 FK cascade).
+    /// 포스트 삭제(DB만) — 기록 삭제 시 가족 피드에서도 제거(미디어·반응·댓글은 FK cascade).
+    /// ⚠️ R2 원본 객체는 남는다 → 완전 삭제는 deletePostFully 사용.
     @discardableResult
     static func deletePost(postId: String) async -> Bool {
         guard let req = await rest("/bl_feed_post?id=eq.\(postId)", method: "DELETE"),
               let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
         return true
+    }
+
+    /// 완전 삭제 — R2 원본 객체까지 제거(media-delete Edge, 작성자 본인 검증). Edge 실패 시 DB만이라도 삭제(폴백).
+    @discardableResult
+    static func deletePostFully(postId: String) async -> Bool {
+        guard let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let url = URL(string: "\(base)/functions/v1/media-delete") else {
+            return await deletePost(postId: postId)
+        }
+        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 20
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["postId": postId])
+        if let (_, resp) = try? await URLSession.shared.data(for: req),
+           let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+            return true
+        }
+        // Edge 실패 → 최소한 DB에서라도 제거(R2 고아 객체는 추후 정리)
+        return await deletePost(postId: postId)
     }
 
     // MARK: - 하트 / 댓글

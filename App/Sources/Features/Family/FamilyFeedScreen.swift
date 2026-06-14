@@ -188,7 +188,7 @@ struct FamilyFeedScreen: View {
     /// 본인이 올린 가족 보관함 사진 삭제 — DB 삭제(미디어·하트·댓글 FK cascade) + 로컬 공유표시 해제.
     private func deletePost(_ post: BLFeedPost) async {
         busy = true; defer { busy = false }
-        if await FamilyFeedBackend.deletePost(postId: post.id) {
+        if await FamilyFeedBackend.deletePostFully(postId: post.id) {
             posts.removeAll { $0.id == post.id }
             store.unmarkFeedShared(post.id)        // 기록 카드의 '공유 중' 표시 해제
             store.familyFeedVersion &+= 1          // 기록 탭 카드들 재조회 트리거

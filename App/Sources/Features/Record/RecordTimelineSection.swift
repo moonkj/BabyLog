@@ -630,7 +630,7 @@ private struct DiaryTimelineCard: View {
         let wasShared = fpost != nil || sharedIntent
         store.deleteDiaryEntry(id: entry.id)
         store.unmarkFeedShared(pid)
-        if wasShared { Task { await FamilyFeedBackend.deletePost(postId: pid) } }
+        if wasShared { Task { await FamilyFeedBackend.deletePostFully(postId: pid) } }   // R2 원본까지 제거
     }
 
     /// 이 기록을 가족 피드에 공유(연결 id = entry.id) — 공유 후 하트·댓글 UI가 열린다.
