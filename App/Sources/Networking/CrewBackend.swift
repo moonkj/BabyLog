@@ -133,8 +133,10 @@ enum CrewBackend {
         guard SupabaseConfig.isConfigured, !apnsToken.isEmpty,
               var req = await request("/rest/v1/crew_push_token?on_conflict=device_id", method: "POST") else { return }
         req.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+        // 토큰 키 = ownerID(로그인 시 Apple uid, 비로그인 시 기기ID). 마켓/거래/채팅 푸시가
+        // 상대 신원(seller/buyer/sold_to = ownerID)으로 토큰을 찾으므로 키를 ownerID로 맞춘다.
         var body: [String: Any] = [
-            "device_id": SupabaseConfig.deviceID,
+            "device_id": await SupabaseConfig.ownerID(),
             "apns_token": apnsToken,
             "env": apnsEnvironment,
             "updated_at": ISO8601DateFormatter().string(from: Date()),

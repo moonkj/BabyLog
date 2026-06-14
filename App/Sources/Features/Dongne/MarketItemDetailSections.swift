@@ -397,10 +397,11 @@ struct MarketDetailBottomBar: View {
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    .background(threadCount > 0 ? AppColors.danger : AppColors.primary,
+                                in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                     .overlay(alignment: .topTrailing) {
                         if threadCount > 0 {
-                            Text("\(threadCount)").font(.system(size: 11, weight: .heavy)).foregroundStyle(AppColors.primary)
+                            Text("\(threadCount)").font(.system(size: 11, weight: .heavy)).foregroundStyle(AppColors.danger)
                                 .frame(minWidth: 18, minHeight: 18).background(.white, in: Circle())
                                 .offset(x: 6, y: -6)
                         }

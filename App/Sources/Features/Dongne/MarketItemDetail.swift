@@ -144,12 +144,7 @@ struct MarketItemDetail: View {
         .toolbar {
             if liveItem.mine {
                 // 판매자 전용 — 들어온 문의(구매자별 1:1 스레드) 바로가기
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showThreads = true } label: {
-                        Image(systemName: "bubble.left.and.bubble.right")
-                    }
-                    .accessibilityLabel("들어온 문의 보기")
-                }
+                // (상단 채팅 아이콘 제거 — 하단 '들어온 문의' 버튼과 중복)
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         // 현재 상태에 체크 표시 + 같은 상태/변경 중엔 비활성(currentStatus 경유)
