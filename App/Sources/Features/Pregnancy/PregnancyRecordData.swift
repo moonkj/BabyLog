@@ -6,130 +6,9 @@
 import SwiftUI
 import Charts
 
-// MARK: - 태동 도트
-
-struct MovementDot: View {
-    var filled: Bool
-    var index: Int
-    var onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(filled ? Color(hex: 0xD96BA0) : AppColors.ink3.opacity(0.18))
-                .frame(height: 10)
-                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: filled)
-        }
-        .buttonStyle(LiquidPressStyle(scale: 0.88))
-        .accessibilityHidden(true) // 부모 combine이 대표 레이블 제공
-    }
-}
-
-// MARK: - 체중 차트 (Swift Charts)
-
-private struct WeightPoint: Identifiable {
-    let id = UUID()
-    let week: Int
-    let weight: Double
-}
-
-struct WeightChart: View {
-    private let points: [WeightPoint] = [
-        .init(week: 0,  weight: 52.0),
-        .init(week: 8,  weight: 53.0),
-        .init(week: 14, weight: 55.0),
-        .init(week: 18, weight: 56.5),
-        .init(week: 24, weight: 58.4),
-    ]
-    // 권장 범위 밴드 (저체중 BMI 기준: +12.5~18kg)
-    private let bandLow:  [(Int, Double)] = [(0, 51.0), (40, 63.0)]
-    private let bandHigh: [(Int, Double)] = [(0, 52.0), (40, 64.5)]
-
-    var body: some View {
-        Chart {
-            // 권장 증가 밴드
-            ForEach(0..<bandLow.count, id: \.self) { i in
-                AreaMark(
-                    x: .value("주수", bandLow[i].0),
-                    yStart: .value("하한", bandLow[i].1),
-                    yEnd: .value("상한", bandHigh[i].1)
-                )
-                .foregroundStyle(AppColors.pregnancyPink.opacity(0.10))
-                .interpolationMethod(.linear)
-            }
-            // 실제 체중 선
-            ForEach(points) { pt in
-                LineMark(
-                    x: .value("주수", pt.week),
-                    y: .value("체중(kg)", pt.weight)
-                )
-                .foregroundStyle(AppColors.pregnancyPink)
-                .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
-                .interpolationMethod(.catmullRom)
-
-                PointMark(
-                    x: .value("주수", pt.week),
-                    y: .value("체중(kg)", pt.weight)
-                )
-                .foregroundStyle(AppColors.pregnancyPink)
-                .symbolSize(20)
-            }
-        }
-        .chartXAxis {
-            AxisMarks(values: [0, 10, 20, 30, 40]) { val in
-                AxisValueLabel {
-                    if let w = val.as(Int.self) {
-                        Text("\(w)주")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(AppColors.ink3)
-                    }
-                }
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.4))
-                    .foregroundStyle(AppColors.line)
-            }
-        }
-        .chartYAxis {
-            AxisMarks(values: [50, 55, 60, 65]) { val in
-                AxisValueLabel {
-                    if let v = val.as(Double.self) {
-                        Text("\(Int(v))")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(AppColors.ink3)
-                    }
-                }
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.4))
-                    .foregroundStyle(AppColors.line)
-            }
-        }
-        .chartYScale(domain: 49...67)
-        .chartXScale(domain: -1...41)
-    }
-}
-
 // MARK: - 배 사진 셀
-
-struct BellyPhotoCell: View {
-    let week: Int
-    let seed: Int
-
-    var body: some View {
-        VStack(spacing: Spacing.s2) {
-            ZStack {
-                PhotoPlaceholder(seed: seed, cornerRadius: 14)
-                    .frame(width: 104, height: 132)
-                // D라인 아이콘 힌트
-                Image(systemName: "figure.stand")
-                    .font(.system(size: 32, weight: .light))
-                    .foregroundStyle(Color.white.opacity(0.7))
-                    .accessibilityHidden(true)
-            }
-            Text("\(week)주")
-                .font(AppFont.micro)
-                .foregroundStyle(AppColors.ink2)
-        }
-        .accessibilityLabel("배 사진 \(week)주차")
-    }
-}
+// (체중 차트·실제 배 사진 셀은 PregnancyMomRecordSection이 store 실데이터로 직접 렌더 —
+//  목업 WeightChart/BellyPhotoCell은 제거됨. 아래는 '계속 기록' 안내 셀만 재사용.)
 
 struct BellyPhotoContinuationCell: View {
     var body: some View {
@@ -269,18 +148,16 @@ enum PregnancyData {
             20: "눈을 뜨고 감기 시작. 바나나만 해졌어요.",
             22: "피부에 솜털(태지)이 자라요.",
             24: "폐 발달 시작. 빛에 눈을 찡그려요.",
+            26: "눈을 뜨기 시작하고, 소리에 더 또렷이 반응해요.",
+            28: "꿈을 꾸듯 REM 수면을 취하고, 눈을 깜빡여요.",
+            30: "뇌 주름이 깊어지고, 골수가 혈구를 만들기 시작해요.",
+            32: "발톱이 다 자라고, 피부가 점점 매끈해져요.",
+            34: "엄마에게서 면역 물질을 받기 시작해요.",
+            36: "대부분 머리를 아래로 두고 출산을 준비해요.",
         ]
         let past = Array(summaries.keys.sorted().filter { $0 < currentWeek }.suffix(4))
         return past.map { w in WeekEntry(week: w, summary: summaries[w] ?? "") }
     }
-
-    struct BellyPhoto { let week: Int; let seed: Int }
-    static let bellyPhotos: [BellyPhoto] = [
-        .init(week: 12, seed: 3),
-        .init(week: 16, seed: 0),
-        .init(week: 20, seed: 4),
-        .init(week: 24, seed: 1),
-    ]
 
     struct CheckupItem: Identifiable {
         let id = UUID()

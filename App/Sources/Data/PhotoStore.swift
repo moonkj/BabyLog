@@ -37,6 +37,23 @@ enum PhotoStore {
         return UIImage(data: data)
     }
 
+    /// 기존 사진 파일을 새 파일로 복제하고 새 파일명을 반환. 실패 시 nil.
+    /// 출산 전환 시 배 사진을 아이 타임라인으로 승계할 때, 원본(임신 기록)과
+    /// 사본(성장 기록)의 파일 수명을 분리하기 위해 사용한다(한쪽 삭제가 다른 쪽을 깨지 않게).
+    static func copy(_ name: String?) -> String? {
+        guard let name, !name.isEmpty else { return nil }
+        let src = directory.appendingPathComponent(name)
+        guard FileManager.default.fileExists(atPath: src.path) else { return nil }
+        let ext = src.pathExtension.isEmpty ? "jpg" : src.pathExtension
+        let newName = "\(UUID().uuidString).\(ext)"
+        do {
+            try FileManager.default.copyItem(at: src, to: directory.appendingPathComponent(newName))
+            return newName
+        } catch {
+            return nil
+        }
+    }
+
     /// 사진 삭제 (기록 삭제 시).
     static func delete(_ name: String?) {
         guard let name, !name.isEmpty else { return }

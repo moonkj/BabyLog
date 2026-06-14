@@ -85,7 +85,7 @@ struct QuickRecordSheet: View {
     private var weightLabel: String { mode == .pregnancy ? "산모 몸무게 (kg)" : "몸무게 (kg)" }
     private var memoPlaceholder: String {
         mode == .pregnancy
-            ? "태동 느낌, 컨디션 메모 (선택)"
+            ? "컨디션 메모 (선택)"
             : "한 줄 메모 (선택)"
     }
 
@@ -969,7 +969,6 @@ private func babyMilestones(months: Int) -> [MilestoneItem] {
 
 // 임신 모드 이정표
 private let pregnancyMilestones: [MilestoneItem] = [
-    MilestoneItem(label: "태동 느낌",    icon: "heart",                    iconFill: "heart.fill",                   color: AppColors.pregnancyPink),
     MilestoneItem(label: "배 사진",       icon: "camera",                   iconFill: "camera.fill",                  color: AppColors.primary),
     MilestoneItem(label: "검진",          icon: "stethoscope",              iconFill: "stethoscope",                   color: Color(hex: 0x3B6FA8)),
     MilestoneItem(label: "컨디션 메모",  icon: "note.text",                iconFill: "note.text",                    color: Color(hex: 0x5B53B0)),

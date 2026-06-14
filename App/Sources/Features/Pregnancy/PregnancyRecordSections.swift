@@ -32,11 +32,37 @@ struct PregnancyFetusGuideSection: View {
                     .frame(height: 25)
                     .background(Color(hex: 0xFBEAF0), in: Capsule())
 
+                    // 히어로 — 이번 주 과일 비유(감정적 연결점)
+                    HStack(spacing: Spacing.s4) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(hex: 0xFBEAF0))
+                                .frame(width: 78, height: 78)
+                            Text(fruit.emoji)
+                                .font(.system(size: 42))
+                        }
+                        .accessibilityHidden(true)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("이번 주 아기는")
+                                .font(AppFont.caption)
+                                .foregroundStyle(AppColors.ink3)
+                            Text("\(fruit.name)만 해요")
+                                .font(.system(size: 21, weight: .heavy))
+                                .foregroundStyle(AppColors.ink)
+                                .minimumScaleFactor(0.8)
+                                .lineLimit(1)
+                            Text("\(PregnancyData.trimesterLabel(week.weeks)) · \(week.weeks)주 \(week.days)일")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.pregnancyPink)
+                        }
+                        Spacer(minLength: 0)
+                    }
+
                     // 수치 타일
                     HStack(spacing: Spacing.s3) {
                         miniTile(value: guide.length, label: "태아 키")
                         miniTile(value: guide.weight, label: "몸무게")
-                        miniTile(value: fruit.name, label: "크기 비유")
                     }
 
                     Text(guide.note)
@@ -54,7 +80,7 @@ struct PregnancyFetusGuideSection: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
-                "\(week.weeks)주차 태아 발달. 키 \(guide.length), 몸무게 \(guide.weight). \(guide.note)"
+                "\(week.weeks)주차 태아 발달. 이번 주 아기는 \(fruit.name)만 해요. 키 \(guide.length), 몸무게 \(guide.weight). \(guide.note)"
             )
             .padding(.horizontal, Spacing.s5)
 
@@ -153,15 +179,6 @@ struct PregnancyMomRecordSection: View {
         pregnancyId.map { store.bellyPhotos(pregnancyId: $0) } ?? []
     }
 
-    /// 오늘 태동 횟수 (store 영속)
-    private var movementCount: Int {
-        pregnancyId.map { store.todayMovementCount(pregnancyId: $0) } ?? 0
-    }
-    private func setMovement(_ v: Int) {
-        guard let pid = pregnancyId else { return }
-        store.setMovementCount(pregnancyId: pid, count: max(0, min(10, v)))
-    }
-
     /// 체중 기록 (store 영속, 날짜 오름차순)
     private var weights: [PregnancyLog] {
         pregnancyId.map { store.pregnancyWeights(pregnancyId: $0) } ?? []
@@ -169,10 +186,6 @@ struct PregnancyMomRecordSection: View {
 
     var body: some View {
         LazyVStack(spacing: Spacing.s3, pinnedViews: []) {
-            // 태동 카운터
-            movementCounterCard
-                .padding(.horizontal, Spacing.s5)
-
             // 체중 추이 차트
             weightChartCard
                 .padding(.horizontal, Spacing.s5)
@@ -197,90 +210,6 @@ struct PregnancyMomRecordSection: View {
         }
     }
 
-    // 태동 카운터 ─────────────────────────────────────────────────────
-    private var movementCounterCard: some View {
-        BLCard {
-            VStack(alignment: .leading, spacing: Spacing.s3) {
-                // 헤더
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            HeartbeatView(size: 13)
-                            Text("오늘의 태동")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(AppColors.ink)
-                        }
-                        Text("10회 목표 · 말기 건강 체크")
-                            .font(AppFont.caption)
-                            .foregroundStyle(AppColors.ink3)
-                    }
-                    Spacer()
-                    HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text("\(movementCount)")
-                            .font(AppFont.num(28, weight: .heavy))
-                            .foregroundStyle(AppColors.pregnancyPink)
-                            .contentTransition(.numericText())
-                        Text("/10")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(AppColors.ink3)
-                    }
-                    .accessibilityLabel("태동 \(movementCount)회 / 10회 목표")
-                }
-
-                // 도트 그리드 (10개)
-                HStack(spacing: Spacing.s2) {
-                    ForEach(0..<10, id: \.self) { index in
-                        MovementDot(filled: index < movementCount, index: index) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                if index == movementCount && movementCount < 10 {
-                                    setMovement(movementCount + 1)
-                                } else if index == movementCount - 1 && movementCount > 0 {
-                                    setMovement(movementCount - 1)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.vertical, Spacing.s1)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("태동 도트 그리드. \(movementCount)회 채워짐")
-
-                // 태동 기록 버튼
-                Button {
-                    Haptics.soft()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        if movementCount < 10 { setMovement(movementCount + 1) }
-                    }
-                } label: {
-                    Label("태동 기록", systemImage: "plus.circle.fill")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Color.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(AppColors.pregnancyPink, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                }
-                .buttonStyle(LiquidPressStyle(scale: 0.97))
-                .disabled(movementCount >= 10)
-                .accessibilityLabel(movementCount >= 10 ? "목표 달성! 10회 완료" : "태동 기록하기. 현재 \(movementCount)회")
-                .accessibilityHint(movementCount < 10 ? "탭하면 태동 1회 추가" : "")
-
-                if movementCount >= 10 {
-                    HStack(spacing: Spacing.s2) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(AppColors.primary)
-                            .accessibilityHidden(true)
-                        Text("오늘 태동 목표를 달성했어요")
-                            .font(AppFont.caption)
-                            .foregroundStyle(AppColors.primary)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("태동 카운터 카드")
-    }
 
     // 체중 추이 차트 ───────────────────────────────────────────────────
     private var weightChartCard: some View {

@@ -5,6 +5,7 @@
 
 import SwiftUI
 import Foundation
+import UIKit
 
 // MARK: - 진입점
 
@@ -148,7 +149,7 @@ struct PregnancyHomeView: View {
             VStack(spacing: Spacing.s2) {
                 Text("임신을 등록해보세요")
                     .font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
-                Text("태명과 출산 예정일을 입력하면\n주차별 가이드와 태동·체중 기록이 시작돼요.")
+                Text("태명과 출산 예정일을 입력하면\n주차별 가이드와 체중·배 사진 기록이 시작돼요.")
                     .font(AppFont.callout).foregroundStyle(AppColors.ink3)
                     .multilineTextAlignment(.center).lineSpacing(3)
             }
@@ -232,19 +233,90 @@ struct PregnancyHomeView: View {
 
     // MARK: - 태아 히어로 카드
 
+    /// 가장 최근 배 사진(주차 최댓값)의 이미지 — 있으면 홈 히어로를 사진으로(육아 홈과 톤 통일).
+    private var latestBellyImage: UIImage? {
+        guard let pid = activePregnancy?.id,
+              let last = store.bellyPhotos(pregnancyId: pid).last else { return nil }
+        return PhotoStore.image(last.photoRef)
+    }
+
     private var heroCard: some View {
         let week = pregnancyWeek
         let dday = dDayToBirth
         let fruit = fruitForWeek(week.weeks)
+        let ddayStr = dday >= 0 ? "D-\(dday)" : "D+\(-dday)"
+        return Group {
+            if let img = latestBellyImage {
+                bellyPhotoHero(img: img, week: week, ddayStr: ddayStr, fruit: fruit)
+            } else {
+                fruitGradientHero(week: week, ddayStr: ddayStr, fruit: fruit)
+            }
+        }
+    }
 
-        return BLCard(padding: 0) {
+    // 배 사진 히어로 — 1:1 사진 액자(육아 홈 heroCard와 동일 톤: 흰 매트 테두리 + 하단 그라데이션 + 생애 시계).
+    // CLAUDE.md "끊김 없는 하나의 여정" — 임신 홈도 아이 홈처럼 '내 사진'이 주인공이 된다.
+    private func bellyPhotoHero(img: UIImage, week: (weeks: Int, days: Int), ddayStr: String, fruit: FruitInfo) -> some View {
+        Image(uiImage: img)
+            .resizable()
+            .scaledToFill()
+            .frame(maxWidth: .infinity)
+            .frame(height: UIScreen.main.bounds.width - Spacing.s5 * 2)   // 1:1 정사각형(좌우 여백 제외)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            .overlay {
+                LinearGradient(
+                    colors: [.clear, .clear, .black.opacity(0.35), .black.opacity(0.65)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            }
+            .overlay(alignment: .topLeading) {
+                Text("\(week.weeks)주 배 사진")
+                    .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 10).frame(height: 24)
+                    .background(AppColors.pregnancyPink.opacity(0.92), in: Capsule())
+                    .padding(14)
+                    .accessibilityHidden(true)
+            }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(fetusNickname)
+                            .font(.system(size: 18, weight: .heavy)).foregroundStyle(.white)
+                        // 생애 시계 ★ — 태아 시절부터 이어지는 상시 시그니처(DESIGN.md §8.2)
+                        LifeClockView(size: 18, hand: AppColors.gold, ring: .white)
+                        Text("\(trimesterLabel(week.weeks)) \(week.weeks)주 · \(ddayStr)")
+                            .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 8).frame(height: 22)
+                            .background(.black.opacity(0.22), in: Capsule())
+                    }
+                    Text("\(fruit.emoji) \(fruit.name)만 해요 · 출산까지")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                }
+                .padding(16)
+            }
+            // 사진을 주인공으로 — 흰 매트 액자 테두리 + 따뜻한 깊은 그림자(육아 홈과 동일).
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 3)
+            }
+            .blShadow(.card)
+            .contentShape(Rectangle())
+            .onTapGesture { editingPregnancy = activePregnancy }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(fetusNickname), \(trimesterLabel(week.weeks)) \(week.weeks)주 \(week.days)일, 출산까지 \(ddayStr). 최근 배 사진. 탭하면 임신 정보 수정")
+            .accessibilityAddTraits(.isButton)
+    }
+
+    // 과일 그라데이션 히어로 — 배 사진이 없을 때(기존 톤 + 생애 시계 시그니처 추가).
+    private func fruitGradientHero(week: (weeks: Int, days: Int), ddayStr: String, fruit: FruitInfo) -> some View {
+        BLCard(padding: 0) {
             ZStack(alignment: .topTrailing) {
                 // 배경 그라데이션 (임신 핑크)
                 LinearGradient(
-                    colors: [
-                        Color(hex: 0xFBE6EE),
-                        Color(hex: 0xF6D6E4)
-                    ],
+                    colors: [Color(hex: 0xFBE6EE), Color(hex: 0xF6D6E4)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -278,10 +350,13 @@ struct PregnancyHomeView: View {
                             dot: true
                         )
 
-                        // D-day (모노스페이스 숫자)
-                        Text(dday >= 0 ? "D-\(dday)" : "D+\(-dday)")
-                            .font(AppFont.num(28, weight: .heavy))
-                            .foregroundStyle(AppColors.pregnancyPink)
+                        // D-day (모노스페이스 숫자) + 생애 시계 시그니처
+                        HStack(spacing: 8) {
+                            Text(ddayStr)
+                                .font(AppFont.num(28, weight: .heavy))
+                                .foregroundStyle(AppColors.pregnancyPink)
+                            LifeClockView(size: 20, hand: AppColors.gold, ring: AppColors.pregnancyPink)
+                        }
 
                         // 과일 비유 + 안내
                         Text("\(fruit.name)만 해요 · 출산까지")
@@ -289,10 +364,7 @@ struct PregnancyHomeView: View {
                             .foregroundStyle(Color(hex: 0xA8537E))
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel({
-                        let ddayStr = dday >= 0 ? "D-\(dday)" : "D+\(-dday)"
-                        return "\(trimesterLabel(week.weeks)), \(week.weeks)주 \(week.days)일. 출산까지 \(ddayStr). 태아 크기는 \(fruit.name) 정도예요."
-                    }())
+                    .accessibilityLabel("\(trimesterLabel(week.weeks)), \(week.weeks)주 \(week.days)일. 출산까지 \(ddayStr). 태아 크기는 \(fruit.name) 정도예요.")
                 }
                 .padding(Spacing.s5)
                 .frame(maxWidth: .infinity, alignment: .leading)

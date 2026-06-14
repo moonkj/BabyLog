@@ -764,9 +764,45 @@ final class AppStore: ObservableObject {
             updatedPregnancy.status = .delivered
             pregnancies[index] = updatedPregnancy
             children.append(child)
+            // 배 사진 → 성장 사진 승계: 태아 시절 배 사진을 아이 타임라인에 잇는다
+            // (CLAUDE.md 핵심 데이터 전환 — "끊김 없는 하나의 여정"). 원본은 임신 기록에 그대로 보존.
+            carryOverBellyPhotos(from: pregnancy, to: child)
             bus.publish(.recordSaved(childId: child.id))
             refreshBadgeAwards()
             return .success(child)
+        }
+    }
+
+    /// 임신 기록의 배 사진을 아이 다이어리로 승계한다.
+    /// - 날짜: LMP 기준 추정 임신일(lmp + 주차×7)로 설정해 출생 이전에 시간순 배치. LMP가 없으면 원본 날짜.
+    ///         어떤 경우든 출생일 이전으로 클램프해 타임라인이 출생 뒤로 새지 않게 한다.
+    /// - 사진: 원본 파일을 복제(PhotoStore.copy)해 임신/성장 기록의 파일 수명을 분리(한쪽 삭제가 다른 쪽을 깨지 않게).
+    private func carryOverBellyPhotos(from pregnancy: Pregnancy, to child: Child) {
+        let cal = Calendar(identifier: .gregorian)
+        let bellies = pregnancyLogs
+            .filter { $0.pregnancyId == pregnancy.id && $0.kind == .belly }
+            .sorted { $0.value < $1.value }
+        guard !bellies.isEmpty else { return }
+        // 출생일 직전(하루 전 정오)을 상한선으로 둬 출생 기록보다 항상 앞서게 한다.
+        let birthDay = cal.startOfDay(for: child.birthDate)
+        let upperBound = cal.date(byAdding: .day, value: -1, to: birthDay)
+            .flatMap { cal.date(bySettingHour: 12, minute: 0, second: 0, of: $0) } ?? child.birthDate
+
+        for log in bellies {
+            guard let copiedRef = PhotoStore.copy(log.photoRef) else { continue }
+            let week = Int(log.value)
+            let estimated = pregnancy.lmpDate
+                .flatMap { cal.date(byAdding: .day, value: week * 7, to: $0) } ?? log.date
+            let date = min(estimated, upperBound)
+            let entry = DiaryEntry(
+                childId: child.id,
+                date: date,
+                recordType: "photo",
+                content: "임신 \(week)주차 · 태아 시절",
+                photoRef: copiedRef,
+                photoRefs: [copiedRef]
+            )
+            diaryEntries.append(entry)
         }
     }
 
@@ -889,36 +925,7 @@ final class AppStore: ObservableObject {
         }
     }
 
-    // MARK: - 임신 기록 (태동·체중)
-
-    /// 특정 임신의 오늘 태동 횟수.
-    func todayMovementCount(pregnancyId: UUID, on date: Date = Date()) -> Int {
-        let cal = Calendar.current
-        let log = pregnancyLogs.first {
-            $0.pregnancyId == pregnancyId && $0.kind == .movement
-                && cal.isDate($0.date, inSameDayAs: date)
-        }
-        return Int(log?.value ?? 0)
-    }
-
-    /// 오늘 태동 횟수를 upsert한다 (0 이하면 해당 로그 제거).
-    func setMovementCount(pregnancyId: UUID, count: Int, on date: Date = Date()) {
-        let cal = Calendar.current
-        let idx = pregnancyLogs.firstIndex {
-            $0.pregnancyId == pregnancyId && $0.kind == .movement
-                && cal.isDate($0.date, inSameDayAs: date)
-        }
-        if count <= 0 {
-            if let idx { pregnancyLogs.remove(at: idx) }
-            return
-        }
-        if let idx {
-            pregnancyLogs[idx].value = Double(count)
-        } else {
-            pregnancyLogs.append(PregnancyLog(pregnancyId: pregnancyId, date: date,
-                                              kind: .movement, value: Double(count)))
-        }
-    }
+    // MARK: - 임신 기록 (체중·배 사진)
 
     /// 체중 기록을 추가한다 (kg). 0 이하 무시.
     func addPregnancyWeight(pregnancyId: UUID, kg: Double, on date: Date = Date()) {

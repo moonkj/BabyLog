@@ -214,7 +214,7 @@ struct PregnancyRecordScreen: View {
                         .foregroundStyle(AppColors.ink)
                         .multilineTextAlignment(.center)
 
-                    Text("태명과 출산 예정일을 입력하면\n주차별 가이드와 태동·체중 기록이 시작돼요.")
+                    Text("태명과 출산 예정일을 입력하면\n주차별 가이드와 체중·배 사진 기록이 시작돼요.")
                         .font(AppFont.callout)
                         .foregroundStyle(AppColors.ink2)
                         .multilineTextAlignment(.center)

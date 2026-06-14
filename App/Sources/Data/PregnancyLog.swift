@@ -1,14 +1,14 @@
 // PregnancyLog.swift
-// BabyLog — 임신 기록(태동·체중) 영속 모델
+// BabyLog — 임신 기록(체중·배 사진·메모) 영속 모델
 //
-// 태아 가이드/배 사진은 별도(가이드=정적 콘텐츠, 사진=사진 저장 시스템).
-// 여기서는 일일 태동 카운트와 체중 기록만 영속한다.
+// 태아 가이드는 정적 콘텐츠로 별도. 여기서는 체중·배 사진·메모를 영속한다.
+// (.movement = 구 태동 카운터. 기능은 제거됐으나 구 저장 데이터 디코딩 호환을 위해 케이스만 유지.)
 
 import Foundation
 
 struct PregnancyLog: Identifiable, Codable, Equatable {
     enum Kind: String, Codable {
-        case movement   // value = 그 날의 태동 횟수
+        case movement   // (구) 태동 카운터 — 기능 제거됨. 구 데이터 디코딩 호환용으로만 유지(미표시).
         case weight     // value = kg
         case belly      // value = 주차, photoRef = 로컬 배 사진
         case memo       // note = 메모 텍스트

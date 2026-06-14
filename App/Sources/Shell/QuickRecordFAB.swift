@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 빠른 기록 스피드다이얼 (기능 8.4) — 탭 시 액션이 위로 펼쳐지고 FAB는 45° 회전.
-/// 모드별 액션 분기(육아: 성장측정/사진/메모 · 임신: 태동/배사진/메모).
+/// 모드별 액션 분기(육아: 성장측정/사진/메모 · 임신: 배사진/메모).
 struct QuickRecordFAB: View {
     var mode: AppMode
     /// 방금 드래그로 이동했으면 true — 직후 탭(메뉴 열림)을 무시한다.
@@ -13,7 +13,7 @@ struct QuickRecordFAB: View {
     // 뱃지 카드 수준 투명도: 흰 글로스/틴트를 최소화해 ultraThinMaterial 블러가 드러나게 한다.
     private var actions: [(icon: String, label: String)] {
         mode == .pregnancy
-            ? [("heart.fill", "태동"), ("photo.fill", "배 사진"), ("square.and.pencil", "메모")]
+            ? [("photo.fill", "배 사진"), ("square.and.pencil", "메모")]
             : [("ruler.fill", "성장 측정"), ("camera.fill", "사진"), ("square.and.pencil", "메모")]
     }
 
