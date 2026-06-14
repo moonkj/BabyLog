@@ -288,7 +288,6 @@ struct NearbyScreen: View {
             if showMap {
                 // 지도 뷰 — 스크롤 없이 full-height
                 VStack(spacing: 0) {
-                    mapToggleBar
                     categoryChips
                     filterChips
                     mapView
@@ -302,7 +301,6 @@ struct NearbyScreen: View {
                 // 리스트 뷰
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        mapToggleBar
                         locationHint
                         categoryChips
                         filterChips
@@ -651,32 +649,6 @@ struct NearbyScreen: View {
 
     // MARK: Map Toggle Bar
 
-    // 장소 카테고리(키즈카페·놀이터)는 실좌표 지도 마커가 없어 리스트만 노출 → 토글 숨김.
-    @ViewBuilder
-    private var mapToggleBar: some View {
-        if isLiveCategory {
-            HStack {
-                Spacer()
-                HStack(spacing: 0) {
-                    mapToggleButton(icon: "list.bullet", label: "리스트", isSelected: !showMap) {
-                        withAnimation(.easeInOut(duration: 0.2)) { showMap = false }
-                    }
-                    mapToggleButton(icon: "map", label: "지도", isSelected: showMap) {
-                        withAnimation(.easeInOut(duration: 0.2)) { showMap = true }
-                    }
-                }
-                .padding(3)
-                .background(AppColors.surface2, in: Capsule())
-                .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
-                .blShadow(.chip)
-            }
-            .padding(.horizontal, Spacing.s5)
-            .padding(.bottom, Spacing.s3)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("보기 전환")
-        }
-    }
-
     private func mapToggleButton(icon: String, label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
@@ -710,17 +682,40 @@ struct NearbyScreen: View {
                 .foregroundStyle(AppColors.ink2)
                 .padding(.horizontal, Spacing.s5)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Spacing.s2) {
-                    ForEach(PlaceCategory.allCases.filter { $0 != .playground }, id: \.self) { cat in
-                        BLChip(text: cat.rawValue, on: selectedCategory == cat) {
-                            // activeFilters 제거 — 필터 상태 갱신 불필요(재조회는 onChange가 담당).
-                            selectedCategory = cat
+            // 카테고리 칩 + 리스트/지도 토글을 한 줄에 둔다(위쪽 빈 공간 제거).
+            HStack(spacing: Spacing.s2) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.s2) {
+                        ForEach(PlaceCategory.allCases.filter { $0 != .playground }, id: \.self) { cat in
+                            BLChip(text: cat.rawValue, on: selectedCategory == cat) {
+                                // activeFilters 제거 — 필터 상태 갱신 불필요(재조회는 onChange가 담당).
+                                selectedCategory = cat
+                            }
+                            .accessibilityAddTraits(selectedCategory == cat ? [.isSelected] : [])
                         }
-                        .accessibilityAddTraits(selectedCategory == cat ? [.isSelected] : [])
                     }
+                    .padding(.leading, Spacing.s5)
+                    .padding(.trailing, Spacing.s2)
                 }
-                .padding(.horizontal, Spacing.s5)
+                // 리스트/지도 토글 — 지도 지원 카테고리(소아과·약국)에서만 노출
+                if isLiveCategory {
+                    HStack(spacing: 0) {
+                        mapToggleButton(icon: "list.bullet", label: "리스트", isSelected: !showMap) {
+                            withAnimation(.easeInOut(duration: 0.2)) { showMap = false }
+                        }
+                        mapToggleButton(icon: "map", label: "지도", isSelected: showMap) {
+                            withAnimation(.easeInOut(duration: 0.2)) { showMap = true }
+                        }
+                    }
+                    .padding(3)
+                    .background(AppColors.surface2, in: Capsule())
+                    .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
+                    .blShadow(.chip)
+                    .fixedSize()
+                    .padding(.trailing, Spacing.s5)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("보기 전환")
+                }
             }
         }
         .padding(.bottom, Spacing.s3)

@@ -211,6 +211,10 @@ struct MainTabView: View {
                 .nightDimmable()
         }
         .onChange(of: showQuickRecord) { _, shown in if shown { recordDetent = .large } }
+        // 빈 타임라인 등에서 '빠른 기록' 요청 신호 → mode에 맞춰 처리
+        .onChange(of: store.requestQuickRecord) { _, req in
+            if req { store.requestQuickRecord = false; triggerQuickRecord() }
+        }
         .onAppear {
             // 최초 1회 모드 기본값: 활성 임신 있고 아이 없으면 임신 모드로(이후엔 사용자 선택 유지)
             if !modeInitialized {

@@ -63,7 +63,9 @@ struct TimelineSection: View {
             BLEmptyState(
                 icon: "book.closed.fill",
                 title: "첫 기록을 남겨볼까요?",
-                message: "\(child.name)의 소중한 순간을\n하나씩 담아보세요."
+                message: "\(child.name)의 소중한 순간을\n하나씩 담아보세요.",
+                actionTitle: "첫 기록 남기기",
+                action: { store.requestQuickRecord = true }
             )
         } else {
             VStack(alignment: .leading, spacing: Spacing.s5) {
