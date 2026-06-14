@@ -59,6 +59,11 @@ final class MockSubsidyProvider: SubsidyProviding {
 
     init() {}
 
+    /// 복지로 모바일 복지서비스 상세 딥링크(검증된 wlfareInfoId 기준).
+    private func bokjiroURL(_ wlfareInfoId: String) -> URL? {
+        URL(string: "https://m.bokjiro.go.kr/ssis-tem/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=\(wlfareInfoId)")
+    }
+
     func subsidies(childAgeMonths: Int) async throws -> [SubsidyInfo] {
         var result: [SubsidyInfo] = []
 
@@ -69,7 +74,7 @@ final class MockSubsidyProvider: SubsidyProviding {
                 name: "첫만남이용권",
                 amountKRW: 2_000_000,
                 eligibility: "출생 아동 1인당 200만원 바우처 지급. 출생 후 1년 이내 신청.",
-                applyURL: URL(string: "https://www.bokjiro.go.kr/ssis-tbu/twatbz/mkclAr/mkclArMtdInfo.do?tbbzSn=94"),
+                applyURL: bokjiroURL("WLF00004656"),
                 isLumpSum: true   // 일시금 — "총 200만원"으로 표기(월 지급 아님)
             ))
         }
@@ -81,7 +86,7 @@ final class MockSubsidyProvider: SubsidyProviding {
                 name: "부모급여 (0~11개월)",
                 amountKRW: 1_000_000,
                 eligibility: "만 0세(0~11개월) 아동을 가정에서 양육하는 경우 월 100만원 지급.",
-                applyURL: URL(string: "https://www.bokjiro.go.kr/ssis-tbu/twatbz/mkclAr/mkclArMtdInfo.do?tbbzSn=96")
+                applyURL: bokjiroURL("WLF00004657")
             ))
         } else if childAgeMonths < 24 {
             result.append(SubsidyInfo(
@@ -89,7 +94,7 @@ final class MockSubsidyProvider: SubsidyProviding {
                 name: "부모급여 (12~23개월)",
                 amountKRW: 500_000,
                 eligibility: "만 1세(12~23개월) 아동을 가정에서 양육하는 경우 월 50만원 지급.",
-                applyURL: URL(string: "https://www.bokjiro.go.kr/ssis-tbu/twatbz/mkclAr/mkclArMtdInfo.do?tbbzSn=96")
+                applyURL: bokjiroURL("WLF00004657")
             ))
         }
 
@@ -100,7 +105,7 @@ final class MockSubsidyProvider: SubsidyProviding {
                 name: "아동수당",
                 amountKRW: 100_000,
                 eligibility: "만 8세 미만(0~95개월) 아동에게 월 10만원 지급. 소득 기준 없음.",
-                applyURL: URL(string: "https://www.bokjiro.go.kr/ssis-tbu/twatbz/mkclAr/mkclArMtdInfo.do?tbbzSn=20")
+                applyURL: bokjiroURL("WLF00001171")
             ))
         }
 
@@ -111,18 +116,18 @@ final class MockSubsidyProvider: SubsidyProviding {
                 name: "가정양육수당",
                 amountKRW: childAgeMonths < 12 ? 200_000 : (childAgeMonths < 24 ? 150_000 : 100_000),
                 eligibility: "어린이집·유치원·종일제 아이돌봄서비스를 이용하지 않는 가정양육 아동 지원. 연령별 금액 상이.",
-                applyURL: URL(string: "https://www.bokjiro.go.kr/ssis-tbu/twatbz/mkclAr/mkclArMtdInfo.do?tbbzSn=56")
+                applyURL: bokjiroURL("WLF00003253")
             ))
         }
 
-        // 어린이집 보육료 바우처 — 84개월 미만 (취학 전)
+        // 어린이집 보육료(영유아보육료) 바우처 — 84개월 미만 (취학 전)
         if childAgeMonths < 84 {
             result.append(SubsidyInfo(
                 id: "subsidy-006",
                 name: "어린이집 보육료 지원",
                 amountKRW: childAgeMonths < 12 ? 514_000 : (childAgeMonths < 24 ? 452_000 : 280_000),
                 eligibility: "어린이집 이용 아동에게 연령별 보육료 바우처 지급. 국공립·민간·가정 어린이집 모두 적용.",
-                applyURL: URL(string: "https://www.bokjiro.go.kr/ssis-tbu/twatbz/mkclAr/mkclArMtdInfo.do?tbbzSn=61")
+                applyURL: bokjiroURL("WLF00003250")
             ))
         }
 
