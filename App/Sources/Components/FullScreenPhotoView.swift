@@ -16,12 +16,15 @@ struct FullScreenPhotoView: View {
     private var totalScale: CGFloat { max(1, scale * gestureScale) }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        // ZStack 기본 정렬(center) — 사진이 화면 가운데에 오도록. (이전 .topTrailing은
+        // 닫기 버튼용이었지만 사진까지 상단에 붙던 문제 → 닫기 버튼은 overlay로 분리)
+        ZStack {
             Color.black.ignoresSafeArea()
 
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .scaleEffect(totalScale)
                 .offset(dragOffset)
                 .gesture(
@@ -52,8 +55,9 @@ struct FullScreenPhotoView: View {
                     }
                 }
                 .accessibilityLabel("사진 전체보기. 핀치로 확대, 더블탭으로 확대·축소.")
-
-            // 닫기 버튼
+        }
+        // 닫기 버튼 — 사진 정렬과 무관하게 항상 우상단 고정
+        .overlay(alignment: .topTrailing) {
             Button(action: onClose) {
                 ZStack {
                     Circle().fill(.black.opacity(0.4)).frame(width: 40, height: 40)
