@@ -440,7 +440,7 @@ struct GrowthChartSection: View {
                         yEnd: .value("p85", band.p85)
                     )
                     .foregroundStyle(AppColors.primary.opacity(0.10))
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.monotone)
                     .accessibilityHidden(true)
                 }
 
@@ -453,7 +453,7 @@ struct GrowthChartSection: View {
                     )
                     .foregroundStyle(AppColors.ink3)
                     .lineStyle(StrokeStyle(lineWidth: 1.3, dash: [4, 4]))
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.monotone)
                     .accessibilityHidden(true)
                 }
             }
@@ -466,7 +466,7 @@ struct GrowthChartSection: View {
                 )
                 .foregroundStyle(AppColors.primary)
                 .lineStyle(StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round))
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(.monotone)
                 .symbol {
                     Circle()
                         .fill(AppColors.surface)

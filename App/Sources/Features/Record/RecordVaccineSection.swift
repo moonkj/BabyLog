@@ -426,6 +426,11 @@ struct VaccineSection: View {
 
                     Spacer(minLength: 0)
 
+                    // 상태 배지(개별 회차 행과 동일 기준) — 그룹은 횟수만, 단회는 '지난 시기'로
+                    // 보여 불일치하던 문제 해소. 그룹도 지남/임박/완료 상태를 동일하게 표기.
+                    let st = groupStatus(g)
+                    BLBadge(tone: st.tone, text: st.text, systemIcon: st.icon).fixedSize()
+
                     // 회차 진행 — 색+모양(채움/외곽)+레이블 3중 인코딩
                     if total > 1 {
                         doseDots(g)
@@ -441,7 +446,7 @@ struct VaccineSection: View {
             }
             .buttonStyle(LiquidPressStyle(scale: 0.99))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(g.name), \(total)회 중 \(doneCount)회 완료\(groupDone ? "" : ", 미완 회차 있음")")
+            .accessibilityLabel("\(g.name), \(total)회 중 \(doneCount)회 완료\(groupDone ? "" : ", \(groupStatus(g).text)")")
             .accessibilityHint(expanded ? "접어서 요약 보기" : "펼쳐서 회차별 보기")
             .accessibilityAddTraits(.isButton)
 
@@ -454,6 +459,25 @@ struct VaccineSection: View {
                 }
             }
         }
+    }
+
+    /// 그룹 대표 상태 — 미완 회차 중 가장 임박/지난 상태를 단회 행과 동일 기준으로 산출.
+    /// (단회는 '지난 시기', 그룹은 횟수만 보여 불일치하던 문제를 통일)
+    private func groupStatus(_ g: VaccineGroup) -> (tone: BadgeTone, text: String, icon: String) {
+        let undone = g.doses.filter { !isDone($0) }
+        if undone.isEmpty { return (.mint, "완료", "checkmark") }
+        // 가장 임박한 미래 예정(D-day) 우선
+        if let nextD = undone
+            .filter({ dDayLabel(for: $0) != nil })
+            .min(by: { ($0.scheduledDate ?? .distantFuture) < ($1.scheduledDate ?? .distantFuture) }),
+           let d = dDayLabel(for: nextD) {
+            return (d == "D-Day" ? .coral : .amber, d, "calendar")
+        }
+        // 미래 예정이 없고 지난 회차가 있으면 '지난 시기'(닦달 아닌 중립 앰버)
+        if undone.contains(where: { isOverdue($0) }) {
+            return (.amber, "지난 시기", "exclamationmark.circle")
+        }
+        return (.grey, "예정", "clock")
     }
 
     /// 회차 진행 도트(채움=완료, 외곽=미완, 금색 링=다음 차례) + "N/M" 텍스트.
