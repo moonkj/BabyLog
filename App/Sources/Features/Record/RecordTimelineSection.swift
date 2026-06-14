@@ -262,9 +262,11 @@ private struct DiaryTimelineCard: View {
     private var liked: Bool { store.isDiaryLiked(entry.id) }
     private var commentCount: Int { store.comments(for: entry.id).count }
     private var hasPhoto: Bool { !entry.photoRefList.isEmpty }
+    /// 이 기록을 가족에 공유했거나(서버) 공유 진행 중(낙관적 표시).
+    private var sharedIntent: Bool { store.sharedFeedEntryIds.contains(entry.id.uuidString) }
     /// Pro 모드 + 이 기록이 가족에 공유됨 → 가족 하트·댓글 표시.
     private var showsFamilySocial: Bool { store.isPro && fpost != nil }
-    /// Pro 모드에서 카드 하단에 가족 UI(하트·댓글 또는 '공유하기')가 보이는지 — 패딩 조절용.
+    /// Pro 모드에서 카드 하단에 가족 UI(하트·댓글/공유중/공유하기)가 보이는지 — 패딩 조절용.
     private var showsAnyFamilyUI: Bool { store.isPro && (fpost != nil || hasPhoto) }
 
     var body: some View {
@@ -490,10 +492,31 @@ private struct DiaryTimelineCard: View {
         if store.isPro {
             if fpost != nil {
                 sharedSocialView
+            } else if sharedIntent, hasPhoto {
+                sharingPlaceholder           // 공유 직후 업로드 중 — 즉시 '공유 중' 표시
             } else if hasPhoto {
                 shareToFamilyBar
             }
         }
+    }
+
+    // 공유 직후(업로드 진행 중) — 등록과 동시에 '가족과 공유 중'을 보여 버튼이 깜빡이지 않게.
+    private var sharingPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Divider().overlay(AppColors.line)
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("가족과 공유 중…").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(AppColors.ink2)
+                Spacer()
+                HStack(spacing: 3) {
+                    Image(systemName: "person.2.fill").font(.system(size: 10))
+                    Text("가족 보관함").font(.system(size: 11, weight: .semibold))
+                }.foregroundStyle(AppColors.ink3)
+            }
+            .frame(minHeight: 40)
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
     }
 
     // 사진 있는데 아직 가족 피드에 없음 → 한 번에 공유(연결 id = entry.id).

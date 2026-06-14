@@ -706,6 +706,7 @@ struct QuickRecordSheet: View {
                     feedImages = selectedImages
                     feedChild = store.selectedChild?.name
                     feedPostId = linkId.uuidString
+                    store.markFeedShared(linkId.uuidString)   // 즉시 '공유 중' 표시(업로드 완료 전)
                     feedCaption = {
                         switch (milestoneText, trimmedMemo.isEmpty) {
                         case let (ms?, false): return "\(ms) · \(trimmedMemo)"
@@ -768,7 +769,10 @@ struct QuickRecordSheet: View {
                 let imgs = feedImages, cap = feedCaption, child = feedChild, pid = feedPostId
                 Task {
                     let ok = await FamilyFeedBackend.shareRecordToFamily(postId: pid, images: imgs, caption: cap, childLabel: child)
-                    if ok { await MainActor.run { store.familyFeedVersion += 1 } }  // 타임라인 가족 반응 재로드
+                    await MainActor.run {
+                        if ok { store.familyFeedVersion += 1 }                 // 타임라인 가족 반응 재로드
+                        else if let pid { store.unmarkFeedShared(pid) }        // 실패 시 '공유 중' 해제 → 버튼 복귀
+                    }
                 }
                 onSave()
                 onClose()

@@ -32,6 +32,10 @@ final class AppStore: ObservableObject {
     }
     /// 가족 피드 변경 신호(공유 완료 등). 증가 시 타임라인이 가족 반응을 다시 읽는다(메모리 전용).
     @Published var familyFeedVersion = 0
+    /// 가족 공유 의도/진행 중인 기록 id — 업로드가 끝나기 전에도 카드가 즉시 '공유 중'을 보이게(메모리 전용).
+    @Published var sharedFeedEntryIds: Set<String> = []
+    func markFeedShared(_ id: String)   { sharedFeedEntryIds.insert(id) }
+    func unmarkFeedShared(_ id: String) { sharedFeedEntryIds.remove(id) }
     // 마켓 (로컬 백본)
     @Published private(set) var marketItems: [MarketItem] = []
     @Published private(set) var savedMarketIds: Set<String> = []
