@@ -242,6 +242,7 @@ struct MarketDetailInfoBlock: View {
 /// 판매자 카드
 struct MarketDetailSellerCard: View {
     let item: MarketItem
+    @State private var verifiedTrades: Int? = nil   // 판매자 인증 거래수(양쪽 확인)
 
     var body: some View {
         BLCard(padding: 14, flat: true) {
@@ -268,19 +269,29 @@ struct MarketDetailSellerCard: View {
                     if item.mine {
                         BLBadge(tone: .mint, text: "내 매물", systemIcon: nil, dot: false)
                     } else {
-                        HStack(spacing: 4) {
-                            Image(systemName: "location.fill")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(AppColors.ink3)
-                            Text(item.distanceText)
-                                .font(AppFont.num(12))
-                                .foregroundStyle(AppColors.ink3)
+                        HStack(spacing: 6) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(AppColors.ink3)
+                                Text(item.distanceText)
+                                    .font(AppFont.num(12))
+                                    .foregroundStyle(AppColors.ink3)
+                            }
+                            // 인증 거래수 — 양쪽 확인 거래가 있을 때만(신뢰 지표)
+                            if let n = verifiedTrades, n > 0 {
+                                BLBadge(tone: .mint, text: "인증 거래 \(n)", systemIcon: "checkmark.seal.fill", dot: false)
+                            }
                         }
                     }
                 }
 
                 Spacer(minLength: 0)
             }
+        }
+        .task(id: item.sellerId) {
+            guard !item.mine, let sid = item.sellerId, !sid.isEmpty else { return }
+            verifiedTrades = await MarketBackend.sellerVerifiedTradeCount(sellerId: sid)
         }
         .overlay {
             RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)

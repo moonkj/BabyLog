@@ -797,7 +797,8 @@ struct NearbyScreen: View {
         // 영업조회가 아직 진행 중이면 미완 카운트("0곳")로 오해하지 않게 "영업 확인 중…"으로 표기.
         let countLabel = checking ? "영업 확인 중…" : (hoursKnown ? "현재 영업중 " : "주변 ")
         let countValue = checking ? "" : (hoursKnown ? "\(open)곳" : "\(total)곳")
-        return HStack(spacing: Spacing.s2) {
+        return VStack(alignment: .leading, spacing: 5) {
+          HStack(spacing: Spacing.s2) {
             HStack(spacing: Spacing.s2) {
                 HStack(spacing: 5) {
                     if hoursKnown && !checking {
@@ -846,6 +847,14 @@ struct NearbyScreen: View {
                 }
                 .accessibilityLabel("새로고침")
             }
+          }
+          // 영업 정보는 100% 정확하지 않으므로 방문 전 전화 확인을 권장(영업중 표시 옆 안내).
+          if hoursKnown && !checking {
+              Text("영업 정보는 공공데이터 기준이라 실제와 다를 수 있어요 · 헛걸음 않게 방문 전 전화로 확인하세요")
+                  .font(.system(size: 11, weight: .medium))
+                  .foregroundStyle(AppColors.ink3)
+                  .fixedSize(horizontal: false, vertical: true)
+          }
         }
         .padding(.horizontal, Spacing.s1)
         .padding(.top, Spacing.s1)

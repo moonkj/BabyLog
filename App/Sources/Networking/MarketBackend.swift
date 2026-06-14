@@ -112,6 +112,25 @@ enum MarketBackend {
         return nil   // 2xx여도 본문 해석 불가 = 불명
     }
 
+    /// 판매자의 '인증 거래' 수 — 판매완료 + 구매자 확인(양쪽 확인)된 거래 누적(신뢰 지표). 실패 시 nil.
+    static func sellerVerifiedTradeCount(sellerId: String) async -> Int? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              !sellerId.isEmpty,
+              let s = sellerId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let status = MarketStatus.sold.rawValue.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let url = URL(string: "\(base)/rest/v1/market_item?seller=eq.\(s)&status=eq.\(status)&buyer_confirmed=eq.true&select=id") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue("count=exact", forHTTPHeaderField: "Prefer")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
+        if let range = http.value(forHTTPHeaderField: "Content-Range"),
+           let total = range.split(separator: "/").last, let n = Int(total) { return n }
+        if let rows = try? JSONDecoder().decode([ItemDTO].self, from: data) { return rows.count }
+        return nil
+    }
+
     /// 내가 올린 매물 전체(상태·만료 무관) 최신순 — 프로필 표시용.
     static func fetchMyItems() async -> [MarketItem]? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
