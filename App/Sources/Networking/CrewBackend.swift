@@ -494,7 +494,24 @@ enum CrewBackend {
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        await notifyCrewChat(meetupId: meetupId, groupId: nil, body: t)   // 참여자 전원에게 푸시
         return true
+    }
+
+    /// 크루 단체 채팅 새 메시지 → 참여자 전원(보낸 사람 제외) 푸시. best-effort.
+    static func notifyCrewChat(meetupId: String?, groupId: String?, body: String) async {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let url = URL(string: "\(base)/functions/v1/notify-crew-chat") else { return }
+        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 보낸 사람
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var payload: [String: Any] = ["body": String(body.prefix(120))]
+        if let meetupId { payload["meetup_id"] = meetupId }
+        if let groupId { payload["group_id"] = groupId }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        _ = try? await URLSession.shared.data(for: req)
     }
 
     // MARK: - 그룹 채팅(가입자 공유)
@@ -533,6 +550,7 @@ enum CrewBackend {
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        await notifyCrewChat(meetupId: nil, groupId: groupId, body: t)   // 가입자 전원에게 푸시
         return true
     }
 
