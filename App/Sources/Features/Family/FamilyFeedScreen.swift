@@ -172,7 +172,9 @@ private struct CommentField: View {
                 .font(.system(size: 13)).padding(.horizontal, Spacing.s3).frame(height: 38)
                 .background(AppColors.surface2, in: Capsule())
             Button {
-                let t = text; text = ""; if !t.trimmingCharacters(in: .whitespaces).isEmpty { onSubmit(t) }
+                let t = text; text = ""
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                if !t.trimmingCharacters(in: .whitespaces).isEmpty { onSubmit(t) }
             } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 26)).foregroundStyle(AppColors.primary) }
         }
         .padding(.top, 2)

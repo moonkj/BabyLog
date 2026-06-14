@@ -223,6 +223,15 @@ enum FamilyFeedBackend {
         return anyMedia
     }
 
+    /// 포스트 삭제 — 기록 삭제 시 가족 피드에서도 제거(미디어·반응·댓글은 FK cascade).
+    @discardableResult
+    static func deletePost(postId: String) async -> Bool {
+        guard let req = await rest("/bl_feed_post?id=eq.\(postId)", method: "DELETE"),
+              let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
     // MARK: - 하트 / 댓글
 
     @discardableResult

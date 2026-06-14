@@ -257,6 +257,7 @@ private struct DiaryTimelineCard: View {
     @State private var sharing = false
     @State private var showLoginForShare = false
     @State private var shareError: String?
+    @State private var showDeleteConfirm = false
 
     private var isMilestone: Bool { entry.milestone != nil }
     private var liked: Bool { store.isDiaryLiked(entry.id) }
@@ -339,7 +340,7 @@ private struct DiaryTimelineCard: View {
             Button { Haptics.light(); showEdit = true } label: {
                 Label("수정", systemImage: "pencil")
             }
-            Button(role: .destructive) { Haptics.warning(); store.deleteDiaryEntry(id: entry.id) } label: {
+            Button(role: .destructive) { Haptics.light(); showDeleteConfirm = true } label: {
                 Label("기록 삭제", systemImage: "trash")
             }
         }
@@ -352,6 +353,14 @@ private struct DiaryTimelineCard: View {
         .alert("가족과 공유", isPresented: Binding(get: { shareError != nil }, set: { if !$0 { shareError = nil } })) {
             Button("확인", role: .cancel) {}
         } message: { Text(shareError ?? "") }
+        .confirmationDialog("이 기록을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("삭제", role: .destructive) { deleteRecord() }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text(showsFamilySocial || sharedIntent
+                 ? "사진·메모가 삭제되고 가족 보관함에서도 사라져요. 되돌릴 수 없어요."
+                 : "사진·메모가 삭제되며 되돌릴 수 없어요.")
+        }
         .sheet(isPresented: $showLoginForShare) {
             VStack(spacing: Spacing.s4) {
                 Image(systemName: "person.2.fill").font(.system(size: 34))
@@ -608,9 +617,20 @@ private struct DiaryTimelineCard: View {
         let t = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         commentDraft = ""; Haptics.light()
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         if await FamilyFeedBackend.addComment(post: p, text: t) {
             fpost = await FamilyFeedBackend.fetchPost(postId: p.id)
         }
+    }
+
+    /// 확인 후 삭제 — 로컬 기록 + (공유됐으면) 가족 피드 포스트까지 정리.
+    private func deleteRecord() {
+        Haptics.warning()
+        let pid = entry.id.uuidString
+        let wasShared = fpost != nil || sharedIntent
+        store.deleteDiaryEntry(id: entry.id)
+        store.unmarkFeedShared(pid)
+        if wasShared { Task { await FamilyFeedBackend.deletePost(postId: pid) } }
     }
 
     /// 이 기록을 가족 피드에 공유(연결 id = entry.id) — 공유 후 하트·댓글 UI가 열린다.
