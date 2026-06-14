@@ -10,13 +10,20 @@ struct MarketPhotoView: View {
     var seed: Int = 0            // 플레이스홀더 그라데이션 시드
     var index: Int = 0
     var cornerRadius: CGFloat = 0
+    /// true=꽉 채움(scaledToFill, 카드용), false=전체 표시(scaledToFit, 잘림 없음)
+    var fill: Bool = true
+
+    @ViewBuilder private func shape(_ image: Image) -> some View {
+        if fill { image.resizable().scaledToFill() }
+        else { image.resizable().scaledToFit() }
+    }
 
     var body: some View {
         if index < urls.count, let url = URL(string: urls[index]) {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
-                    image.resizable().scaledToFill()
+                    shape(image)
                 case .failure:
                     PhotoPlaceholder(seed: seed, cornerRadius: cornerRadius)
                 case .empty:
@@ -29,7 +36,7 @@ struct MarketPhotoView: View {
                 }
             }
         } else if index < refs.count, let img = PhotoStore.image(refs[index]) {
-            Image(uiImage: img).resizable().scaledToFill()
+            shape(Image(uiImage: img))
         } else {
             PhotoPlaceholder(seed: seed, cornerRadius: cornerRadius)
         }

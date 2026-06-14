@@ -8,6 +8,8 @@ import Foundation
 
 // MARK: - MarketItemDetail
 
+private struct IdentifiableUIImage: Identifiable { let id = UUID(); let image: UIImage }
+
 struct MarketItemDetail: View {
     let item: MarketItem
 
@@ -29,6 +31,7 @@ struct MarketItemDetail: View {
     @State private var myID = ""
     @State private var confirmBusy = false
     @State private var showConfirmPrompt = false         // 구매자: 거래 확인 알람
+    @State private var heroFull: UIImage? = nil          // 사진 전체화면
     @Environment(\.dismiss) private var dismiss
 
     private var liveItem: MarketItem { store.marketItems.first(where: { $0.id == item.id }) ?? item }
@@ -115,14 +118,13 @@ struct MarketItemDetail: View {
         ZStack(alignment: .bottom) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    MarketDetailHeroPhoto(item: displayItem)
+                    MarketDetailHeroPhoto(item: displayItem, onTap: { openHeroFullscreen() })
                     if needsBuyerConfirm { buyerConfirmCard }
                     MarketDetailContent(item: displayItem)
                         .padding(.bottom, 96) // 하단 바 여백
                 }
             }
             .background(AppColors.canvas.ignoresSafeArea())
-            .ignoresSafeArea(edges: .top)
 
             MarketDetailBottomBar(
                 item: displayItem,
@@ -192,6 +194,13 @@ struct MarketItemDetail: View {
             Button("확인", role: .cancel) { }
         } message: {
             Text("네트워크 문제로 판매 상태를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.")
+        }
+        // 사진 전체화면
+        .fullScreenCover(item: Binding(
+            get: { heroFull.map { IdentifiableUIImage(image: $0) } },
+            set: { if $0 == nil { heroFull = nil } }
+        )) { wrap in
+            FullScreenPhotoView(image: wrap.image, onClose: { heroFull = nil })
         }
         // 판매자: 누구와 거래했는지 지정 → 판매완료
         .sheet(isPresented: $showBuyerPicker) { buyerPickerSheet }
@@ -282,6 +291,15 @@ struct MarketItemDetail: View {
             let ok = await MarketBackend.completeSale(id: item.id, buyer: buyer)
             if !ok { overrideStatus = nil; overrideSoldTo = nil; showStatusFailAlert = true }
             statusBusy = false
+        }
+    }
+
+    /// 히어로 사진 전체화면 — 로컬 사진 우선, 없으면 서버 URL 로드.
+    private func openHeroFullscreen() {
+        if let r = liveItem.photoRefs.first, let img = PhotoStore.image(r) { heroFull = img; return }
+        guard let s = liveItem.photoURLs.first, let url = URL(string: s) else { return }
+        Task { @MainActor in
+            if let (d, _) = try? await URLSession.shared.data(from: url), let img = UIImage(data: d) { heroFull = img }
         }
     }
 

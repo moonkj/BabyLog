@@ -11,15 +11,19 @@ import Foundation
 /// 히어로 사진
 struct MarketDetailHeroPhoto: View {
     let item: MarketItem
+    var onTap: () -> Void = {}
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             // 사진 + 장식 뱃지 — VoiceOver에서 숨김(장식)
             ZStack(alignment: .topLeading) {
-                MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs, seed: item.photoSeed, index: 0, cornerRadius: 0)
+                // 전체 표시(scaledToFit) — 잘림 없음. 탭하면 전체화면.
+                MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs, seed: item.photoSeed, index: 0, cornerRadius: 0, fill: false)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 280)
-                    .clipped()
+                    .frame(maxHeight: 420)
+                    .background(AppColors.surface2)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onTap() }
 
                 // 상태 뱃지 (예약/판매완료)
                 if item.status != .selling {
