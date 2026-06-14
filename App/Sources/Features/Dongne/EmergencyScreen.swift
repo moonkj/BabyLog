@@ -144,7 +144,7 @@ struct EmergencyScreen: View {
                     .foregroundStyle(AppColors.ink)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("영업중 · 대학병원급 우선 · 가까운 순 · \(lastCheckedAt) 기준")
+                Text("응급실 보유 병원 + 영업중 소아과 · 가까운 순 · \(lastCheckedAt) 기준")
                     .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(AppColors.ink3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -389,12 +389,15 @@ private struct EmergencyPlaceCard: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 6) {
-                    // 영업중 확인 마커 — 노출되는 곳은 모두 영업중(상세 영업시간/응급실 기준)
+                    // 상태 마커(색+아이콘+텍스트 3중 인코딩). 소아과는 영업시간 확인됨 → "영업중";
+                    // 대형병원은 거리순으로만 넣어 영업확인을 안 했으므로 단정하지 않고 "전화 확인"으로 정직 표기.
                     HStack(spacing: 3) {
-                        Circle().fill(BadgeTone.mint.ink).frame(width: 6, height: 6)
-                        Text(hospital.isMajorHospital ? "응급실 운영" : "영업중")
+                        Image(systemName: hospital.isMajorHospital ? "cross.case.fill" : "clock.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(hospital.isMajorHospital ? AppColors.ink2 : BadgeTone.mint.ink)
+                        Text(hospital.isMajorHospital ? "응급실 보유 · 전화 확인" : "영업중")
                             .font(.system(size: 11.5, weight: .heavy))
-                            .foregroundStyle(BadgeTone.mint.ink)
+                            .foregroundStyle(hospital.isMajorHospital ? AppColors.ink2 : BadgeTone.mint.ink)
                     }
                     Text("·").foregroundStyle(AppColors.line2)
                     Text(distanceText).font(AppFont.num(13.5)).foregroundStyle(AppColors.ink2)

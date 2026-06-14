@@ -1185,13 +1185,12 @@ private struct HospitalCard: View {
         }
     }
 
+    private var telDigits: String { hospital.phone.filter { $0.isNumber } }
+
     private var phoneButton: some View {
         Button {
-            let raw = hospital.phone
-                .replacingOccurrences(of: "-", with: "")
-            if let url = URL(string: "tel://\(raw)") {
-                UIApplication.shared.open(url)
-            }
+            guard !telDigits.isEmpty, let url = URL(string: "tel://\(telDigits)") else { return }
+            UIApplication.shared.open(url)
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
@@ -1200,10 +1199,12 @@ private struct HospitalCard: View {
                 PhoneMotionIcon(color: .white, size: 22, animated: isSelected)
             }
             .blShadow(.chip)
+            .opacity(telDigits.isEmpty ? 0.4 : 1)   // 전화번호 없으면 비활성 표시
         }
         .buttonStyle(LiquidPressStyle(scale: 0.94))
-        .accessibilityLabel("전화하기")
-        .accessibilityHint("\(hospital.name)에 전화합니다")
+        .disabled(telDigits.isEmpty)
+        .accessibilityLabel(telDigits.isEmpty ? "전화번호 없음" : "전화하기")
+        .accessibilityHint(telDigits.isEmpty ? "이 병원은 전화번호 정보가 없어요" : "\(hospital.name)에 전화합니다")
     }
 
     // 길찾기 — Apple 지도 앱에서 장소명 검색 (좌표는 합성이므로 이름 검색)

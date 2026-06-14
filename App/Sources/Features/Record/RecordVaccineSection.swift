@@ -75,7 +75,13 @@ struct VaccineSection: View {
                                                    to: Calendar.current.startOfDay(for: scheduled)).day ?? 0
         if diff > 0  { return "D-\(diff)" }
         if diff == 0 { return "D-Day" }
-        return nil  // 이미 지난 날짜는 nil (완료 처리 안 됐어도 배지 없음)
+        return nil  // 이미 지난 날짜는 nil → isOverdue로 별도 표기
+    }
+
+    /// 권장 시기가 지났는데 아직 미접종인지 — 닦달(빨강) 대신 중립 앰버 "지난 시기"로 표시(아동 안전).
+    private func isOverdue(_ record: VaccineRecord) -> Bool {
+        guard !isDone(record), let scheduled = record.scheduledDate else { return false }
+        return Calendar.current.startOfDay(for: scheduled) < Calendar.current.startOfDay(for: Date())
     }
 
     private func isDone(_ record: VaccineRecord) -> Bool {
@@ -354,6 +360,8 @@ struct VaccineSection: View {
                     BLBadge(tone: .mint, text: "완료", systemIcon: "checkmark").fixedSize()
                 } else if let d = dDayLabel(for: v) {
                     BLBadge(tone: d == "D-Day" ? .coral : .amber, text: d, systemIcon: "calendar").fixedSize()
+                } else if isOverdue(v) {
+                    BLBadge(tone: .amber, text: "지난 시기", systemIcon: "exclamationmark.circle").fixedSize()
                 } else {
                     BLBadge(tone: .grey, text: "예정", systemIcon: "clock").fixedSize()
                 }
@@ -479,6 +487,7 @@ struct VaccineSection: View {
             hospital: store.vaccineHospital(childId: child.id, vaccineId: v.vaccineId),
             done: isDone(v),
             dDay: dDayLabel(for: v),
+            overdue: isOverdue(v),
             onToggle: { toggleDose(v, child: child) },
             onTapHospital: { openInMaps($0) },
             onEditHospital: { presentHospitalPrompt(vaccineId: v.vaccineId, name: name) }
@@ -607,6 +616,7 @@ private struct VaccineRow: View {
     let hospital: String?
     let done: Bool
     let dDay: String?
+    var overdue: Bool = false
     let onToggle: () -> Void
     let onTapHospital: (String) -> Void
     let onEditHospital: () -> Void
@@ -683,6 +693,9 @@ private struct VaccineRow: View {
                             text: d,
                             systemIcon: "calendar")
                     .accessibilityLabel("접종 예정 \(d)")
+                } else if overdue {
+                    BLBadge(tone: .amber, text: "지난 시기", systemIcon: "exclamationmark.circle")
+                        .accessibilityLabel("접종 권장 시기가 지났어요. 소아과와 확인하세요")
                 } else {
                     BLBadge(tone: .grey, text: "예정", systemIcon: "clock")
                         .accessibilityLabel("접종 예정")
