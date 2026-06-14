@@ -243,7 +243,8 @@ private struct CrewActiveContent: View {
     var refreshTick: Int = 0
 
     private let sectionLimit = 5
-    private var hood: String { location.localityName ?? "우리 동네" }
+    // 크루는 '내 동네'(선택) 기준. 미설정 시에만 현재 GPS로 폴백.
+    private var hood: String { store.selectedHood ?? location.localityName ?? "우리 동네" }
     // 서버 연동 시엔 서버 데이터만(시드 폴백 금지 — 정직 원칙). 미구성 시에만 로컬/목업.
     private var posts: [CrewPost] { SupabaseConfig.isConfigured ? (sharedPosts ?? []) : store.crewPosts }
     private var meetups: [CrewMeetup] { SupabaseConfig.isConfigured ? (sharedMeetups ?? []) : store.crews }
@@ -279,8 +280,8 @@ private struct CrewActiveContent: View {
         didLoad = true
     }
 
-    /// 동네(시도)가 아직 안 잡혔으면 빈/실패 화면 대신 로딩을 유지한다.
-    private var isLoading: Bool { SupabaseConfig.isConfigured && (!didLoad || location.localityName == nil) }
+    /// 동네(내 동네 또는 GPS)가 아직 안 잡혔으면 빈/실패 화면 대신 로딩을 유지한다.
+    private var isLoading: Bool { SupabaseConfig.isConfigured && (!didLoad || hood == "우리 동네") }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -875,6 +876,7 @@ private struct CrewPostRow: View {
 
 private struct CrewColdStartContent: View {
     var onJoinWaitlist: () -> Void
+    @EnvironmentObject private var store: AppStore
     @ObservedObject private var location = NearbyLocationProvider.shared
 
     /// 서버 연동 시 실제 신청 수(미구성/실패 시 nil → 목업).
@@ -889,8 +891,8 @@ private struct CrewColdStartContent: View {
         return SupabaseConfig.isConfigured ? target : 22
     }
 
-    /// 현재 GPS 동네(없으면 일반 표현)
-    private var hood: String { location.localityName ?? "우리 동네" }
+    /// 내 동네(선택) 기준 — 미설정 시 현재 GPS 폴백
+    private var hood: String { store.selectedHood ?? location.localityName ?? "우리 동네" }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {

@@ -110,7 +110,7 @@ struct CrewCreateSheet: View {
         let cap = max(2, Int(capacityText.filter(\.isNumber)) ?? 6)
         let placeText = place.trimmingCharacters(in: .whitespaces)
         let whenText = when.isEmpty ? "일정 협의" : when
-        let hood = location.localityName ?? ""
+        let hood = store.selectedHood ?? location.localityName ?? ""
 
         if SupabaseConfig.isConfigured {
             // 위치 미확보 시 서버 생성이 실패하므로 시도하지 않고 안내.

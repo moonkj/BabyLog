@@ -343,7 +343,7 @@ struct MkSellFlowSheet: View {
                 return
             }
 
-            let hood = location.localityName ?? ""
+            let hood = store.selectedHood ?? location.localityName ?? ""
             // 위치 미확보 시 서버 등록이 실패하므로 시도하지 않고 안내(CrewCreateSheet와 동일 가드).
             guard !hood.isEmpty, hood != "우리 동네" else {
                 await MainActor.run {

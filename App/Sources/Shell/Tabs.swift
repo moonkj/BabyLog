@@ -963,8 +963,10 @@ struct HomeTab: View {
 
 // MARK: - 동네 (주변/마켓/크루 세그먼트)
 struct DongneTab: View {
+    @EnvironmentObject private var store: AppStore
     @State private var seg = 0
     @State private var showEmergency = false
+    @State private var showHoodManage = false
     @ObservedObject private var location = NearbyLocationProvider.shared
 
     /// 세그먼트 구성 — 마켓은 피처 플래그(AppFeatures.market) ON일 때만 노출.
@@ -981,20 +983,22 @@ struct DongneTab: View {
             VStack(spacing: Spacing.s4) {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("내 주변 · 위치 기반")
+                        Text(isNearbySeg ? "내 주변 · 위치 기반" : "내 동네 기반")
                             .font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("동네").font(.system(size: 28, weight: .heavy)).tracking(-0.4).foregroundStyle(AppColors.ink)
-                            // 현재 행정동(동/읍/면/리) — 역지오코딩 결과
-                            if let loc = location.localityName {
-                                HStack(spacing: 4) {
-                                    LocationPinIcon(color: MotionIconPalette.green, size: 17)
-                                    Text(loc)
-                                        .font(.system(size: 13.5, weight: .bold))
-                                        .foregroundStyle(AppColors.ink2)
-                                        .lineLimit(1)
+                            if isNearbySeg {
+                                // 주변·응급: 실시간 GPS 행정동(역지오코딩)
+                                if let loc = location.localityName {
+                                    HStack(spacing: 4) {
+                                        LocationPinIcon(color: MotionIconPalette.green, size: 17)
+                                        Text(loc).font(.system(size: 13.5, weight: .bold))
+                                            .foregroundStyle(AppColors.ink2).lineLimit(1)
+                                    }
+                                    .accessibilityLabel("현재 위치 \(loc)")
                                 }
-                                .accessibilityLabel("현재 위치 \(loc)")
+                            } else {
+                                hoodSwitcher   // 마켓·크루: 내 동네 선택/추가(GPS 자동추적 안 함)
                             }
                         }
                     }
@@ -1052,15 +1056,90 @@ struct DongneTab: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(AppColors.canvas)
             .toolbar(.hidden, for: .navigationBar)
-            .onAppear { location.start() }   // 위치 라벨이 세그먼트와 무관하게 채워지도록
-            // 동네가 잡히면 크루 자동 카운트(기기당 1회) + 목표 도달 시 자동 알림
-            .onChange(of: location.localityName) { _, name in
-                if let hood = name { Task { await CrewBackend.syncNeighborhood(hood: hood) } }
+            .onAppear { location.start() }   // 주변 라벨 + '현재 위치 추가' 인증용 GPS 확보
+            // 크루 자동 카운트·알림은 '내 동네'(선택) 기준 — 지나가는 동네에 자동 등록 안 함(스팸 방지)
+            .onChange(of: store.selectedHood) { _, hood in
+                if let hood { Task { await CrewBackend.syncNeighborhood(hood: hood) } }
             }
+            .task { if let hood = store.selectedHood { await CrewBackend.syncNeighborhood(hood: hood) } }
             .fullScreenCover(isPresented: $showEmergency) {
                 EmergencyScreen(onClose: { showEmergency = false })
             }
+            .sheet(isPresented: $showHoodManage) { hoodManageSheet }
         }
+    }
+
+    private var currentSeg: DongneSeg { segItems[min(seg, segItems.count - 1)] }
+    private var isNearbySeg: Bool { currentSeg == .nearby }
+
+    // 내 동네 스위처(마켓·크루) — 선택 전환 + 현재 위치로 추가(인증) + 관리
+    private var hoodSwitcher: some View {
+        Menu {
+            ForEach(Array(store.myNeighborhoods.enumerated()), id: \.offset) { idx, h in
+                Button { store.selectNeighborhood(idx); Haptics.selection() } label: {
+                    Label(h, systemImage: idx == store.selectedHoodIndex ? "checkmark" : "mappin.circle")
+                }
+            }
+            if store.myNeighborhoods.count < 2, let gps = location.localityName,
+               !store.myNeighborhoods.contains(gps) {
+                Divider()
+                Button { store.addNeighborhood(gps); Haptics.success() } label: {
+                    Label("현재 위치 ‘\(gps)’ 추가", systemImage: "plus.circle")
+                }
+            }
+            if !store.myNeighborhoods.isEmpty {
+                Divider()
+                Button { showHoodManage = true } label: { Label("동네 관리", systemImage: "slider.horizontal.3") }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                LocationPinIcon(color: MotionIconPalette.green, size: 17)
+                Text(store.selectedHood ?? "내 동네 설정")
+                    .font(.system(size: 13.5, weight: .bold)).foregroundStyle(AppColors.ink2).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)).foregroundStyle(AppColors.ink3)
+            }
+        }
+        .accessibilityLabel("내 동네 \(store.selectedHood ?? "미설정"). 탭하면 전환·추가")
+    }
+
+    private var hoodManageSheet: some View {
+        NavigationStack {
+            List {
+                Section("내 동네 (최대 2개)") {
+                    ForEach(Array(store.myNeighborhoods.enumerated()), id: \.offset) { idx, h in
+                        HStack(spacing: 8) {
+                            LocationPinIcon(color: MotionIconPalette.green, size: 16)
+                            Text(h).font(.system(size: 15, weight: .semibold)).foregroundStyle(AppColors.ink)
+                            if idx == store.selectedHoodIndex {
+                                Spacer()
+                                Text("사용 중").font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.primary)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { store.selectNeighborhood(idx) }
+                    }
+                    .onDelete { idx in if let i = idx.first { store.removeNeighborhood(at: i) } }
+                    if store.myNeighborhoods.count < 2 {
+                        if let gps = location.localityName, !store.myNeighborhoods.contains(gps) {
+                            Button { store.addNeighborhood(gps); Haptics.success() } label: {
+                                Label("현재 위치 ‘\(gps)’ 추가", systemImage: "plus.circle.fill")
+                            }
+                        } else {
+                            Text("동네를 추가하려면 그 동네에 있을 때 추가하세요 (위치 인증).")
+                                .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                        }
+                    }
+                }
+                Section {
+                    Text("마켓·크루는 내 동네 기준으로 보여요. 주변·응급은 현재 위치를 따릅니다.")
+                        .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                }
+            }
+            .navigationTitle("내 동네")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("완료") { showHoodManage = false } } }
+        }
+        .presentationDetents([.medium])
     }
 }
 

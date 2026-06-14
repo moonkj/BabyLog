@@ -36,6 +36,38 @@ final class AppStore: ObservableObject {
     @Published var sharedFeedEntryIds: Set<String> = []
     func markFeedShared(_ id: String)   { sharedFeedEntryIds.insert(id) }
     func unmarkFeedShared(_ id: String) { sharedFeedEntryIds.remove(id) }
+
+    // MARK: - 내 동네 (당근식 대표 동네 — 마켓·크루 기준. 주변/응급은 실시간 GPS)
+    /// 내 동네(행정동 이름) — 최대 2개. 현재 위치에서만 추가(인증) → 어뷰징·스팸 방지.
+    @Published var myNeighborhoods: [String] =
+        (UserDefaults.standard.array(forKey: "bl_my_hoods") as? [String]) ?? [] {
+        didSet { UserDefaults.standard.set(myNeighborhoods, forKey: "bl_my_hoods") }
+    }
+    /// 마켓·크루에 적용 중인 내 동네 인덱스(0/1).
+    @Published var selectedHoodIndex: Int = UserDefaults.standard.integer(forKey: "bl_selected_hood") {
+        didSet { UserDefaults.standard.set(selectedHoodIndex, forKey: "bl_selected_hood") }
+    }
+    /// 현재 선택된 내 동네(없으면 nil → 화면이 GPS 폴백/설정 유도).
+    var selectedHood: String? {
+        guard !myNeighborhoods.isEmpty else { return nil }
+        return myNeighborhoods[min(max(0, selectedHoodIndex), myNeighborhoods.count - 1)]
+    }
+    /// 내 동네 추가(현재 위치 기준 인증). 최대 2개·중복 불가. 추가하면 자동 선택.
+    func addNeighborhood(_ name: String) {
+        let t = name.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty, t != "우리 동네", !myNeighborhoods.contains(t), myNeighborhoods.count < 2 else { return }
+        myNeighborhoods.append(t)
+        selectedHoodIndex = myNeighborhoods.count - 1
+    }
+    func removeNeighborhood(at index: Int) {
+        guard myNeighborhoods.indices.contains(index) else { return }
+        myNeighborhoods.remove(at: index)
+        if selectedHoodIndex >= myNeighborhoods.count { selectedHoodIndex = max(0, myNeighborhoods.count - 1) }
+    }
+    func selectNeighborhood(_ index: Int) {
+        guard myNeighborhoods.indices.contains(index) else { return }
+        selectedHoodIndex = index
+    }
     // 마켓 (로컬 백본)
     @Published private(set) var marketItems: [MarketItem] = []
     @Published private(set) var savedMarketIds: Set<String> = []
