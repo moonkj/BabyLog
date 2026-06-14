@@ -21,6 +21,10 @@ struct QuickRecordSheet: View {
 
     // 이정표 선택 (다중)
     @State private var selectedMilestones: Set<String> = []
+    // 직접 입력한 이정표(이 기록 세션) + 입력 알럿 상태
+    @State private var customMilestones: [String] = []
+    @State private var showCustomMilestoneInput = false
+    @State private var customMilestoneText = ""
 
     // 사진 선택
     @State private var selectedImages: [UIImage] = []
@@ -338,18 +342,59 @@ struct QuickRecordSheet: View {
         }
     }
 
-    // 이정표 칩 가로 스크롤
+    // 이정표 칩 가로 스크롤 (나이대 추천 + 직접 입력한 것 + '직접 입력' 추가 칩)
     private var milestoneRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s2) {
                 ForEach(milestones) { item in
                     milestoneChip(item)
                 }
+                ForEach(customMilestones, id: \.self) { label in
+                    milestoneChip(MilestoneItem(label: label, icon: "tag", iconFill: "tag.fill",
+                                                color: Color(hex: 0x2E8B7A)))
+                }
+                addCustomChip
             }
             .padding(.horizontal, Spacing.s5)
             .padding(.vertical, 2)
         }
         .padding(.horizontal, -Spacing.s5)   // 부모 패딩 상쇄 → 전폭 스크롤
+        .alert("이정표 직접 입력", isPresented: $showCustomMilestoneInput) {
+            TextField("예: 첫 김밥, 할머니댁 방문", text: $customMilestoneText)
+            Button("추가") { addCustomMilestone() }
+            Button("취소", role: .cancel) { customMilestoneText = "" }
+        } message: { Text("이 기록에 붙일 이정표를 입력하세요.") }
+    }
+
+    // '직접 입력' 칩 — 점선 테두리로 추천 칩과 구분
+    private var addCustomChip: some View {
+        Button { Haptics.light(); showCustomMilestoneInput = true } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "plus").font(.system(size: 12, weight: .bold))
+                Text("직접 입력").font(.system(size: 14, weight: .medium))
+            }
+            .foregroundStyle(AppColors.primary)
+            .padding(.horizontal, 14)
+            .frame(height: 40)
+            .background(AppColors.surface, in: Capsule())
+            .overlay {
+                Capsule().stroke(AppColors.primary.opacity(0.55),
+                                 style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            }
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.96))
+        .accessibilityLabel("이정표 직접 입력")
+    }
+
+    private func addCustomMilestone() {
+        let t = customMilestoneText.trimmingCharacters(in: .whitespacesAndNewlines)
+        customMilestoneText = ""
+        guard !t.isEmpty else { return }
+        if !customMilestones.contains(t), !milestones.contains(where: { $0.label == t }) {
+            customMilestones.append(t)
+        }
+        selectedMilestones.insert(t)
+        Haptics.success()
     }
 
     private func milestoneChip(_ item: MilestoneItem) -> some View {
@@ -862,38 +907,56 @@ private struct MilestoneItem: Identifiable {
     let color: Color       // 색상 인코딩 (3중 인코딩 §2.2)
 }
 
-// 육아 모드 이정표 — 아이 월령에 맞춰 노출
+// 육아 모드 이정표 — 아이 월령에 맞춰 노출(나이대별 다양하게 + '직접 입력'은 칩에서 별도 제공)
 private func babyMilestones(months: Int) -> [MilestoneItem] {
-    let c1 = AppColors.primary, c2 = Color(hex: 0x5B53B0), c3 = Color(hex: 0x3B6FA8)
-    let c4 = Color(hex: 0xB45840)
-    func mk(_ l: String, _ i: String, _ c: Color) -> MilestoneItem {
-        MilestoneItem(label: l, icon: i, iconFill: i, color: c)
+    let palette = [AppColors.primary, Color(hex: 0x5B53B0), Color(hex: 0x3B6FA8),
+                   Color(hex: 0xB45840), Color(hex: 0x2E8B7A), Color(hex: 0x98711E)]
+    func make(_ pairs: [(String, String)]) -> [MilestoneItem] {
+        pairs.enumerated().map { idx, p in
+            MilestoneItem(label: p.0, icon: p.1, iconFill: p.1, color: palette[idx % palette.count])
+        }
     }
     switch months {
     case 0..<4:
-        return [mk("첫 웃음", "face.smiling", c1), mk("목 가누기", "figure.stand", c2),
-                mk("첫 외출", "stroller", c3), mk("첫 사진", "camera", c4)]
+        return make([("첫 웃음", "face.smiling"), ("눈맞춤", "eye"), ("목 가누기", "figure.stand"),
+                     ("배냇짓", "sparkles"), ("첫 외출", "stroller"), ("첫 목욕", "drop"),
+                     ("첫 예방접종", "cross.case"), ("손 빨기", "hand.raised"), ("첫 사진", "camera"),
+                     ("백일", "birthday.cake")])
     case 4..<7:
-        return [mk("뒤집기", "arrow.2.circlepath", c1), mk("옹알이", "bubble.left", c2),
-                mk("이유식 시작", "fork.knife", c3), mk("손 뻗기", "hand.raised", c4)]
+        return make([("뒤집기", "arrow.2.circlepath"), ("옹알이", "bubble.left"), ("이유식 시작", "fork.knife"),
+                     ("손 뻗기", "hand.raised"), ("발 잡기", "figure.seated.side"), ("첫 이앓이", "mouth"),
+                     ("소리내 웃기", "speaker.wave.2"), ("장난감 쥐기", "cube"), ("까꿍 반응", "face.smiling"),
+                     ("첫 외식", "fork.knife.circle")])
     case 7..<10:
-        return [mk("혼자 앉기", "figure.seated.side", c1), mk("기어다니기", "figure.walk.motion", c2),
-                mk("첫 이앓이", "mouth", c3), mk("까꿍 놀이", "face.smiling", c4)]
+        return make([("혼자 앉기", "figure.seated.side"), ("기어다니기", "figure.walk.motion"), ("첫 이", "mouth"),
+                     ("짝짜꿍", "hands.clap"), ("까꿍 놀이", "face.smiling"), ("손가락 음식", "fork.knife"),
+                     ("이름에 반응", "ear"), ("물건 옮기기", "hand.raised"), ("낯가림", "face.dashed"),
+                     ("잡고 서기 시도", "figure.stand")])
     case 10..<13:
-        return [mk("잡고 서기", "figure.stand", c1), mk("첫 단어", "bubble.left.fill", c2),
-                mk("첫 걸음마", "figure.walk", c3), mk("첫 생일(돌)", "birthday.cake", c4)]
+        return make([("잡고 서기", "figure.stand"), ("첫 단어", "bubble.left.fill"), ("첫 걸음마", "figure.walk"),
+                     ("박수", "hands.clap"), ("빠이빠이", "hand.wave"), ("컵 잡기", "cup.and.saucer"),
+                     ("가리키기", "hand.point.up"), ("혼자 서기", "figure.stand"), ("첫 신발", "shoe"),
+                     ("첫 생일(돌)", "birthday.cake")])
     case 13..<19:
-        return [mk("걸음마", "figure.walk", c1), mk("새 단어", "bubble.left.fill", c2),
-                mk("컵으로 마시기", "cup.and.saucer", c3), mk("끄적이기", "scribble", c4)]
+        return make([("걸음마", "figure.walk"), ("새 단어", "bubble.left.fill"), ("컵으로 마시기", "cup.and.saucer"),
+                     ("끄적이기", "scribble"), ("계단 오르기", "figure.stairs"), ("블록 쌓기", "cube"),
+                     ("숟가락 시도", "fork.knife"), ("그림책 보기", "book"), ("춤추기", "music.note"),
+                     ("신체 부위 알기", "figure.stand")])
     case 19..<25:
-        return [mk("뛰기", "figure.run", c1), mk("두 단어 문장", "text.bubble", c2),
-                mk("숟가락 사용", "fork.knife", c3), mk("신발 신기", "shoe", c4)]
+        return make([("뛰기", "figure.run"), ("두 단어 문장", "text.bubble"), ("숟가락 사용", "fork.knife"),
+                     ("신발 신기", "shoe"), ("공 차기", "soccerball"), ("색칠 시도", "paintbrush"),
+                     ("양치 시도", "mouth"), ("이름 말하기", "person"), ("계단 내려가기", "figure.stairs"),
+                     ("옷 벗기", "tshirt")])
     case 25..<37:
-        return [mk("대소변 가리기", "toilet", c1), mk("세 단어 문장", "text.bubble.fill", c2),
-                mk("친구와 놀기", "person.2.fill", c3), mk("색칠하기", "paintbrush", c4)]
+        return make([("대소변 가리기", "toilet"), ("세 단어 문장", "text.bubble.fill"), ("친구와 놀기", "person.2.fill"),
+                     ("색칠하기", "paintbrush"), ("점프", "figure.run"), ("가위질 시도", "scissors"),
+                     ("숫자 세기", "number"), ("색깔 알기", "paintpalette"), ("혼자 옷 입기", "tshirt"),
+                     ("세발자전거", "bicycle")])
     default:
-        return [mk("어린이집/유치원", "building.2", c1), mk("세발자전거", "bicycle", c2),
-                mk("가위질", "scissors", c3), mk("한글 관심", "textformat.abc", c4)]
+        return make([("어린이집/유치원", "building.2"), ("세발자전거", "bicycle"), ("가위질", "scissors"),
+                     ("한글 관심", "textformat.abc"), ("숫자 쓰기", "number"), ("그림 그리기", "paintbrush"),
+                     ("줄넘기", "figure.jumprope"), ("친구 사귀기", "person.2.fill"), ("노래 부르기", "music.mic"),
+                     ("질문 많아짐", "questionmark.bubble"), ("혼자 화장실", "toilet"), ("받아쓰기", "pencil.and.outline")])
     }
 }
 
@@ -905,6 +968,10 @@ private let pregnancyMilestones: [MilestoneItem] = [
     MilestoneItem(label: "컨디션 메모",  icon: "note.text",                iconFill: "note.text",                    color: Color(hex: 0x5B53B0)),
     MilestoneItem(label: "초음파",        icon: "waveform.path.ecg",        iconFill: "waveform.path.ecg",             color: Color(hex: 0x98711E)),
     MilestoneItem(label: "튼살 관리",    icon: "drop",                     iconFill: "drop.fill",                    color: Color(hex: 0xB45840)),
+    MilestoneItem(label: "태명 짓기",    icon: "sparkles",                 iconFill: "sparkles",                     color: Color(hex: 0x2E8B7A)),
+    MilestoneItem(label: "태교 음악",    icon: "music.note",               iconFill: "music.note",                   color: AppColors.pregnancyPink),
+    MilestoneItem(label: "출산 준비물",  icon: "bag",                      iconFill: "bag.fill",                     color: Color(hex: 0x3B6FA8)),
+    MilestoneItem(label: "부모 교실",    icon: "person.2",                 iconFill: "person.2.fill",                color: Color(hex: 0x5B53B0)),
 ]
 
 // MARK: - Preview
