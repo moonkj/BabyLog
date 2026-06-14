@@ -48,6 +48,7 @@ struct QuickRecordSheet: View {
     @State private var showFamilyShare = false
     @State private var pendingShareURLs: [URL] = []
     @State private var showProUpsell = false   // 프리에서 가족공유 탭 시 Pro 안내
+    @State private var showClearMediaConfirm = false   // 선택 사진 모두 지우기 재확인
 
     // MARK: 모드별 콘텐츠
     private var sheetTitle: String {
@@ -258,7 +259,7 @@ struct QuickRecordSheet: View {
                     }
                 }
                 Button {
-                    selectedImages = []; selectedVideoURL = nil; carouselIndex = 0
+                    Haptics.light(); showClearMediaConfirm = true
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
@@ -266,6 +267,12 @@ struct QuickRecordSheet: View {
                         .background(.black.opacity(0.45), in: Circle())
                 }
                 .accessibilityLabel("미디어 모두 지우기")
+                .confirmationDialog("사진을 모두 지울까요?", isPresented: $showClearMediaConfirm, titleVisibility: .visible) {
+                    Button("지우기", role: .destructive) {
+                        selectedImages = []; selectedVideoURL = nil; carouselIndex = 0; Haptics.warning()
+                    }
+                    Button("취소", role: .cancel) {}
+                } message: { Text("선택한 사진·동영상이 모두 사라져요.") }
             }
             .padding(10)
         }
