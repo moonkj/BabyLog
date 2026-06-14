@@ -26,6 +26,9 @@ create table if not exists public.market_item (
 );
 -- 기존 테이블에 city 컬럼이 없으면 추가(멱등)
 alter table public.market_item add column if not exists city text;
+-- 양쪽 확인 거래: 판매자가 지정한 구매자(sold_to) + 구매자 확인(buyer_confirmed)
+alter table public.market_item add column if not exists sold_to text;
+alter table public.market_item add column if not exists buyer_confirmed boolean not null default false;
 create index if not exists market_item_hood_idx    on public.market_item (hood, created_at desc);
 create index if not exists market_item_city_idx    on public.market_item (city, created_at desc);
 create index if not exists market_item_expires_idx on public.market_item (expires_at);
@@ -135,3 +138,18 @@ drop policy if exists market_report_ins on public.market_report;
 -- INSERT만 허용(누구나 신고). SELECT/UPDATE/DELETE 정책 없음 → 운영자(service_role)만 접근.
 create policy market_report_ins on public.market_report for insert to anon, authenticated
   with check ( reporter = coalesce(auth.uid()::text, reporter) );
+
+-- ───────── 거래 확인(구매자) ─────────
+-- 판매자가 sold_to=구매자로 '판매완료'하면, 그 구매자만 buyer_confirmed=true로 확정 가능.
+-- 컬럼 단위 권한 대신 security definer 함수로 안전하게(다른 필드 위조 차단).
+create or replace function public.market_confirm_trade(p_item uuid)
+returns boolean language plpgsql security definer as $$
+declare me text;
+begin
+  me := coalesce(auth.uid()::text, nullif(current_setting('request.headers', true)::json ->> 'x-device-id',''));
+  update public.market_item
+     set buyer_confirmed = true
+   where id = p_item and sold_to = me and status = '판매완료';
+  return found;
+end; $$;
+grant execute on function public.market_confirm_trade(uuid) to anon, authenticated;

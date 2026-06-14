@@ -37,6 +37,8 @@ enum MarketBackend {
         let seller_name: String?
         let status: String?
         let created_at: String?
+        let sold_to: String?
+        let buyer_confirmed: Bool?
     }
 
     /// 시(city) 단위 매물(미만료) 최신순 조회. 미구성/실패 시 nil(→ 로컬 폴백).
@@ -45,7 +47,7 @@ enum MarketBackend {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               !city.isEmpty, city != "우리 동네",
               let h = city.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
-        let cols = "id,hood,city,title,category,grade,months_tag,price,is_free,is_graduate,has_recall,description,hygiene_checks,photo_urls,seller,seller_name,status,created_at"
+        let cols = "id,hood,city,title,category,grade,months_tag,price,is_free,is_graduate,has_recall,description,hygiene_checks,photo_urls,seller,seller_name,status,created_at,sold_to,buyer_confirmed"
         guard let url = URL(string: "\(base)/rest/v1/market_item?city=eq.\(h)&expires_at=gt.now()&select=\(cols)&order=created_at.desc&limit=100") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
@@ -84,7 +86,8 @@ enum MarketBackend {
                 photoURLs: d.photo_urls ?? [],
                 mine: d.seller == me,
                 status: MarketStatus(rawValue: d.status ?? "") ?? .selling,
-                createdAt: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date()
+                createdAt: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date(),
+                soldTo: d.sold_to, buyerConfirmed: d.buyer_confirmed ?? false
             )
         }
     }
@@ -112,7 +115,7 @@ enum MarketBackend {
     static func fetchMyItems() async -> [MarketItem]? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let s = (await SupabaseConfig.ownerID()).addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
-        let cols = "id,hood,city,title,category,grade,months_tag,price,is_free,is_graduate,has_recall,description,hygiene_checks,photo_urls,seller,seller_name,status,created_at"
+        let cols = "id,hood,city,title,category,grade,months_tag,price,is_free,is_graduate,has_recall,description,hygiene_checks,photo_urls,seller,seller_name,status,created_at,sold_to,buyer_confirmed"
         guard let url = URL(string: "\(base)/rest/v1/market_item?seller=eq.\(s)&select=\(cols)&order=created_at.desc&limit=50") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
@@ -133,7 +136,8 @@ enum MarketBackend {
                 sellerTier: .new, distanceText: d.hood ?? "내 동네", favoriteCount: 0, photoSeed: 0,
                 description: d.description ?? "", photoRefs: [], photoURLs: d.photo_urls ?? [],
                 mine: true, status: MarketStatus(rawValue: d.status ?? "") ?? .selling,
-                createdAt: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date()
+                createdAt: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date(),
+                soldTo: d.sold_to, buyerConfirmed: d.buyer_confirmed ?? false
             )
         }
     }
@@ -208,6 +212,46 @@ enum MarketBackend {
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
         // PostgREST는 0행 매칭(RLS 불일치)도 2xx → 실제 변경된 행이 있어야 성공
         guard let rows = (try? JSONSerialization.jsonObject(with: data)) as? [Any], !rows.isEmpty else { return false }
+        return true
+    }
+
+    /// 판매완료 처리 — 구매자 지정(buyer) 또는 앱 밖 직거래(buyer=nil). 판매자만(owner RLS).
+    /// 구매자를 지정하면 그 구매자가 '거래 확인'해야 인증 거래로 집계된다.
+    @discardableResult
+    static func completeSale(id: String, buyer: String?) async -> Bool {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let i = id.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let url = URL(string: "\(base)/rest/v1/market_item?id=eq.\(i)") else { return false }
+        var req = URLRequest(url: url); req.httpMethod = "PATCH"; req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        var body: [String: Any] = ["status": MarketStatus.sold.rawValue, "buyer_confirmed": false]
+        body["sold_to"] = buyer as Any   // nil이면 직거래(NULL)
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = (try? JSONSerialization.jsonObject(with: data)) as? [Any], !rows.isEmpty else { return false }
+        return true
+    }
+
+    /// 구매자 거래 확인 — RPC(security definer)로 sold_to==본인 행만 buyer_confirmed=true.
+    @discardableResult
+    static func confirmTrade(id: String) async -> Bool {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let url = URL(string: "\(base)/rest/v1/rpc/market_confirm_trade") else { return false }
+        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_item": id])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        // RPC가 true/false 반환 — 실제 확인된 경우만 성공
+        if let b = (try? JSONSerialization.jsonObject(with: data)) as? Bool { return b }
         return true
     }
 

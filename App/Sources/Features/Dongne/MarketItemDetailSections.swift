@@ -23,7 +23,7 @@ struct MarketDetailHeroPhoto: View {
 
                 // 상태 뱃지 (예약/판매완료)
                 if item.status != .selling {
-                    BLBadge(tone: item.status == .sold ? .grey : .amber, text: item.status.rawValue, systemIcon: nil, dot: true)
+                    BLBadge(tone: item.statusTone, text: item.statusDisplay, systemIcon: nil, dot: true)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         .padding(.top, 52).padding(.trailing, Spacing.s5)
                 }

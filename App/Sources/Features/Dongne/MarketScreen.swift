@@ -5,6 +5,7 @@
 
 import SwiftUI
 import Foundation
+import UserNotifications
 
 // MARK: - Market Models
 
@@ -129,6 +130,10 @@ struct MarketItem: Identifiable, Hashable, Codable {
     var createdAt: Date = Date()
     /// 판매자가 직접 체크한 위생 항목 (선택한 것만 상세에 표시)
     var hygieneChecks: [String] = []
+    /// 거래 상대(구매자) 식별자 — 판매자가 '판매완료' 시 지정. nil이면 앱 밖 직거래.
+    var soldTo: String? = nil
+    /// 구매자가 거래를 확인했는지 — soldTo + buyerConfirmed 둘 다여야 '인증 거래'.
+    var buyerConfirmed: Bool = false
 
     /// 위생 셀프체크 선택지
     static let hygieneOptions = ["세척·소독 완료", "부품 누락 없음", "곰팡이·얼룩 없음"]
@@ -146,6 +151,7 @@ extension MarketItem {
         case id, title, category, grade, monthsTag, price, originalPrice, isFree, hasRecall
         case isGraduate, sellerName, sellerTier, distanceText, favoriteCount, photoSeed
         case description, photoRefs, photoURLs, mine, status, createdAt, hygieneChecks
+        case soldTo, buyerConfirmed
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -171,6 +177,30 @@ extension MarketItem {
         status        = MarketStatus(rawValue: (try? c.decode(String.self, forKey: .status)) ?? "") ?? .selling
         createdAt     = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         hygieneChecks = try c.decodeIfPresent([String].self, forKey: .hygieneChecks) ?? []
+        soldTo        = try c.decodeIfPresent(String.self, forKey: .soldTo)
+        buyerConfirmed = try c.decodeIfPresent(Bool.self, forKey: .buyerConfirmed) ?? false
+    }
+}
+
+extension MarketItem {
+    /// 양쪽 확인 거래를 반영한 표시 라벨.
+    var statusDisplay: String {
+        switch status {
+        case .selling:  return "판매중"
+        case .reserved: return "예약중"
+        case .sold:
+            if buyerConfirmed { return "거래완료" }
+            if soldTo != nil  { return "구매자 확인 대기" }
+            return "직거래 완료"
+        }
+    }
+    /// 상태 배지 색 — 확인 대기는 강조(amber), 완료/직거래는 회색.
+    var statusTone: BadgeTone {
+        switch status {
+        case .selling:  return .mint
+        case .reserved: return .amber
+        case .sold:     return (soldTo != nil && !buyerConfirmed) ? .amber : .grey
+        }
     }
 }
 
@@ -300,10 +330,32 @@ struct MarketScreen: View {
             loadFailed = true   // 네트워크 실패 — 빈 동네와 구분
         }
         didLoad = true
+        await notifyPendingConfirms(sharedItems ?? [])   // 구매자: 거래 확인 알람
         // 업로드 실패한 신고 재시도(증거 유실 방지).
         for r in store.pendingReports {
             if await MarketBackend.uploadReport(r) { store.markReportUploaded(r.id) }
         }
+    }
+
+    /// 내가 구매자로 지정됐는데 아직 확인 안 한 거래 → 로컬 알림(당근식 '거래 확인' 알람).
+    /// 백그라운드(앱 꺼짐) 푸시는 추후 Edge로. 지금은 앱이 마켓을 열 때 감지해 알림.
+    private func notifyPendingConfirms(_ items: [MarketItem]) async {
+        let me = await SupabaseConfig.ownerID()
+        let pending = items.filter { $0.status == .sold && $0.soldTo == me && !$0.buyerConfirmed }
+        guard !pending.isEmpty else { return }
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
+        var notified = Set(UserDefaults.standard.stringArray(forKey: "bl_trade_confirm_notified") ?? [])
+        for it in pending where !notified.contains(it.id) {
+            let content = UNMutableNotificationContent()
+            content.title = "거래 확인이 필요해요"
+            content.body = "‘\(it.title)’ 판매자가 거래 완료로 표시했어요. 거래를 확인해 주세요."
+            content.sound = .default
+            try? await center.add(UNNotificationRequest(identifier: "trade-confirm-\(it.id)", content: content, trigger: nil))
+            notified.insert(it.id)
+        }
+        UserDefaults.standard.set(Array(notified), forKey: "bl_trade_confirm_notified")
     }
 
     var body: some View {
@@ -619,7 +671,7 @@ private struct MkItemCard: View {
                 if item.status != .selling || item.hasRecall || item.isGraduate {
                     HStack(spacing: 5) {
                         if item.status != .selling {
-                            BLBadge(tone: item.status == .sold ? .grey : .amber, text: item.status.rawValue, systemIcon: nil, dot: false)
+                            BLBadge(tone: item.statusTone, text: item.statusDisplay, systemIcon: nil, dot: false)
                         }
                         if item.hasRecall {
                             BLBadge(tone: .coral, text: "리콜", systemIcon: "exclamationmark.triangle.fill", dot: false)

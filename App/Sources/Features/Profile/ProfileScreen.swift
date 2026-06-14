@@ -43,8 +43,8 @@ struct ProfileScreen: View {
     }
 
     // 거래·크루 수는 뱃지 엔진과 동일 소스(로컬 기준)로 산정 — 티어 카드와 뱃지 불일치 방지.
-    // (서버 거래 집계 전까지 로컬 판매완료/가입 기준. 평점은 데이터 없어 0.)
-    private var tradeCount: Int { store.marketItems.filter { $0.mine && $0.status == .sold }.count }
+    // 인증 거래수 — 양쪽 확인(판매완료 + 구매자 확인)된 것만 집계(서버 myItems). 로딩 전엔 0.
+    private var tradeCount: Int { myItems.filter { $0.status == .sold && $0.buyerConfirmed }.count }
     private let avgRating    = 0.0
     private let joinedMonths = 0
     private var crewCount: Int { store.joinedCrewIds.count }
