@@ -56,41 +56,35 @@ enum FamilyFeedBackend {
     }
 
     /// 가족 생성 + 본인을 parent 멤버로 추가. 생성된 가족 반환.
+    /// ⚠️ return=representation 금지 — INSERT와 같은 문장에서 행을 되읽으면(SELECT RLS=bl_is_family_member)
+    ///    방금 삽입한 행이 스냅샷에 없어 멤버십이 false → 42501. 대신 id를 클라에서 생성해 되읽기 자체를 없앤다.
     static func createFamily(name: String) async -> BLFamily? {
         lastError = nil
         guard let uid = await AuthStore.shared.userId else { lastError = "로그인 안 됨(uid 없음)"; return nil }
-        // 진단: 실제 보내는 토큰의 sub/role을 디코딩(auth.uid()=sub, role이 authenticated여야 RLS 통과).
-        guard let token = await AuthStore.shared.validAccessToken() else {
-            lastError = "유효 토큰 없음 — 다시 로그인 필요. uid=\(uid.prefix(8))"; return nil
-        }
-        let jwt = decodeJWT(token)
-        let diag = "[owner=\(uid.prefix(8)) sub=\((jwt["sub"] as? String ?? "nil").prefix(8)) role=\(jwt["role"] as? String ?? "nil")]"
+        let famId = UUID().uuidString
         guard var req = await rest("/bl_family", method: "POST") else { lastError = "서버 미구성"; return nil }
-        req.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "owner_uid": uid, "name": String(name.prefix(40)),
+            "id": famId, "owner_uid": uid, "name": String(name.prefix(40)),
         ])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse else { lastError = "네트워크 오류 \(diag)"; return nil }
+              let http = resp as? HTTPURLResponse else { lastError = "네트워크 오류"; return nil }
         guard (200...299).contains(http.statusCode) else {
-            lastError = "HTTP \(http.statusCode) \(diag): \(String(data: data, encoding: .utf8)?.prefix(120) ?? "")"
+            lastError = "HTTP \(http.statusCode): \(String(data: data, encoding: .utf8)?.prefix(140) ?? "")"
             return nil
         }
-        guard let fam = decode(data, [BLFamily].self)?.first else {
-            lastError = "생성됐지만 조회 0건(RLS 패치 미적용?). HTTP \(http.statusCode) body=\(String(data: data, encoding: .utf8)?.prefix(120) ?? "")"
-            return nil
-        }
-        // 본인 멤버 등록(parent)
+        // 본인 멤버 등록(parent) — 별도 문장이라 위 가족 행이 보임(RLS 통과).
         let nickname = UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님"
         if var mreq = await rest("/bl_family_member", method: "POST") {
+            mreq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
             mreq.httpBody = try? JSONSerialization.data(withJSONObject: [
-                "family_id": fam.id, "uid": uid, "role": "parent",
+                "family_id": famId, "uid": uid, "role": "parent",
                 "display_name": String(nickname.prefix(40)),
                 "joined_at": ISO8601DateFormatter().string(from: Date()),
             ])
             _ = try? await URLSession.shared.data(for: mreq)
         }
-        return fam
+        return BLFamily(id: famId, ownerUid: uid, name: String(name.prefix(40)))
     }
 
     // MARK: - 피드
@@ -115,20 +109,21 @@ enum FamilyFeedBackend {
         // 2) R2 업로드 키 발급(Edge) + 직접 PUT
         guard let key = await uploadToR2(familyId: familyId, data: data,
                                          ext: "jpg", contentType: "image/jpeg") else { return false }
-        // 3) 포스트 행 생성
+        // 3) 포스트 행 생성 — id를 클라에서 생성(return=representation 금지: 되읽기 RLS 42501 회피)
+        let postId = UUID().uuidString
         guard var preq = await rest("/bl_feed_post", method: "POST") else { return false }
-        preq.setValue("return=representation", forHTTPHeaderField: "Prefer")
-        var postBody: [String: Any] = ["family_id": familyId, "author_uid": uid]
+        preq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        var postBody: [String: Any] = ["id": postId, "family_id": familyId, "author_uid": uid]
         if let c = caption, !c.isEmpty { postBody["caption"] = String(c.prefix(2000)) }
         if let cl = childLabel, !cl.isEmpty { postBody["child_label"] = String(cl.prefix(40)) }
         preq.httpBody = try? JSONSerialization.data(withJSONObject: postBody)
-        guard let (pdata, presp) = try? await URLSession.shared.data(for: preq),
-              let phttp = presp as? HTTPURLResponse, (200...299).contains(phttp.statusCode),
-              let post = decode(pdata, [BLFeedPost].self)?.first else { return false }
+        guard let (_, presp) = try? await URLSession.shared.data(for: preq),
+              let phttp = presp as? HTTPURLResponse, (200...299).contains(phttp.statusCode) else { return false }
         // 4) 미디어 행 기록(키만)
         guard var mreq = await rest("/bl_post_media", method: "POST") else { return false }
+        mreq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         mreq.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "post_id": post.id, "family_id": familyId, "kind": "photo", "r2_key": key,
+            "post_id": postId, "family_id": familyId, "kind": "photo", "r2_key": key,
         ])
         guard let (_, mresp) = try? await URLSession.shared.data(for: mreq),
               let mhttp = mresp as? HTTPURLResponse, (200...299).contains(mhttp.statusCode) else { return false }
