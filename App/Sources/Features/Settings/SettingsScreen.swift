@@ -223,21 +223,7 @@ struct SettingsScreen: View {
 
             // Pro 가족 보관함(클라우드 양방향 피드) — 피처플래그 ON 시에만 노출(개발/베타).
             if AppFeatures.proFamilyFeed {
-                Divider().overlay(AppColors.line).padding(.leading, 62)
-                // ⚠️ 개발용 — 출시 시 StoreKit 구독 결과로 대체. 두 모드(프리/프로) 검증용.
-                settingsRow(icon: "hammer.fill",
-                            iconBg: AppColors.surface2, iconFg: AppColors.ink2,
-                            showChevron: false) {
-                    Toggle(isOn: $store.isPro) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("개발: Pro 모드")
-                                .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                            Text("켜면 가족 좋아요·댓글·공유 활성 (출시 시 구독으로 대체)")
-                                .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }.tint(AppColors.primary)
-                }
+                // 개발용 'Pro 모드' 토글은 운영자 모드로 이동(설정에 노출하지 않음).
                 Divider().overlay(AppColors.line).padding(.leading, 62)
                 NavigationLink {
                     FamilyFeedScreen()
@@ -755,7 +741,7 @@ struct SettingsScreen: View {
                 Button("입장") { if adminPass == "1639316" { showAdmin = true } else { adminPass = "" } }
                 Button("취소", role: .cancel) { adminPass = "" }
             } message: { Text("운영자 비밀번호를 입력하세요.") }
-            .sheet(isPresented: $showAdmin) { AdminReportsScreen(pass: adminPass) }
+            .sheet(isPresented: $showAdmin) { AdminReportsScreen(pass: adminPass).environmentObject(store) }
 
             Divider()
                 .overlay(AppColors.line)

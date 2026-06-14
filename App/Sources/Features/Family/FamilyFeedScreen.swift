@@ -7,12 +7,14 @@ import SwiftUI
 
 struct FamilyFeedScreen: View {
     @ObservedObject private var auth = AuthStore.shared
+    @EnvironmentObject private var store: AppStore
 
     @State private var family: BLFamily?
     @State private var posts: [BLFeedPost] = []
     @State private var loading = true
     @State private var busy = false
     @State private var errorMsg: String?
+    @State private var pendingDelete: BLFeedPost?   // 본인 사진 삭제 확인
 
     private var myUid: String? { auth.userId }
     /// R2 공개 베이스(앱이 키로 이미지 URL 구성). 미설정이면 플레이스홀더.
@@ -33,6 +35,14 @@ struct FamilyFeedScreen: View {
         .alert("가족 보관함", isPresented: Binding(get: { errorMsg != nil }, set: { if !$0 { errorMsg = nil } })) {
             Button("확인", role: .cancel) {}
         } message: { Text(errorMsg ?? "") }
+        .confirmationDialog("이 사진을 가족 보관함에서 삭제할까요?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
+        ), titleVisibility: .visible, presenting: pendingDelete) { post in
+            Button("삭제", role: .destructive) { Task { await deletePost(post) } }
+            Button("취소", role: .cancel) {}
+        } message: { _ in
+            Text("가족 모두의 보관함에서 사라지고 하트·댓글도 함께 삭제돼요. 되돌릴 수 없어요.")
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -123,6 +133,20 @@ struct FamilyFeedScreen: View {
                             Text("\(post.comments.count)").font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
                         }
                         Spacer()
+                        // 올린 본인만 삭제 가능
+                        if post.authorUid == myUid {
+                            Menu {
+                                Button(role: .destructive) { pendingDelete = post } label: {
+                                    Label("사진 삭제", systemImage: "trash")
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(AppColors.ink3)
+                                    .frame(width: 32, height: 32)
+                            }
+                            .accessibilityLabel("사진 옵션")
+                        }
                     }
                     if let cap = post.caption, !cap.isEmpty {
                         Text(cap).font(.system(size: 14)).foregroundStyle(AppColors.ink).fixedSize(horizontal: false, vertical: true)
@@ -158,6 +182,18 @@ struct FamilyFeedScreen: View {
     private func addComment(_ post: BLFeedPost, _ text: String) async {
         if await FamilyFeedBackend.addComment(post: post, text: text), let f = family {
             posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
+        }
+    }
+
+    /// 본인이 올린 가족 보관함 사진 삭제 — DB 삭제(미디어·하트·댓글 FK cascade) + 로컬 공유표시 해제.
+    private func deletePost(_ post: BLFeedPost) async {
+        busy = true; defer { busy = false }
+        if await FamilyFeedBackend.deletePost(postId: post.id) {
+            posts.removeAll { $0.id == post.id }
+            store.unmarkFeedShared(post.id)        // 기록 카드의 '공유 중' 표시 해제
+            store.familyFeedVersion &+= 1          // 기록 탭 카드들 재조회 트리거
+        } else {
+            errorMsg = "삭제하지 못했어요. 잠시 후 다시 시도해 주세요."
         }
     }
 }

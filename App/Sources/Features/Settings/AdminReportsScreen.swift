@@ -7,8 +7,9 @@ import SwiftUI
 struct AdminReportsScreen: View {
     let pass: String
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: AppStore
 
-    private enum Tab: String, CaseIterable { case reports = "신고", content = "콘텐츠" }
+    private enum Tab: String, CaseIterable { case reports = "신고", content = "콘텐츠", dev = "개발" }
     @State private var tab: Tab = .reports
 
     // 신고
@@ -61,6 +62,7 @@ struct AdminReportsScreen: View {
                     switch tab {
                     case .reports: reportsView
                     case .content: contentView
+                    case .dev:     devView
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -315,6 +317,28 @@ struct AdminReportsScreen: View {
                 Text(shortDate(date)).font(.system(size: 10)).foregroundStyle(AppColors.ink3)
             }
         }
+    }
+
+    // MARK: - 개발 탭 (운영자 전용 도구)
+
+    @ViewBuilder private var devView: some View {
+        List {
+            Section("개발 / 검증") {
+                Toggle(isOn: $store.isPro) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Pro 모드").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Text("켜면 가족 좋아요·댓글·공유·풀화질 백업 활성 (출시 시 구독으로 대체)")
+                            .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                    }
+                }
+                .tint(AppColors.primary)
+            }
+            Section {
+                Text("운영자 전용 도구입니다. 출시 전 제거 예정.")
+                    .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+            }
+        }
+        .listStyle(.insetGrouped)
     }
 
     // MARK: - 삭제
