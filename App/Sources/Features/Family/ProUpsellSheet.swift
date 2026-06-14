@@ -8,6 +8,7 @@ import SwiftUI
 struct ProUpsellSheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    @State private var comingSoon = false
 
     var body: some View {
         ScrollView {
@@ -44,22 +45,28 @@ struct ProUpsellSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
 
-                // 가격 + 정직 고지
+                // 가격 + 정직 고지(자동 갱신·해지 경로 명시 — App Store 요건 + 정직한 결제 원칙)
                 VStack(spacing: 4) {
                     (Text("월 ").font(.system(size: 16, weight: .semibold))
                      + Text("990원").font(.system(size: 22, weight: .heavy)))
                         .foregroundStyle(AppColors.ink)
-                    Text("무료 데이터는 영구 보존돼요 · 언제든 쉽게 해지")
+                    Text("매월 자동 갱신 · 해지 전까지 청구돼요. 해지는 설정 > Apple 계정 > 구독에서 한 번에 가능해요. 무료 데이터는 영구 보존돼요.")
                         .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 }
 
                 // CTA
                 VStack(spacing: Spacing.s2) {
                     Button {
-                        // ⚠️ 개발용 — 출시 시 StoreKit 구매 플로우로 대체.
+                        #if DEBUG
+                        // 개발용 — 출시 시 StoreKit 2 구매로 대체.
                         store.isPro = true
                         Haptics.success()
                         dismiss()
+                        #else
+                        // StoreKit 구매 미연결 — 결제 없이 잠금 해제하지 않는다(정직한 결제).
+                        comingSoon = true
+                        #endif
                     } label: {
                         Text("Pro 시작하기")
                             .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
@@ -76,6 +83,11 @@ struct ProUpsellSheet: View {
         }
         .background(AppColors.canvas.ignoresSafeArea())
         .presentationDetents([.large])
+        .alert("구독 준비 중이에요", isPresented: $comingSoon) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("결제 연동을 준비하고 있어요. 곧 가족 보관함을 만나보실 수 있어요.")
+        }
     }
 
     private func benefit(_ icon: String, _ title: String, _ desc: String) -> some View {

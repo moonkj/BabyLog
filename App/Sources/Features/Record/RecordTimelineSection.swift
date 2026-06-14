@@ -183,6 +183,7 @@ private struct DateGroupHeader: View {
 private struct GrowthTimelineCard: View {
     @EnvironmentObject private var store: AppStore
     var record: GrowthRecord
+    @State private var showDeleteConfirm = false
     var body: some View {
         BLCard(padding: Spacing.s4) {
             HStack(spacing: 12) {
@@ -219,11 +220,16 @@ private struct GrowthTimelineCard: View {
         }
         .contextMenu {
             Button(role: .destructive) {
-                Haptics.warning()
-                store.deleteGrowthRecord(id: record.id)
+                Haptics.light(); showDeleteConfirm = true
             } label: {
                 Label("기록 삭제", systemImage: "trash")
             }
+        }
+        .confirmationDialog("이 성장 기록을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("삭제", role: .destructive) { Haptics.warning(); store.deleteGrowthRecord(id: record.id) }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("키·몸무게 기록이 삭제돼요. 되돌릴 수 없어요.")
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(growthAccessibilityLabel)
@@ -403,7 +409,7 @@ private struct DiaryTimelineCard: View {
                 Button { Haptics.light(); showEdit = true } label: {
                     Label("수정", systemImage: "pencil")
                 }
-                Button(role: .destructive) { Haptics.warning(); store.deleteDiaryEntry(id: entry.id) } label: {
+                Button(role: .destructive) { Haptics.light(); showDeleteConfirm = true } label: {
                     Label("기록 삭제", systemImage: "trash")
                 }
             } label: {
