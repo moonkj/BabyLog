@@ -56,10 +56,14 @@ struct AdminReportsScreen: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal, Spacing.s4).padding(.vertical, Spacing.s2)
 
-                switch tab {
-                case .reports: reportsView
-                case .content: contentView
+                // 콘텐츠 영역이 항상 남은 높이를 채우게 해서 세그먼트가 위에 고정되도록(빈 상태 중앙 정렬).
+                Group {
+                    switch tab {
+                    case .reports: reportsView
+                    case .content: contentView
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .navigationTitle("운영자")
             .navigationBarTitleDisplayMode(.inline)
