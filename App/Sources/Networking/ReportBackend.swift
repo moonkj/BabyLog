@@ -17,6 +17,31 @@ struct AdminReport: Identifiable, Decodable {
     let created_at: String?
 }
 
+/// 운영자 콘텐츠 관리용 — 모임/크루/매물/게시글 한 줄.
+struct AdminContentRow: Identifiable, Decodable {
+    let id: String
+    let title: String?       // 모임 title / 매물 title / 게시글 title
+    let name: String?        // 크루 그룹 name
+    let hood: String?
+    let host_name: String?   // 모임 주최자
+    let creator_name: String? // 그룹 생성자
+    let seller_name: String? // 매물 판매자
+    let author_name: String? // 게시글 작성자
+    let status: String?      // 매물 상태
+    let when_text: String?   // 모임 일시
+    let category: String?    // 게시글 분류
+    let created_at: String?
+    let expires_at: String?
+}
+
+/// op=list 응답.
+struct AdminContent: Decodable {
+    let meetups: [AdminContentRow]
+    let groups: [AdminContentRow]
+    let items: [AdminContentRow]
+    let posts: [AdminContentRow]
+}
+
 enum ReportBackend {
     static let reasons = ["욕설·비방", "사기·허위 정보", "부적절한 사진/내용", "광고·스팸", "안전 위협", "기타"]
 
@@ -64,5 +89,32 @@ enum ReportBackend {
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
         struct Wrap: Decodable { let reports: [AdminReport] }
         return (try? JSONDecoder().decode(Wrap.self, from: data))?.reports
+    }
+
+    /// 운영자 — 콘텐츠 목록(모임/크루/매물/게시글) 조회(admin-action op=list). 실패 시 nil.
+    static func adminListContent(pass: String) async -> AdminContent? {
+        guard let data = await adminAction(pass: pass, body: ["op": "list"]) else { return nil }
+        return try? JSONDecoder().decode(AdminContent.self, from: data)
+    }
+
+    /// 운영자 — 콘텐츠 삭제(admin-action op=delete). kind: crew_meetup/crew_group/market_item/crew_post.
+    @discardableResult
+    static func adminDelete(pass: String, kind: String, id: String) async -> Bool {
+        await adminAction(pass: pass, body: ["op": "delete", "kind": kind, "id": id]) != nil
+    }
+
+    /// admin-action Edge 공통 호출 — 성공(2xx) 시 응답 바디, 실패 시 nil.
+    private static func adminAction(pass: String, body: [String: Any]) async -> Data? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let url = URL(string: "\(base)/functions/v1/admin-action") else { return nil }
+        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var payload = body; payload["pass"] = pass
+        req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
+        return data
     }
 }
