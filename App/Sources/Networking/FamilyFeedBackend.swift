@@ -128,16 +128,44 @@ enum FamilyFeedBackend {
         guard await AuthStore.shared.userId != nil,
               var req = await rest("/rpc/bl_dev_set_pro", method: "POST") else { return }
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_on": true])
-        _ = try? await URLSession.shared.data(for: req)
+        guard let (d, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse else { lastError = "is_pro 설정: 네트워크 오류"; return }
+        if !(200...299).contains(http.statusCode) {
+            lastError = "is_pro 설정 실패 HTTP \(http.statusCode): \(String(data: d, encoding: .utf8)?.prefix(100) ?? "") — SQL(bl_dev_set_pro) 실행했나요?"
+        }
+    }
+
+    /// 소유자 멤버 행 보장 — Edge(media-upload-url)는 bl_family_member 행을 요구하므로(소유자여도
+    /// 멤버 행 없으면 not_member 403), 없으면 본인 parent 멤버를 1회 삽입한다(중복 방지 위해 선조회).
+    private static func ensureMembership(familyId: String, uid: String) async {
+        if let req = await rest("/bl_family_member?family_id=eq.\(familyId)&uid=eq.\(uid)&select=id&limit=1", method: "GET"),
+           let (d, resp) = try? await URLSession.shared.data(for: req),
+           let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+           let arr = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]], !arr.isEmpty {
+            return  // 이미 멤버
+        }
+        let nickname = UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님"
+        if var mreq = await rest("/bl_family_member", method: "POST") {
+            mreq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+            mreq.httpBody = try? JSONSerialization.data(withJSONObject: [
+                "family_id": familyId, "uid": uid, "role": "parent",
+                "display_name": String(nickname.prefix(40)),
+                "joined_at": ISO8601DateFormatter().string(from: Date()),
+            ])
+            _ = try? await URLSession.shared.data(for: mreq)
+        }
     }
 
     @discardableResult
     static func shareRecordToFamily(postId: String?, images: [UIImage], caption: String?, childLabel: String?) async -> Bool {
-        guard !images.isEmpty else { return false }
+        lastError = nil
+        guard !images.isEmpty else { lastError = "사진이 없어요"; return false }
+        guard let uid = await AuthStore.shared.userId else { lastError = "로그인이 필요해요"; return false }
         await ensureProForDev()   // DEV: 서버 is_pro 동기화(출시 시 제거)
         var fam = await myFamily()
         if fam == nil { fam = await createFamily(name: "우리 가족") }
-        guard let f = fam else { return false }
+        guard let f = fam else { lastError = lastError ?? "가족 보관함 생성 실패"; return false }
+        await ensureMembership(familyId: f.id, uid: uid)   // Edge not_member 403 방지
         return await createPhotoPost(familyId: f.id, postId: postId, images: images, caption: caption, childLabel: childLabel)
     }
 
@@ -157,17 +185,21 @@ enum FamilyFeedBackend {
                                              ext: "jpg", contentType: "image/jpeg") else { continue }
             keys.append(key)
         }
-        guard !keys.isEmpty else { return false }
+        guard !keys.isEmpty else { lastError = lastError ?? "사진 업로드 실패"; return false }
         // 2) 포스트 행 생성 — id를 클라에서 생성(return=representation 금지: 되읽기 RLS 42501 회피)
         let postId = postId ?? UUID().uuidString
-        guard var preq = await rest("/bl_feed_post", method: "POST") else { return false }
+        guard var preq = await rest("/bl_feed_post", method: "POST") else { lastError = "서버 미구성"; return false }
         preq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         var postBody: [String: Any] = ["id": postId, "family_id": familyId, "author_uid": uid]
         if let c = caption, !c.isEmpty { postBody["caption"] = String(c.prefix(2000)) }
         if let cl = childLabel, !cl.isEmpty { postBody["child_label"] = String(cl.prefix(40)) }
         preq.httpBody = try? JSONSerialization.data(withJSONObject: postBody)
-        guard let (_, presp) = try? await URLSession.shared.data(for: preq),
-              let phttp = presp as? HTTPURLResponse, (200...299).contains(phttp.statusCode) else { return false }
+        guard let (pdata, presp) = try? await URLSession.shared.data(for: preq),
+              let phttp = presp as? HTTPURLResponse else { lastError = "포스트 생성: 네트워크 오류"; return false }
+        guard (200...299).contains(phttp.statusCode) else {
+            lastError = "포스트 생성 실패 HTTP \(phttp.statusCode): \(String(data: pdata, encoding: .utf8)?.prefix(120) ?? "")"
+            return false
+        }
         // 3) 미디어 행 기록(키만)
         var anyMedia = false
         for key in keys {
@@ -224,24 +256,31 @@ enum FamilyFeedBackend {
 
     private static func uploadToR2(familyId: String, data: Data, ext: String, contentType: String) async -> String? {
         guard let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
-              let url = URL(string: "\(base)/functions/v1/media-upload-url") else { return nil }
+              let url = URL(string: "\(base)/functions/v1/media-upload-url") else { lastError = "서버 미구성"; return nil }
         var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 15
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "familyId": familyId, "kind": "photo", "ext": ext, "contentType": contentType,
         ])
         guard let (rdata, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let obj = try? JSONSerialization.jsonObject(with: rdata) as? [String: Any],
+              let http = resp as? HTTPURLResponse else { lastError = "업로드 URL: 네트워크 오류"; return nil }
+        guard (200...299).contains(http.statusCode) else {
+            let body = String(data: rdata, encoding: .utf8) ?? ""
+            lastError = "업로드 권한 거부 HTTP \(http.statusCode): \(body.prefix(140))"
+            return nil
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: rdata) as? [String: Any],
               let uploadUrl = obj["uploadUrl"] as? String, let objKey = obj["key"] as? String,
-              let put = URL(string: uploadUrl) else { return nil }
+              let put = URL(string: uploadUrl) else { lastError = "업로드 URL 응답 파싱 실패"; return nil }
         // R2로 직접 PUT
         var preq = URLRequest(url: put); preq.httpMethod = "PUT"; preq.timeoutInterval = 60
         preq.setValue(contentType, forHTTPHeaderField: "Content-Type")
         guard let (_, presp) = try? await URLSession.shared.upload(for: preq, from: data),
-              let phttp = presp as? HTTPURLResponse, (200...299).contains(phttp.statusCode) else { return nil }
+              let phttp = presp as? HTTPURLResponse else { lastError = "R2 전송: 네트워크 오류"; return nil }
+        guard (200...299).contains(phttp.statusCode) else { lastError = "R2 PUT 실패 HTTP \(phttp.statusCode)"; return nil }
         return objKey
     }
 

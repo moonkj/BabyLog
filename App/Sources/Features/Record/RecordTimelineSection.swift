@@ -256,6 +256,7 @@ private struct DiaryTimelineCard: View {
     @State private var commentDraft = ""
     @State private var sharing = false
     @State private var showLoginForShare = false
+    @State private var shareError: String?
 
     private var isMilestone: Bool { entry.milestone != nil }
     private var liked: Bool { store.isDiaryLiked(entry.id) }
@@ -340,6 +341,9 @@ private struct DiaryTimelineCard: View {
         )) { wrapper in
             FullScreenPhotoView(image: wrapper.image, onClose: { fullPhoto = nil })
         }
+        .alert("가족과 공유", isPresented: Binding(get: { shareError != nil }, set: { if !$0 { shareError = nil } })) {
+            Button("확인", role: .cancel) {}
+        } message: { Text(shareError ?? "") }
         .sheet(isPresented: $showLoginForShare) {
             VStack(spacing: Spacing.s4) {
                 Image(systemName: "person.2.fill").font(.system(size: 34))
@@ -591,6 +595,9 @@ private struct DiaryTimelineCard: View {
         if ok {
             Haptics.success()
             fpost = await FamilyFeedBackend.fetchPost(postId: entry.id.uuidString)
+        } else {
+            Haptics.warning()
+            shareError = FamilyFeedBackend.lastError ?? "공유에 실패했어요. 잠시 후 다시 시도해 주세요."
         }
     }
 
