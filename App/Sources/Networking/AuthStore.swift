@@ -23,7 +23,16 @@ final class AuthStore: ObservableObject {
     var isLoggedIn: Bool { session != nil }
     var userId: String? { session?.userId }
 
+    /// 신규 설치 감지 플래그 — UserDefaults는 앱 삭제 시 초기화되지만 Keychain은 유지된다.
+    private static let installFlagKey = "bl_keychain_install_flag"
+
     private init() {
+        // 앱을 지웠다 새로 깔면(첫 실행 플래그 없음) Keychain에 남은 세션을 지워 로그아웃 상태로 시작.
+        // (Keychain은 앱 삭제 후에도 남아 "지웠는데 로그인됨"이 발생 — 이를 차단.)
+        if !UserDefaults.standard.bool(forKey: Self.installFlagKey) {
+            Keychain.deleteSession()
+            UserDefaults.standard.set(true, forKey: Self.installFlagKey)
+        }
         session = Keychain.loadSession()
         // 세션 복원 경로 — 과거 claim_device가 실패(오프라인 등)했으면 여기서 재시도해 영구 누락 방지.
         if session != nil {
