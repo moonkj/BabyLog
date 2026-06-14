@@ -967,6 +967,8 @@ struct DongneTab: View {
     @State private var seg = 0
     @State private var showEmergency = false
     @State private var showHoodManage = false
+    @State private var showHoodSetupPrompt = false   // 동 미등록 시 등록 유도
+    @State private var hoodPromptShown = false        // 세션당 1회만
     @ObservedObject private var location = NearbyLocationProvider.shared
 
     /// 세그먼트 구성 — 마켓은 피처 플래그(AppFeatures.market) ON일 때만 노출.
@@ -1062,11 +1064,29 @@ struct DongneTab: View {
                 if let dong { Task { await CrewBackend.syncNeighborhood(hood: dong) } }
             }
             .task { if let dong = store.selectedDong { await CrewBackend.syncNeighborhood(hood: dong) } }
+            // 마켓·크루 진입 시 내 동네 미등록이면 등록 유도(세션당 1회)
+            .onChange(of: seg) { _, _ in maybePromptHoodSetup() }
             .fullScreenCover(isPresented: $showEmergency) {
                 EmergencyScreen(onClose: { showEmergency = false })
             }
             .sheet(isPresented: $showHoodManage) { hoodManageSheet }
+            .alert("내 동네를 등록해 주세요", isPresented: $showHoodSetupPrompt) {
+                if canAddCurrentHood, let d = location.localityName {
+                    Button("현재 위치 ‘\(d)’ 등록") { store.addHood(dong: d, city: location.cityName ?? ""); Haptics.success() }
+                }
+                Button("직접 관리") { showHoodManage = true }
+                Button("나중에", role: .cancel) {}
+            } message: {
+                Text("크루는 ‘동’, 마켓은 ‘시’ 기준으로 보여줘요. 지금 위치한 동네를 등록하면 시작할 수 있어요.")
+            }
         }
+    }
+
+    /// 마켓·크루 세그먼트인데 내 동네가 없으면 등록 팝업(세션당 1회).
+    private func maybePromptHoodSetup() {
+        guard !hoodPromptShown, store.myHoods.isEmpty, !isNearbySeg else { return }
+        hoodPromptShown = true
+        showHoodSetupPrompt = true
     }
 
     private var currentSeg: DongneSeg { segItems[min(seg, segItems.count - 1)] }

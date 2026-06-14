@@ -108,6 +108,36 @@ enum MarketBackend {
         return nil   // 2xx여도 본문 해석 불가 = 불명
     }
 
+    /// 내가 올린 매물 전체(상태·만료 무관) 최신순 — 프로필 표시용.
+    static func fetchMyItems() async -> [MarketItem]? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let s = (await SupabaseConfig.ownerID()).addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let cols = "id,hood,city,title,category,grade,months_tag,price,is_free,is_graduate,has_recall,description,hygiene_checks,photo_urls,seller,seller_name,status,created_at"
+        guard let url = URL(string: "\(base)/rest/v1/market_item?seller=eq.\(s)&select=\(cols)&order=created_at.desc&limit=50") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dtos = try? JSONDecoder().decode([ItemDTO].self, from: data) else { return nil }
+        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoPlain = ISO8601DateFormatter()
+        return dtos.map { d in
+            MarketItem(
+                id: d.id, title: d.title ?? "",
+                category: MarketCategory(rawValue: d.category ?? "") ?? .etc,
+                grade: MarketItemGrade(rawValue: d.grade ?? "") ?? .a,
+                monthsTag: d.months_tag ?? "전 월령", price: d.price ?? 0, originalPrice: nil,
+                isFree: d.is_free ?? ((d.price ?? 0) == 0), hasRecall: d.has_recall ?? false,
+                isGraduate: d.is_graduate ?? false, sellerName: d.seller_name ?? "이웃",
+                sellerTier: .new, distanceText: d.hood ?? "내 동네", favoriteCount: 0, photoSeed: 0,
+                description: d.description ?? "", photoRefs: [], photoURLs: d.photo_urls ?? [],
+                mine: true, status: MarketStatus(rawValue: d.status ?? "") ?? .selling,
+                createdAt: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date()
+            )
+        }
+    }
+
     /// 무료 한도 초과 여부(등록 전 확인).
     /// 카운트 확인 불가(nil)면 true — fail-closed: 등록 자체가 네트워크를 요구하므로
     /// 보류해도 UX 손해가 없고, 오프라인으로 무료 한도를 우회하는 구멍을 막는다.

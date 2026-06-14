@@ -16,6 +16,10 @@ struct ProfileScreen: View {
     @State private var showShareSheet = false
     @State private var showSettings = false
     @State private var infoAlert: String? = nil
+    // 내 거래·동네 활동
+    @State private var myItems: [MarketItem] = []
+    @State private var myMeetups: [CrewMeetup] = []
+    @State private var detailItem: MarketItem? = nil
 
     // 성별 중립 닉네임 (설정에서 변경 — 맘/파파/양육자)
     @AppStorage("bl_nickname") private var nickname = "양육자님"
@@ -136,6 +140,7 @@ struct ProfileScreen: View {
                 VStack(spacing: Spacing.s4) {
                     profileCard
                     tierProgressCard
+                    myActivitySection
                     badgeCollectionSection
                     privacySection
                 }
@@ -144,6 +149,10 @@ struct ProfileScreen: View {
             }
         }
         .background(AppColors.canvas.ignoresSafeArea())
+        .task { await loadMyActivity() }
+        .sheet(item: $detailItem) { it in
+            NavigationStack { MarketItemDetail(item: it).environmentObject(store) }
+        }
         .overlay {
             if let badge = detailBadge {
                 BadgeDetailOverlay(
@@ -433,6 +442,107 @@ struct ProfileScreen: View {
     }
 
     // MARK: - Privacy Section
+
+    // MARK: - 내 거래 · 동네 활동 (마켓 물품 + 등록 크루)
+
+    private func loadMyActivity() async {
+        if let items = await MarketBackend.fetchMyItems() { myItems = items }
+        if let ms = await CrewBackend.fetchMyMeetups() { myMeetups = ms }
+    }
+
+    private var myActivitySection: some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            BLSectionHead(eyebrow: "내 거래 · 동네", title: "마켓 · 크루")
+
+            // 내가 올린 물품(마켓)
+            BLCard(padding: 0) {
+                VStack(spacing: 0) {
+                    activityHeader(icon: "tag.fill", iconBg: AppColors.primarySoft,
+                                   iconFg: AppColors.primary, title: "내가 올린 물품", count: myItems.count)
+                    if myItems.isEmpty {
+                        activityEmpty("아직 올린 물품이 없어요")
+                    } else {
+                        ForEach(myItems.prefix(6)) { it in
+                            Button { detailItem = it } label: { myItemRow(it) }.buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            // 내가 만든 크루(모임)
+            BLCard(padding: 0) {
+                VStack(spacing: 0) {
+                    activityHeader(icon: "person.2.fill", iconBg: Color(hex: 0xE6F1FB),
+                                   iconFg: Color(hex: 0x3B6FA8), title: "내가 만든 크루", count: myMeetups.count)
+                    if myMeetups.isEmpty {
+                        activityEmpty("아직 만든 크루가 없어요")
+                    } else {
+                        ForEach(myMeetups.prefix(6)) { m in
+                            myMeetupRow(m)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func activityHeader(icon: String, iconBg: Color, iconFg: Color, title: String, count: Int) -> some View {
+        HStack(spacing: Spacing.s3) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(iconBg).frame(width: 34, height: 34)
+                Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(iconFg)
+            }.accessibilityHidden(true)
+            Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+            Spacer()
+            Text("\(count)").font(AppFont.num(14)).foregroundStyle(AppColors.ink2)
+        }
+        .padding(.horizontal, Spacing.s4).padding(.vertical, Spacing.s3)
+    }
+
+    private func activityEmpty(_ text: String) -> some View {
+        HStack {
+            Text(text).font(.system(size: 13)).foregroundStyle(AppColors.ink3)
+            Spacer()
+        }
+        .padding(.horizontal, Spacing.s4).padding(.bottom, Spacing.s4).padding(.top, 2)
+    }
+
+    private func myItemRow(_ it: MarketItem) -> some View {
+        VStack(spacing: 0) {
+            Divider().overlay(AppColors.line).padding(.leading, Spacing.s4)
+            HStack(spacing: Spacing.s3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(it.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink).lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(it.isFree ? "무료나눔" : "\(it.price.formatted())원")
+                            .font(AppFont.num(12.5)).foregroundStyle(AppColors.ink2)
+                        Text("·").foregroundStyle(AppColors.ink3)
+                        Text(it.distanceText).font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                    }
+                }
+                Spacer()
+                BLBadge(tone: it.status == .sold ? .grey : (it.status == .reserved ? .amber : .mint),
+                        text: it.status.rawValue, systemIcon: nil, dot: false)
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(AppColors.ink3)
+            }
+            .padding(.horizontal, Spacing.s4).padding(.vertical, Spacing.s3)
+        }
+    }
+
+    private func myMeetupRow(_ m: CrewMeetup) -> some View {
+        VStack(spacing: 0) {
+            Divider().overlay(AppColors.line).padding(.leading, Spacing.s4)
+            HStack(spacing: Spacing.s3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(m.place).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink).lineLimit(1)
+                    Text(m.when).font(.system(size: 12)).foregroundStyle(AppColors.ink3).lineLimit(1)
+                }
+                Spacer()
+                Text("참여 \(m.joined)/\(m.capacity)").font(AppFont.num(12.5)).foregroundStyle(AppColors.ink2)
+            }
+            .padding(.horizontal, Spacing.s4).padding(.vertical, Spacing.s3)
+        }
+    }
 
     private var privacySection: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {

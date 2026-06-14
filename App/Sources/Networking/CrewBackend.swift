@@ -283,6 +283,28 @@ enum CrewBackend {
         }
     }
 
+    /// 내가 만든 모임 전체(동네 무관) 최신순 — 프로필 표시용.
+    static func fetchMyMeetups() async -> [CrewMeetup]? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let h = (await SupabaseConfig.ownerID()).addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let select = "id,place,when_text,meetup_type,capacity,host,host_name,crew_meetup_join(count)"
+        guard let url = URL(string: "\(base)/rest/v1/crew_meetup?host=eq.\(h)&select=\(select)&order=created_at.desc&limit=50") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dtos = try? JSONDecoder().decode([CrewMeetupDTO].self, from: data) else { return nil }
+        return dtos.map { d in
+            CrewMeetup(
+                id: d.id, place: d.place ?? "모임", when: d.when_text ?? "일정 협의",
+                hostName: d.host_name ?? "이웃", hostTier: .new,
+                joined: d.crew_meetup_join?.first?.count ?? 0, capacity: d.capacity ?? 8,
+                meetupType: CrewMeetupType(rawValue: d.meetup_type ?? "park") ?? .park, mine: true
+            )
+        }
+    }
+
     /// 동네 모임 생성(+주최자 자동 참가). 새 모임 id 반환(실패 시 nil).
     @discardableResult
     static func createMeetup(hood: String, place: String, when: String, capacity: Int,
