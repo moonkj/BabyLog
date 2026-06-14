@@ -426,7 +426,23 @@ enum MarketBackend {
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        await notifyChat(itemId: itemId, buyer: buyer, body: t)   // 상대방에게 새 메시지 푸시
         return true
+    }
+
+    /// 채팅 상대에게 새 메시지 푸시(앱 꺼져 있어도 수신). best-effort.
+    static func notifyChat(itemId: String, buyer: String, body: String) async {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let url = URL(string: "\(base)/functions/v1/notify-market-chat") else { return }
+        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")  // 보낸 사람
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "item_id": itemId, "buyer": buyer, "body": String(body.prefix(120)),
+        ])
+        _ = try? await URLSession.shared.data(for: req)
     }
 
     /// 판매자용 — 내 매물에 들어온 문의 스레드 목록(구매자별 최신 메시지). RLS로 판매자만 전체 조회 가능.

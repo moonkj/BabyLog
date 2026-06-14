@@ -362,6 +362,8 @@ struct MarketDetailBottomBar: View {
     var isMine: Bool = false
     let onChat: () -> Void
     var onBuy: () -> Void = {}
+    var onThreads: () -> Void = {}    // 판매자: 들어온 문의 목록
+    var threadCount: Int = 0
 
     var body: some View {
         HStack(spacing: 12) {
@@ -386,15 +388,26 @@ struct MarketDetailBottomBar: View {
             .accessibilityHint("관심 목록에 추가하거나 제거합니다")
 
             if isMine {
-                // 내 매물 — 상태 표시
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.seal.fill").font(.system(size: 15, weight: .bold))
-                    Text(item.status == .sold ? "판매완료된 내 매물" : "내가 등록한 매물")
-                        .font(.system(size: 15, weight: .bold))
+                // 내 매물 — 들어온 문의 바로가기(받은 채팅이 안 보이던 문제 해결)
+                Button { onThreads() } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill").font(.system(size: 16, weight: .bold))
+                        Text(threadCount > 0 ? "들어온 문의 \(threadCount)" : "들어온 문의")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    .overlay(alignment: .topTrailing) {
+                        if threadCount > 0 {
+                            Text("\(threadCount)").font(.system(size: 11, weight: .heavy)).foregroundStyle(AppColors.primary)
+                                .frame(minWidth: 18, minHeight: 18).background(.white, in: Circle())
+                                .offset(x: 6, y: -6)
+                        }
+                    }
                 }
-                .foregroundStyle(AppColors.ink2)
-                .frame(maxWidth: .infinity).frame(height: 50)
-                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                .buttonStyle(LiquidPressStyle(scale: 0.98))
+                .accessibilityLabel(threadCount > 0 ? "들어온 문의 \(threadCount)건 보기" : "들어온 문의 보기")
             } else if item.status == .sold {
                 // 판매완료 — 비활성
                 Text("판매완료된 상품")

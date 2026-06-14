@@ -134,7 +134,9 @@ struct MarketItemDetail: View {
                 ),
                 isMine: liveItem.mine,
                 onChat: { showChatSheet = true },
-                onBuy: { showBuySheet = true }
+                onBuy: { showBuySheet = true },
+                onThreads: { showThreads = true },
+                threadCount: threads.count
             )
         }
         .navigationBarTitleDisplayMode(.inline)
