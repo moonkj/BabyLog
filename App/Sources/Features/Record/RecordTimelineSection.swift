@@ -17,6 +17,8 @@ struct TimelineSection: View {
     let child: Child
     /// ⭐ 즐겨찾기만 모아보기 토글.
     @State private var favoritesOnly = false
+    /// Pro: 가족 피드 반응(하트·댓글) — post.id(=기록 entry.id)로 색인. 프리는 미사용.
+    @State private var familyPosts: [String: BLFeedPost] = [:]
 
     // store에서 실데이터 (일기 + 성장, date 내림차순 통합). 즐겨찾기 필터 시 ⭐ 일기만.
     private var allItems: [(date: Date, item: TimelineItem)] {
@@ -84,7 +86,8 @@ struct TimelineSection: View {
                                 case .growth(let r):
                                     GrowthTimelineCard(record: r)
                                 case .diary(let e):
-                                    DiaryTimelineCard(entry: e, child: child)
+                                    DiaryTimelineCard(entry: e, child: child,
+                                                      familyPost: familyPosts[e.id.uuidString])
                                 }
                             }
                         }
@@ -99,7 +102,14 @@ struct TimelineSection: View {
                         .padding(.top, Spacing.s2)
                 }
             }
+            // Pro: 가족 피드 반응 로드(기록↔포스트 id 매칭). isPro 토글 시 재로드.
+            .task(id: store.isPro) { await loadFamilySocial() }
         }
+    }
+
+    private func loadFamilySocial() async {
+        guard store.isPro, AuthStore.shared.isLoggedIn else { familyPosts = [:]; return }
+        familyPosts = await FamilyFeedBackend.fetchFamilySocial()
     }
 
     // ⭐ 즐겨찾기 필터 칩 — 전체 / 즐겨찾기 N (즐겨찾기가 1개 이상일 때만 노출)
@@ -233,16 +243,23 @@ private struct DiaryTimelineCard: View {
     @EnvironmentObject private var store: AppStore
     var entry: DiaryEntry
     var child: Child
+    /// Pro: 이 기록과 연결된 가족 피드 포스트(하트·댓글). 프리/미공유면 nil → 소셜 미표시.
+    var familyPost: BLFeedPost? = nil
     @State private var showComments = false
     @State private var showEdit = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var heartPop = false
     @State private var cardIndex = 0
     @State private var fullPhoto: UIImage? = nil
+    // 가족 소셜(서버) — 부모가 넘긴 familyPost를 받아 로컬에서 하트·댓글 후 즉시 갱신.
+    @State private var fpost: BLFeedPost? = nil
+    @State private var commentDraft = ""
 
     private var isMilestone: Bool { entry.milestone != nil }
     private var liked: Bool { store.isDiaryLiked(entry.id) }
     private var commentCount: Int { store.comments(for: entry.id).count }
+    /// Pro 모드 + 이 기록이 가족에 공유됨 → 가족 하트·댓글 표시.
+    private var showsFamilySocial: Bool { store.isPro && fpost != nil }
 
     var body: some View {
         let photos = entry.photoRefList.compactMap { PhotoStore.image($0) }
@@ -299,8 +316,11 @@ private struct DiaryTimelineCard: View {
 
                 actionBar(photo: photos.first)
                 captionBlock
+                familySocialBlock
             }
         }
+        .onAppear { if fpost == nil { fpost = familyPost } }
+        .onChange(of: familyPost) { _, new in if new != nil { fpost = new } }
         .contextMenu {
             Button { Haptics.light(); showEdit = true } label: {
                 Label("수정", systemImage: "pencil")
@@ -429,7 +449,78 @@ private struct DiaryTimelineCard: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 2)
-        .padding(.bottom, 14)
+        .padding(.bottom, showsFamilySocial ? 6 : 14)
+    }
+
+    // Pro 가족 소셜 — 가족 하트·댓글(서버). 프리/미공유에는 미표시.
+    @ViewBuilder
+    private var familySocialBlock: some View {
+        if showsFamilySocial, let p = fpost {
+            let myUid = AuthStore.shared.userId
+            let famLiked = myUid != nil && p.reactions.contains { $0.uid == myUid }
+            VStack(alignment: .leading, spacing: 8) {
+                Divider().overlay(AppColors.line)
+                HStack(spacing: 18) {
+                    Button { Task { await toggleFamilyHeart() } } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: famLiked ? "heart.fill" : "heart")
+                                .font(.system(size: 20))
+                                .foregroundStyle(famLiked ? Color(hex: 0xE8607A) : AppColors.ink)
+                            Text("\(p.reactions.count)").font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
+                        }
+                    }.buttonStyle(.plain)
+                    .accessibilityLabel(famLiked ? "가족 좋아요 취소" : "가족 좋아요")
+                    HStack(spacing: 5) {
+                        Image(systemName: "bubble.right").font(.system(size: 19)).foregroundStyle(AppColors.ink)
+                        Text("\(p.comments.count)").font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
+                    }
+                    Spacer()
+                    HStack(spacing: 3) {
+                        Image(systemName: "person.2.fill").font(.system(size: 10))
+                        Text("가족과 공유중").font(.system(size: 11, weight: .semibold))
+                    }.foregroundStyle(AppColors.ink3)
+                    .accessibilityLabel("가족과 공유중")
+                }
+                // 가족 댓글 목록
+                ForEach(p.comments) { c in
+                    (Text(c.authorName).font(.system(size: 13, weight: .bold))
+                     + Text("  ") + Text(c.text).font(.system(size: 13)))
+                        .foregroundStyle(AppColors.ink).fixedSize(horizontal: false, vertical: true)
+                }
+                // 댓글 입력(가족 스레드)
+                HStack(spacing: 8) {
+                    TextField("댓글 달기…", text: $commentDraft)
+                        .font(.system(size: 13)).padding(.horizontal, 12).frame(height: 36)
+                        .background(AppColors.surface2, in: Capsule())
+                    Button { Task { await sendFamilyComment() } } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 24)).foregroundStyle(AppColors.primary)
+                    }
+                    .accessibilityLabel("댓글 보내기")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 14)
+        }
+    }
+
+    private func toggleFamilyHeart() async {
+        guard let p = fpost, let myUid = AuthStore.shared.userId else { return }
+        let famLiked = p.reactions.contains { $0.uid == myUid }
+        Haptics.light()
+        if await FamilyFeedBackend.setHeart(post: p, on: !famLiked) {
+            fpost = await FamilyFeedBackend.fetchPost(postId: p.id)
+        }
+    }
+
+    private func sendFamilyComment() async {
+        guard let p = fpost else { return }
+        let t = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        commentDraft = ""; Haptics.light()
+        if await FamilyFeedBackend.addComment(post: p, text: t) {
+            fpost = await FamilyFeedBackend.fetchPost(postId: p.id)
+        }
     }
 
     @ViewBuilder

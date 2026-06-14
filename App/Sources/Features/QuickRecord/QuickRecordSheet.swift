@@ -43,6 +43,7 @@ struct QuickRecordSheet: View {
     @AppStorage("bl_quickshare_family") private var shareToFamily = false
     @State private var showFamilyShare = false
     @State private var pendingShareURLs: [URL] = []
+    @State private var showProUpsell = false   // 프리에서 가족공유 탭 시 Pro 안내
 
     // MARK: 모드별 콘텐츠
     private var sheetTitle: String {
@@ -100,6 +101,10 @@ struct QuickRecordSheet: View {
         // 가족 공유 시트 — 저장 직후 '공유 앨범에 추가'. 닫히면 기록 시트도 닫는다.
         .sheet(isPresented: $showFamilyShare, onDismiss: { onSave(); onClose() }) {
             QuickFamilyShareSheet(activityItems: pendingShareURLs)
+        }
+        // 프리에서 '가족과 공유' 탭 → Pro 안내 팝업.
+        .sheet(isPresented: $showProUpsell) {
+            ProUpsellSheet().environmentObject(store)
         }
     }
 
@@ -453,29 +458,44 @@ struct QuickRecordSheet: View {
         .accessibilityLabel("\(label) 입력")
     }
 
-    /// Pro 가족 피드가 켜져 있고 로그인 상태인지 — 토글 문구·기본값·자동 게시 분기 기준.
-    private var proFeedActive: Bool { AppFeatures.proFamilyFeed && AuthStore.shared.isLoggedIn }
+    /// Pro 가족 피드가 켜져 있고 로그인 상태인지 — 자동 게시 분기 기준.
+    private var proFeedActive: Bool { store.isPro && AuthStore.shared.isLoggedIn }
+    /// 가족 공유 토글 사용 가능 여부(=Pro). 프리는 비활성 + 탭 시 안내 팝업.
+    private var familyShareEnabled: Bool { store.isPro }
 
-    // 가족(조부모) 공유 토글 — 육아 모드 + 미디어 있을 때만. 저장 직후 공유 앨범에 추가.
+    // 가족(조부모) 공유 토글 — 육아 모드 + 미디어 있을 때만.
+    //  · Pro: 활성 — 저장 시 가족 피드에 자동 게시(기본 ON).
+    //  · 프리: 비활성(회색) — 탭하면 Pro 안내 팝업.
     @ViewBuilder
     private var familyShareToggle: some View {
         if mode == .baby, hasMedia {
             HStack(spacing: Spacing.s3) {
-                Image(systemName: "person.2.fill")
+                Image(systemName: familyShareEnabled ? "person.2.fill" : "lock.fill")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color(hex: 0xB5478A))
+                    .foregroundStyle(familyShareEnabled ? Color(hex: 0xB5478A) : AppColors.ink3)
                     .frame(width: 34, height: 34)
-                    .background(Color(hex: 0xFBEAF0), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background((familyShareEnabled ? Color(hex: 0xFBEAF0) : AppColors.surface3),
+                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("가족과 공유")
-                        .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                    Text(proFeedActive ? "가족 보관함에 자동 게시 (하트·댓글로 함께)"
-                                       : "저장 후 조부모님 공유 앨범에 바로 추가")
+                    HStack(spacing: 5) {
+                        Text("가족과 공유")
+                            .font(.system(size: 14.5, weight: .semibold))
+                            .foregroundStyle(familyShareEnabled ? AppColors.ink : AppColors.ink2)
+                        if !familyShareEnabled {
+                            Text("Pro").font(.system(size: 10, weight: .heavy)).foregroundStyle(.white)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(AppColors.primary, in: Capsule())
+                        }
+                    }
+                    Text(familyShareEnabled
+                         ? (proFeedActive ? "가족 보관함에 자동 게시 (하트·댓글로 함께)" : "로그인하면 가족과 함께 봐요")
+                         : "조부모님과 함께 보고 하트·댓글 — Pro에서 열려요")
                         .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
                 }
                 Spacer(minLength: 0)
                 Toggle("", isOn: $shareToFamily).labelsHidden().tint(AppColors.primary)
+                    .disabled(!familyShareEnabled)
             }
             // Pro(로그인)면 기본 ON — "기록하면 가족과 자동 공유". 사용자가 끄면 그 기록만 비공개.
             .onAppear {
@@ -484,12 +504,17 @@ struct QuickRecordSheet: View {
                     UserDefaults.standard.set(true, forKey: "bl_quickshare_family_proinit")
                 }
             }
+            // 프리: 행 전체 탭 → Pro 안내 팝업(토글 자체는 비활성).
+            .contentShape(Rectangle())
+            .onTapGesture { if !familyShareEnabled { Haptics.light(); showProUpsell = true } }
             .padding(.horizontal, Spacing.s3).padding(.vertical, Spacing.s2)
             .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             .padding(.top, Spacing.s3)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("가족과 공유. \(shareToFamily ? "켜짐" : "꺼짐")")
-            .accessibilityAddTraits(.isToggle)
+            .accessibilityLabel(familyShareEnabled
+                ? "가족과 공유. \(shareToFamily ? "켜짐" : "꺼짐")"
+                : "가족과 공유. Pro 기능. 탭하면 안내를 봅니다.")
+            .accessibilityAddTraits(familyShareEnabled ? .isToggle : .isButton)
         }
     }
 
@@ -631,6 +656,7 @@ struct QuickRecordSheet: View {
         var feedImages: [UIImage] = []
         var feedCaption: String? = nil
         var feedChild: String? = nil
+        var feedPostId: String? = nil   // 기록 entry.id == 피드 post id (양쪽 연결)
 
         if mode == .pregnancy {
             // 임신 모드: 배 사진 + 산모 체중을 활성 임신 기록에 저장
@@ -649,7 +675,8 @@ struct QuickRecordSheet: View {
                 // 대상 아이들: 현재 아이 + 함께 선택된 형제·자매. 각 아이가 자기 사진 파일을 소유(삭제 안전).
                 let targetIds = [childId] + selectedExtraChildIds.filter { $0 != childId }
                 var shareURLs: [URL] = []
-                for (idx, tid) in targetIds.enumerated() {
+                var firstEntryId: UUID? = nil   // 가족 피드 포스트 id로 연결(기록↔피드 동일 id)
+                for tid in targetIds {
                     let refs = selectedImages.compactMap { PhotoStore.save($0) }
                     let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
                     // 사진 저장이 모두 실패(디스크 오류 등)하고 메모·이정표도 없으면 빈 기록을
@@ -660,7 +687,7 @@ struct QuickRecordSheet: View {
                         shareURLs = refs.map { PhotoStore.photosDirectory.appendingPathComponent($0) }
                         if let vf = videoFile { shareURLs.append(PhotoStore.photosDirectory.appendingPathComponent(vf)) }
                     }
-                    store.addDiaryEntry(
+                    let newId = store.addDiaryEntry(
                         childId:   tid,
                         content:   content,
                         milestone: milestoneText,
@@ -668,14 +695,17 @@ struct QuickRecordSheet: View {
                         photoRefs: refs,
                         videoRef:  videoFile
                     )
+                    if firstEntryId == nil { firstEntryId = newId }
                     didSave = true
                 }
                 pendingShareURLs = (shareToFamily && hasMedia) ? shareURLs : []
                 // Pro + 로그인 + 사진 공유 ON → 이 기록의 사진을 가족 피드(서버)로 자동 게시할 준비.
-                if shareToFamily, !selectedImages.isEmpty,
-                   AppFeatures.proFamilyFeed, AuthStore.shared.isLoggedIn {
+                // 피드 포스트 id = 기록 entry.id → 타임라인 카드가 같은 id로 가족 하트·댓글을 불러옴.
+                if shareToFamily, !selectedImages.isEmpty, store.isPro,
+                   AuthStore.shared.isLoggedIn, let linkId = firstEntryId {
                     feedImages = selectedImages
                     feedChild = store.selectedChild?.name
+                    feedPostId = linkId.uuidString
                     feedCaption = {
                         switch (milestoneText, trimmedMemo.isEmpty) {
                         case let (ms?, false): return "\(ms) · \(trimmedMemo)"
@@ -735,8 +765,8 @@ struct QuickRecordSheet: View {
         //  · 무료: 기존 iCloud 공유 앨범 시트.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
             if !feedImages.isEmpty {
-                let imgs = feedImages, cap = feedCaption, child = feedChild
-                Task { await FamilyFeedBackend.shareRecordToFamily(images: imgs, caption: cap, childLabel: child) }
+                let imgs = feedImages, cap = feedCaption, child = feedChild, pid = feedPostId
+                Task { await FamilyFeedBackend.shareRecordToFamily(postId: pid, images: imgs, caption: cap, childLabel: child) }
                 onSave()
                 onClose()
             } else if mode == .baby, shareToFamily, !pendingShareURLs.isEmpty {

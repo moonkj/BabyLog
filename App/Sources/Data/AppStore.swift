@@ -25,6 +25,11 @@ final class AppStore: ObservableObject {
     @Published private(set) var likedDiaryIds: Set<String>
     /// 다이어리별 댓글 (key = uuid 문자열)
     @Published private(set) var diaryComments: [String: [String]]
+    /// Pro 구독 여부 — 가족 피드(좋아요·댓글·가족공유)의 단일 게이트.
+    /// 지금은 로컬 플래그(설정의 개발용 토글로 두 모드 검증). 출시 시 StoreKit 엔타이틀먼트로 대체.
+    @Published var isPro: Bool = UserDefaults.standard.bool(forKey: "bl_is_pro") {
+        didSet { UserDefaults.standard.set(isPro, forKey: "bl_is_pro") }
+    }
     // 마켓 (로컬 백본)
     @Published private(set) var marketItems: [MarketItem] = []
     @Published private(set) var savedMarketIds: Set<String> = []
@@ -711,6 +716,7 @@ final class AppStore: ObservableObject {
     ///   - content:   텍스트 내용 (옵션)
     ///   - milestone: 마일스톤 텍스트 (옵션)
     ///   - photoRef:  사진 참조 문자열. nil이 아니면 recordType = "photo", 아니면 "diary".
+    @discardableResult
     func addDiaryEntry(
         childId: UUID,
         content: String?,
@@ -718,7 +724,7 @@ final class AppStore: ObservableObject {
         photoRef: String?,
         photoRefs: [String] = [],
         videoRef: String? = nil
-    ) {
+    ) -> UUID {
         let hasMedia = photoRef != nil || !photoRefs.isEmpty || videoRef != nil
         let entry = DiaryEntry(
             id: UUID(),
@@ -738,6 +744,7 @@ final class AppStore: ObservableObject {
             bus.publish(.milestoneAchieved(childId: childId, milestone: milestone))
         }
         refreshBadgeAwards()
+        return entry.id
     }
 
     /// 성장 기록을 추가한다.

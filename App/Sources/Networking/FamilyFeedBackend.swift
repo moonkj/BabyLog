@@ -99,21 +99,41 @@ enum FamilyFeedBackend {
         return posts
     }
 
+    /// 타임라인 매칭용 — 내 가족 피드 전체를 post.id로 색인해 반환(기록 entry.id로 조회).
+    static func fetchFamilySocial() async -> [String: BLFeedPost] {
+        guard let f = await myFamily() else { return [:] }
+        var map: [String: BLFeedPost] = [:]
+        for p in await fetchFeed(familyId: f.id) { map[p.id] = p }
+        return map
+    }
+
+    /// 단일 포스트(하트·댓글 포함) 재조회 — 카드에서 반응/댓글 직후 갱신용.
+    static func fetchPost(postId: String) async -> BLFeedPost? {
+        let sel = "select=*,bl_post_media(*),bl_reaction(uid),bl_comment(*)"
+        let path = "/bl_feed_post?id=eq.\(postId)&\(sel)&limit=1"
+        guard let req = await rest(path, method: "GET"),
+              let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let posts = decode(data, [BLFeedPost].self) else { return nil }
+        return posts.first
+    }
+
     /// 기록→가족 자동 공유: 가족이 없으면 만들고, 한 기록의 사진들을 한 포스트로 올린다.
     /// (기록 탭에서 사진을 저장하면 Pro 사용자는 이 경로로 가족 피드에 자동 게시)
     @discardableResult
-    static func shareRecordToFamily(images: [UIImage], caption: String?, childLabel: String?) async -> Bool {
+    static func shareRecordToFamily(postId: String?, images: [UIImage], caption: String?, childLabel: String?) async -> Bool {
         guard !images.isEmpty else { return false }
         var fam = await myFamily()
         if fam == nil { fam = await createFamily(name: "우리 가족") }
         guard let f = fam else { return false }
-        return await createPhotoPost(familyId: f.id, images: images, caption: caption, childLabel: childLabel)
+        return await createPhotoPost(familyId: f.id, postId: postId, images: images, caption: caption, childLabel: childLabel)
     }
 
     /// 사진 포스트 작성: (사진들) 압축 → R2 업로드(Edge presigned) → bl_feed_post 1개 + bl_post_media N개.
     /// 한 기록(한 순간)이 사진 여러 장이어도 피드에선 한 포스트(여러 미디어).
+    /// postId를 주면 그 id로 포스트 생성(기록 entry.id와 동일 → 타임라인이 가족 반응을 매칭).
     @discardableResult
-    static func createPhotoPost(familyId: String, images: [UIImage],
+    static func createPhotoPost(familyId: String, postId: String? = nil, images: [UIImage],
                                 caption: String?, childLabel: String?) async -> Bool {
         guard let uid = await AuthStore.shared.userId, !images.isEmpty else { return false }
         // 1) 모든 사진 압축(긴변 1280, jpeg 0.7) → R2 업로드. 실패분은 건너뜀.
@@ -127,7 +147,7 @@ enum FamilyFeedBackend {
         }
         guard !keys.isEmpty else { return false }
         // 2) 포스트 행 생성 — id를 클라에서 생성(return=representation 금지: 되읽기 RLS 42501 회피)
-        let postId = UUID().uuidString
+        let postId = postId ?? UUID().uuidString
         guard var preq = await rest("/bl_feed_post", method: "POST") else { return false }
         preq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
         var postBody: [String: Any] = ["id": postId, "family_id": familyId, "author_uid": uid]
