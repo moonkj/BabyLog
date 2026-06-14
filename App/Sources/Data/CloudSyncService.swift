@@ -96,4 +96,76 @@ final class CloudSyncService {
         throw CloudSyncError.notEnabled
         #endif
     }
+
+    // MARK: - 사진 동기화 (CKAsset)
+    // 상태(JSON)만 백업하면 사진 파일이 빠져 복원 시 빈 액자가 된다 → 사진도 CloudKit에 함께 보관.
+    // 사진은 파일별 레코드(BabyLogPhoto, recordName=photo-<파일명>)에 CKAsset으로 저장(증분 업로드).
+
+    private static let photoRecordType = "BabyLogPhoto"
+    private static let uploadedKey = "bl_ck_uploaded_photos"   // 이미 올린 파일명(증분)
+
+    /// 새 사진 파일만 CloudKit에 업로드(증분). best-effort — 실패분은 다음 기회에 재시도.
+    func pushPhotos() async {
+        #if BL_CLOUDKIT
+        guard Self.isEnabled, await accountAvailable() else { return }
+        var uploaded = Set(UserDefaults.standard.stringArray(forKey: Self.uploadedKey) ?? [])
+        let pending = PhotoStore.allPhotoFileURLs().filter { !uploaded.contains($0.lastPathComponent) }
+        guard !pending.isEmpty else { return }
+        for batch in pending.chunked(into: 40) {
+            let records = batch.map { url -> CKRecord in
+                let rec = CKRecord(recordType: Self.photoRecordType,
+                                   recordID: CKRecord.ID(recordName: "photo-\(url.lastPathComponent)"))
+                rec["name"] = url.lastPathComponent as CKRecordValue
+                rec["asset"] = CKAsset(fileURL: url)
+                return rec
+            }
+            do {
+                _ = try await database.modifyRecords(saving: records, deleting: [], savePolicy: .allKeys)
+                for url in batch { uploaded.insert(url.lastPathComponent) }
+                UserDefaults.standard.set(Array(uploaded), forKey: Self.uploadedKey)
+            } catch {
+                break   // 네트워크/용량 문제 — 다음 백업 때 이어서
+            }
+        }
+        #endif
+    }
+
+    /// CloudKit의 모든 사진을 로컬로 복원(로컬에 없는 파일만 기록). 새 기기/재설치 복원용.
+    func pullPhotos() async {
+        #if BL_CLOUDKIT
+        guard Self.isEnabled, await accountAvailable() else { return }
+        let query = CKQuery(recordType: Self.photoRecordType, predicate: NSPredicate(value: true))
+        var cursor: CKQueryOperation.Cursor?
+        repeat {
+            do {
+                let page: (matchResults: [(CKRecord.ID, Result<CKRecord, Error>)], queryCursor: CKQueryOperation.Cursor?)
+                if let c = cursor {
+                    page = try await database.records(continuingMatchFrom: c)
+                } else {
+                    page = try await database.records(matching: query)
+                }
+                for (_, result) in page.matchResults {
+                    guard let rec = try? result.get(),
+                          let name = rec["name"] as? String,
+                          let asset = rec["asset"] as? CKAsset, let src = asset.fileURL,
+                          let dest = PhotoStore.safeRestoreURL(for: name),
+                          !FileManager.default.fileExists(atPath: dest.path) else { continue }
+                    try? FileManager.default.copyItem(at: src, to: dest)
+                }
+                cursor = page.queryCursor
+            } catch {
+                break
+            }
+        } while cursor != nil
+        #endif
+    }
 }
+
+#if BL_CLOUDKIT
+private extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        guard size > 0 else { return [self] }
+        return stride(from: 0, to: count, by: size).map { Array(self[$0 ..< Swift.min($0 + size, count)]) }
+    }
+}
+#endif

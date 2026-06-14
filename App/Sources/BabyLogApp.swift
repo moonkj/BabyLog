@@ -32,6 +32,7 @@ struct BabyLogApp: App {
                 .task {
                     store.enableAutoPersist()
                     store.refreshBadgeAwards()   // 첫 실행 시드 / 닫힌 새 획득 감지
+                    await maybeAutoRestoreFromCloud()   // 재설치 직후 iCloud 백업 자동 복원(CloudKit 활성 시)
                     notifications.start()
                     await flushPendingReports()  // 신고 증거 업로드 — 마켓 탭 재진입에 의존하지 않게
                     await setupNotifications()
@@ -46,7 +47,10 @@ struct BabyLogApp: App {
                         // 앱을 닫을 때 스냅샷을 자동 푸시(엔타이틀먼트 없으면 isAvailableInBuild=false → no-op).
                         if CloudSyncService.isAvailableInBuild && CloudSyncService.isEnabled {
                             let snapshot = store.snapshot()
-                            Task { try? await CloudSyncService.shared.push(snapshot) }
+                            Task {
+                                try? await CloudSyncService.shared.push(snapshot)
+                                await CloudSyncService.shared.pushPhotos()   // 기록+사진 함께 백업
+                            }
                         }
                         Task { await syncPhotoLibrary() }   // 닫을 때 새 사진을 사진 앱에 저장
                     }
@@ -59,6 +63,18 @@ struct BabyLogApp: App {
     private func syncPhotoLibrary() async {
         guard PhotoLibraryBackup.isEnabled else { return }
         await PhotoLibraryBackup.sync(refs: store.memoryPhotoRefs())
+    }
+
+    /// 재설치 직후 iCloud(CloudKit) 백업 자동 복원 — 로컬이 비어 있을 때만(기존 데이터 보호).
+    /// CloudKit 미활성 빌드(isAvailableInBuild=false)에서는 no-op.
+    private func maybeAutoRestoreFromCloud() async {
+        guard CloudSyncService.isAvailableInBuild, CloudSyncService.isEnabled else { return }
+        guard store.children.isEmpty, store.diaryEntries.isEmpty, store.pregnancies.isEmpty else { return }
+        guard await CloudSyncService.shared.accountAvailable() else { return }
+        if let state = try? await CloudSyncService.shared.pull() {
+            await CloudSyncService.shared.pullPhotos()
+            store.restore(state)
+        }
     }
 
     /// 미업로드 거래 신고(증거)를 서버에 재전송 — 앱 시작/포그라운드 복귀 시점.

@@ -490,9 +490,11 @@ struct SettingsScreen: View {
             switch op {
             case .backup:
                 try await CloudSyncService.shared.push(store.snapshot())
+                await CloudSyncService.shared.pushPhotos()       // 사진도 함께 백업
                 cloudStatus = "백업 완료 ✓"
             case .restore:
                 if let remote = try await CloudSyncService.shared.pull() {
+                    await CloudSyncService.shared.pullPhotos()    // 사진 먼저 내려받고 상태 적용
                     store.restore(remote)
                     cloudStatus = "복원 완료 ✓"
                 } else {
