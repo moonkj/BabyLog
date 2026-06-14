@@ -43,6 +43,11 @@ struct SettingsScreen: View {
     @State private var showBackupImporter = false
     @State private var backupBusy = false
     @State private var backupAlert: String? = nil
+    // 운영자 모드 — 버전 10회 탭 → 비밀번호 → 신고 목록
+    @State private var versionTaps = 0
+    @State private var showAdminPass = false
+    @State private var adminPass = ""
+    @State private var showAdmin = false
 
     // MARK: Body
 
@@ -697,6 +702,17 @@ struct SettingsScreen: View {
                 }
             }
             .accessibilityLabel("버전 \(appVersion)")
+            .contentShape(Rectangle())
+            .onTapGesture {
+                versionTaps += 1
+                if versionTaps >= 10 { versionTaps = 0; adminPass = ""; showAdminPass = true }
+            }
+            .alert("운영자 모드", isPresented: $showAdminPass) {
+                SecureField("비밀번호", text: $adminPass)
+                Button("입장") { if adminPass == "1639316" { showAdmin = true } else { adminPass = "" } }
+                Button("취소", role: .cancel) { adminPass = "" }
+            } message: { Text("운영자 비밀번호를 입력하세요.") }
+            .sheet(isPresented: $showAdmin) { AdminReportsScreen(pass: adminPass) }
 
             Divider()
                 .overlay(AppColors.line)

@@ -24,6 +24,8 @@ struct CrewChatSheet: View {
     @State private var lastFailedText: String? = nil
     /// 서버 공유 메시지(미구성/미로드 시 nil → 로컬 폴백)
     @State private var serverMessages: [ChatMessage]? = nil
+    @State private var reportTarget: ChatMessage? = nil
+    @State private var reportDone = false
 
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
     private var messages: [ChatMessage] { serverMessages ?? store.crewChat(meetupId: meetup.id) }
@@ -83,7 +85,8 @@ struct CrewChatSheet: View {
                                 .frame(maxWidth: .infinity).padding(.vertical, Spacing.s4)
                         }
                         ForEach(messages) { msg in
-                            CrewChatBubble(text: msg.text, isMe: msg.mine, author: msg.author)
+                            CrewChatBubble(text: msg.text, isMe: msg.mine, author: msg.author,
+                                           onReport: { reportTarget = msg })
                         }
 
                         // 안전 안내 뱃지
@@ -124,6 +127,22 @@ struct CrewChatSheet: View {
         .background(AppColors.canvas)
         .accessibilityElement(children: .contain)
         .task(id: meetup.id) { await pollLoop() }
+        .confirmationDialog("이 사용자를 신고할까요?", isPresented: Binding(
+            get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }
+        ), titleVisibility: .visible, presenting: reportTarget) { msg in
+            ForEach(ReportBackend.reasons, id: \.self) { reason in
+                Button(reason, role: .destructive) {
+                    let snap = messages.suffix(20).map { ["author": $0.author ?? ($0.mine ? "나" : "상대"), "text": $0.text] }
+                    Task { _ = await ReportBackend.submit(surface: "crew_meetup", contextId: meetup.id,
+                        reportedName: msg.author, reportedId: msg.authorId, reason: reason, transcript: snap) }
+                    reportDone = true
+                }
+            }
+            Button("취소", role: .cancel) {}
+        } message: { msg in Text("‘\(msg.author ?? "사용자")’ 님을 신고합니다. 대화 내용이 운영자에게 증거로 전달돼요.") }
+        .alert("신고 접수됐어요", isPresented: $reportDone) {
+            Button("확인", role: .cancel) {}
+        } message: { Text("운영자가 확인 후 조치합니다. 감사합니다.") }
     }
 
     // MARK: 헤더
@@ -268,6 +287,7 @@ private struct CrewChatBubble: View {
     let text: String
     let isMe: Bool
     var author: String? = nil
+    var onReport: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .top) {
@@ -275,8 +295,12 @@ private struct CrewChatBubble: View {
 
             VStack(alignment: isMe ? .trailing : .leading, spacing: 2) {
                 if !isMe, let author, !author.isEmpty {
-                    Text(author).font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
-                        .padding(.leading, 2)
+                    Button { onReport?() } label: {
+                        HStack(spacing: 3) {
+                            Text(author).font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                            Image(systemName: "ellipsis").font(.system(size: 9, weight: .bold)).foregroundStyle(AppColors.ink3)
+                        }
+                    }.buttonStyle(.plain).padding(.leading, 2)
                 }
                 Text(text)
                 .font(.system(size: 14.5, weight: .regular))

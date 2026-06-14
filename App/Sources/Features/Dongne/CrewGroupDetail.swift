@@ -148,6 +148,8 @@ struct CrewGroupChatSheet: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var messages: [ChatMessage] = []
     @State private var text = ""
+    @State private var reportTarget: ChatMessage? = nil   // 신고 대상(작성자명 탭)
+    @State private var reportDone = false
 
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
 
@@ -210,6 +212,22 @@ struct CrewGroupChatSheet: View {
         }
         .background(AppColors.canvas.ignoresSafeArea())
         .task(id: group.id) { await poll() }
+        .confirmationDialog("이 사용자를 신고할까요?", isPresented: Binding(
+            get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }
+        ), titleVisibility: .visible, presenting: reportTarget) { msg in
+            ForEach(ReportBackend.reasons, id: \.self) { reason in
+                Button(reason, role: .destructive) {
+                    let snap = messages.suffix(20).map { ["author": $0.author ?? ($0.mine ? "나" : "상대"), "text": $0.text] }
+                    Task { _ = await ReportBackend.submit(surface: "crew_group", contextId: group.id,
+                        reportedName: msg.author, reportedId: msg.authorId, reason: reason, transcript: snap) }
+                    reportDone = true
+                }
+            }
+            Button("취소", role: .cancel) {}
+        } message: { msg in Text("‘\(msg.author ?? "사용자")’ 님을 신고합니다. 대화 내용이 운영자에게 증거로 전달돼요.") }
+        .alert("신고 접수됐어요", isPresented: $reportDone) {
+            Button("확인", role: .cancel) {}
+        } message: { Text("운영자가 확인 후 조치합니다. 감사합니다.") }
     }
 
     @ViewBuilder private func bubble(_ m: ChatMessage) -> some View {
@@ -217,7 +235,12 @@ struct CrewGroupChatSheet: View {
             if m.mine { Spacer(minLength: 40) }
             VStack(alignment: m.mine ? .trailing : .leading, spacing: 2) {
                 if !m.mine, let name = m.author, !name.isEmpty {
-                    Text(name).font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                    Button { reportTarget = m } label: {
+                        HStack(spacing: 3) {
+                            Text(name).font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                            Image(systemName: "ellipsis").font(.system(size: 9, weight: .bold)).foregroundStyle(AppColors.ink3)
+                        }
+                    }.buttonStyle(.plain)
                 }
                 Text(m.text)
                     .font(.system(size: 14)).foregroundStyle(m.mine ? .white : AppColors.ink)
