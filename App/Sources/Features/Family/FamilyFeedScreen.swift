@@ -85,13 +85,21 @@ struct FamilyFeedScreen: View {
         let liked = myUid != nil && post.reactions.contains { $0.uid == myUid }
         return BLCard(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                // 사진
+                // 사진 — 자연 비율로 전체 표시(잘림 방지). 세로/가로 사진 모두 통째로 보임.
                 if let key = post.media.first?.r2Key, let base = publicBase,
                    let url = URL(string: "\(base)/\(key)") {
-                    AsyncImage(url: url) { img in img.resizable().scaledToFill() } placeholder: {
-                        Rectangle().fill(AppColors.surface2)
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let img):
+                            img.resizable().scaledToFit().frame(maxWidth: .infinity)
+                        case .empty:
+                            ZStack { Rectangle().fill(AppColors.surface2); ProgressView() }.frame(height: 280)
+                        default:
+                            Rectangle().fill(AppColors.surface2).frame(height: 280)
+                        }
                     }
-                    .frame(maxWidth: .infinity).frame(height: 280).clipped()
+                    .frame(maxWidth: .infinity)
+                    .background(AppColors.surface2)
                 } else {
                     ZStack {
                         Rectangle().fill(AppColors.surface2).frame(height: 200)
