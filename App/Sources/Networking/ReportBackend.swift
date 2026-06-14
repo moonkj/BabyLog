@@ -4,6 +4,21 @@
 
 import Foundation
 
+/// 신고 시점 대화 스냅샷 한 줄(증거). 크루={author,text}, 마켓={text,mine,date} 양쪽을 수용.
+struct TranscriptLine: Decodable, Identifiable {
+    let id = UUID()
+    let author: String?
+    let text: String?
+    let mine: Bool?
+    enum CodingKeys: String, CodingKey { case author, text, mine }
+    /// 표시용 발신자 라벨.
+    var speaker: String {
+        if let a = author, !a.isEmpty { return a }
+        if let m = mine { return m ? "신고자" : "상대" }
+        return "메시지"
+    }
+}
+
 /// 운영자 화면용 신고 항목.
 struct AdminReport: Identifiable, Decodable {
     let id: String
@@ -14,6 +29,7 @@ struct AdminReport: Identifiable, Decodable {
     let context_id: String?
     let reason: String?
     let note: String?
+    let transcript: [TranscriptLine]?
     let created_at: String?
 }
 

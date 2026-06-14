@@ -21,17 +21,18 @@ Deno.serve(async (req) => {
     // 채팅/사용자 신고(bl_report)
     const { data: a } = await supabase
       .from("bl_report")
-      .select("id,reporter,reported,reported_name,surface,context_id,reason,note,created_at")
+      .select("id,reporter,reported,reported_name,surface,context_id,reason,note,transcript,created_at")
       .order("created_at", { ascending: false }).limit(150);
     // 마켓 거래 신고(market_report) — 공통 형태로 매핑
     const { data: b } = await supabase
       .from("market_report")
-      .select("id,item_id,item_title,reporter,counterpart,reason,note,created_at")
+      .select("id,item_id,item_title,reporter,counterpart,reason,note,transcript,created_at")
       .order("created_at", { ascending: false }).limit(80);
     const mapped = (b ?? []).map((r: any) => ({
       id: r.id, reporter: r.reporter, reported: null, reported_name: r.counterpart,
       surface: "market_item", context_id: r.item_id, reason: r.reason,
-      note: [r.item_title, r.note].filter(Boolean).join(" · "), created_at: r.created_at,
+      note: [r.item_title, r.note].filter(Boolean).join(" · "),
+      transcript: r.transcript, created_at: r.created_at,
     }));
     const reports = [...(a ?? []), ...mapped]
       .sort((x: any, y: any) => (y.created_at ?? "").localeCompare(x.created_at ?? ""));

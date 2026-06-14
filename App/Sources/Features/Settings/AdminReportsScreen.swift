@@ -1,7 +1,6 @@
 // AdminReportsScreen.swift
-// BabyLog · 운영자 전용 — 신고 목록 + 콘텐츠 관리(모임/크루/매물/게시글 삭제).
+// BabyLog · 운영자 전용 — 신고 목록(상세·증거·대상 이동) + 콘텐츠 관리(모임/크루/매물/게시글 삭제).
 // 설정에서 버전 10회 탭 + 비밀번호로 진입. 조회·삭제는 service_role Edge(admin-reports / admin-action)로만.
-// 비로그인으로 만들어 신원이 바뀌어 본인도 못 지우는 모임/크루를 운영자가 정리할 수 있다.
 
 import SwiftUI
 
@@ -16,6 +15,7 @@ struct AdminReportsScreen: View {
     @State private var reports: [AdminReport] = []
     @State private var loadingReports = true
     @State private var reportsFailed = false
+    @State private var selectedReport: AdminReport?
 
     // 콘텐츠
     @State private var meetups: [AdminContentRow] = []
@@ -27,12 +27,24 @@ struct AdminReportsScreen: View {
     @State private var deleting: Set<String> = []
     @State private var pendingDelete: PendingDelete?
     @State private var deleteFailed = false
+    @State private var scrollTarget: String?     // 신고 → '대상 보기'로 이동·강조할 콘텐츠 id
 
     private struct PendingDelete: Identifiable {
         let id = UUID()
         let kind: String      // crew_meetup / crew_group / market_item / crew_post
         let rowId: String
         let label: String
+    }
+
+    /// surface → 삭제 가능한 콘텐츠 종류(없으면 이동·삭제 비활성).
+    private func deletableKind(_ surface: String?) -> String? {
+        switch surface {
+        case "market_item": return "market_item"
+        case "crew_meetup": return "crew_meetup"
+        case "crew_group":  return "crew_group"
+        case "crew_post":   return "crew_post"
+        default:            return nil
+        }
     }
 
     var body: some View {
@@ -56,6 +68,10 @@ struct AdminReportsScreen: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("새로고침") { Task { tab == .reports ? await loadReports() : await loadContent() } }
                 }
+            }
+            .sheet(item: $selectedReport) { rep in
+                reportDetailSheet(rep)
+                    .presentationDetents([.large])
             }
             .confirmationDialog("정말 삭제할까요?", isPresented: Binding(
                 get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
@@ -83,28 +99,131 @@ struct AdminReportsScreen: View {
             BLEmptyState(icon: "checkmark.shield", title: "접수된 신고가 없어요", message: "새 신고가 들어오면 여기 표시됩니다.")
         } else {
             List(reports) { r in
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 6) {
-                        Text(surfaceLabel(r.surface))
-                            .font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
-                            .padding(.horizontal, 7).padding(.vertical, 2)
-                            .background(AppColors.primary, in: Capsule())
-                        Text(r.reason ?? "신고").font(.system(size: 14, weight: .bold)).foregroundStyle(AppColors.danger)
-                        Spacer()
-                        Text(shortDate(r.created_at)).font(.system(size: 11)).foregroundStyle(AppColors.ink3)
-                    }
-                    Text("대상: \(r.reported_name ?? "-")  ·  신고자: \(String((r.reporter ?? "-").prefix(8)))")
-                        .font(.system(size: 12)).foregroundStyle(AppColors.ink2)
-                    if let note = r.note, !note.isEmpty {
-                        Text(note).font(.system(size: 12)).foregroundStyle(AppColors.ink3)
-                    }
-                    if let cid = r.context_id, !cid.isEmpty {
-                        Text("위치 id: \(cid)").font(.system(size: 10)).foregroundStyle(AppColors.ink3)
-                    }
-                }
-                .padding(.vertical, 3)
+                Button { selectedReport = r } label: { reportRow(r) }
+                    .buttonStyle(.plain)
             }
             .listStyle(.plain)
+        }
+    }
+
+    private func reportRow(_ r: AdminReport) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text(surfaceLabel(r.surface))
+                        .font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(AppColors.primary, in: Capsule())
+                    Text(r.reason ?? "신고").font(.system(size: 14, weight: .bold)).foregroundStyle(AppColors.danger)
+                    Spacer()
+                    Text(shortDate(r.created_at)).font(.system(size: 11)).foregroundStyle(AppColors.ink3)
+                }
+                Text("대상: \(r.reported_name ?? "-")  ·  신고자: \(String((r.reporter ?? "-").prefix(8)))")
+                    .font(.system(size: 12)).foregroundStyle(AppColors.ink2)
+                if let note = r.note, !note.isEmpty {
+                    Text(note).font(.system(size: 12)).foregroundStyle(AppColors.ink3).lineLimit(1)
+                }
+                if let t = r.transcript, !t.isEmpty {
+                    Label("대화 증거 \(t.count)건", systemImage: "text.bubble")
+                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(AppColors.ink3)
+                }
+            }
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(AppColors.ink3)
+        }
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: - 신고 상세 시트
+
+    private func reportDetailSheet(_ r: AdminReport) -> some View {
+        let kind = deletableKind(r.surface)
+        return NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    // 요약
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        HStack(spacing: 6) {
+                            Text(surfaceLabel(r.surface))
+                                .font(.system(size: 12, weight: .heavy)).foregroundStyle(.white)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(AppColors.primary, in: Capsule())
+                            Text(shortDate(r.created_at)).font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                        }
+                        Text(r.reason ?? "신고")
+                            .font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.danger)
+                    }
+
+                    detailField("신고 대상", r.reported_name ?? "-")
+                    if let rid = r.reported, !rid.isEmpty { detailField("대상 식별자", rid) }
+                    detailField("신고자", r.reporter ?? "-")
+                    if let cid = r.context_id, !cid.isEmpty { detailField("콘텐츠 id", cid) }
+                    if let note = r.note, !note.isEmpty { detailField("메모", note) }
+
+                    // 대화 증거(신고 시점 스냅샷)
+                    if let t = r.transcript, !t.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.s2) {
+                            Text("대화 증거").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink2)
+                            VStack(alignment: .leading, spacing: Spacing.s2) {
+                                ForEach(t) { line in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(line.speaker).font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                                        Text(line.text ?? "").font(.system(size: 13)).foregroundStyle(AppColors.ink)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(Spacing.s2)
+                                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                }
+                            }
+                        }
+                    }
+
+                    // 조치
+                    if let kind, let cid = r.context_id, !cid.isEmpty {
+                        VStack(spacing: Spacing.s2) {
+                            Button {
+                                selectedReport = nil
+                                tab = .content
+                                scrollTarget = cid
+                            } label: {
+                                Label("신고 대상 콘텐츠로 이동", systemImage: "arrow.right.circle.fill")
+                                    .font(.system(size: 15, weight: .bold)).frame(maxWidth: .infinity).frame(height: 48)
+                                    .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                                    .foregroundStyle(.white)
+                            }
+                            Button {
+                                let label = r.reported_name ?? r.reason ?? "콘텐츠"
+                                selectedReport = nil
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                    pendingDelete = PendingDelete(kind: kind, rowId: cid, label: label)
+                                }
+                            } label: {
+                                Label("신고 대상 콘텐츠 삭제", systemImage: "trash.fill")
+                                    .font(.system(size: 15, weight: .bold)).frame(maxWidth: .infinity).frame(height: 48)
+                                    .background(AppColors.danger.opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                                    .foregroundStyle(AppColors.danger)
+                            }
+                        }
+                        .padding(.top, Spacing.s2)
+                    } else {
+                        Text("이 신고는 이동/삭제할 콘텐츠 위치 정보가 없어요.")
+                            .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                    }
+                }
+                .padding(Spacing.s4)
+            }
+            .background(AppColors.canvas.ignoresSafeArea())
+            .navigationTitle("신고 상세")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { selectedReport = nil } } }
+        }
+    }
+
+    private func detailField(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppColors.ink3)
+            Text(value).font(.system(size: 14)).foregroundStyle(AppColors.ink)
+                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -118,29 +237,40 @@ struct AdminReportsScreen: View {
         } else if meetups.isEmpty && groups.isEmpty && items.isEmpty && posts.isEmpty {
             BLEmptyState(icon: "tray", title: "콘텐츠가 없어요", message: "등록된 모임·크루·매물이 없습니다.")
         } else {
-            List {
-                contentSection(title: "모임 (같이가요)", kind: "crew_meetup", rows: meetups) { r in
-                    contentRow(primary: r.title ?? "(제목 없음)",
-                               sub: [r.host_name, r.hood, r.when_text].compactMap { $0 }.joined(separator: " · "),
-                               date: r.created_at)
+            ScrollViewReader { proxy in
+                List {
+                    contentSection(title: "모임 (같이가요)", kind: "crew_meetup", rows: meetups) { r in
+                        contentRow(primary: r.title ?? "(제목 없음)",
+                                   sub: [r.host_name, r.hood, r.when_text].compactMap { $0 }.joined(separator: " · "),
+                                   date: r.created_at)
+                    }
+                    contentSection(title: "크루 (그룹)", kind: "crew_group", rows: groups) { r in
+                        contentRow(primary: r.name ?? "(이름 없음)",
+                                   sub: [r.creator_name, r.hood].compactMap { $0 }.joined(separator: " · "),
+                                   date: r.created_at)
+                    }
+                    contentSection(title: "매물", kind: "market_item", rows: items) { r in
+                        contentRow(primary: r.title ?? "(제목 없음)",
+                                   sub: [r.seller_name, r.status, r.hood].compactMap { $0 }.joined(separator: " · "),
+                                   date: r.created_at)
+                    }
+                    contentSection(title: "크루 게시글", kind: "crew_post", rows: posts) { r in
+                        contentRow(primary: r.title ?? "(제목 없음)",
+                                   sub: [r.author_name, r.category, r.hood].compactMap { $0 }.joined(separator: " · "),
+                                   date: r.created_at)
+                    }
                 }
-                contentSection(title: "크루 (그룹)", kind: "crew_group", rows: groups) { r in
-                    contentRow(primary: r.name ?? "(이름 없음)",
-                               sub: [r.creator_name, r.hood].compactMap { $0 }.joined(separator: " · "),
-                               date: r.created_at)
-                }
-                contentSection(title: "매물", kind: "market_item", rows: items) { r in
-                    contentRow(primary: r.title ?? "(제목 없음)",
-                               sub: [r.seller_name, r.status, r.hood].compactMap { $0 }.joined(separator: " · "),
-                               date: r.created_at)
-                }
-                contentSection(title: "크루 게시글", kind: "crew_post", rows: posts) { r in
-                    contentRow(primary: r.title ?? "(제목 없음)",
-                               sub: [r.author_name, r.category, r.hood].compactMap { $0 }.joined(separator: " · "),
-                               date: r.created_at)
+                .listStyle(.insetGrouped)
+                .onChange(of: scrollTarget) { _, target in
+                    guard let target else { return }
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        withAnimation { proxy.scrollTo(target, anchor: .center) }
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        if scrollTarget == target { scrollTarget = nil }
+                    }
                 }
             }
-            .listStyle(.insetGrouped)
         }
     }
 
@@ -165,6 +295,8 @@ struct AdminReportsScreen: View {
                             .buttonStyle(.borderless)
                         }
                     }
+                    .id(r.id)
+                    .listRowBackground(scrollTarget == r.id ? AppColors.primaryTint : nil)
                 }
             }
         }
