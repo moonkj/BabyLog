@@ -266,9 +266,13 @@ enum MarketBackend {
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_item": id])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
-        // RPC가 true/false 반환 — 실제 확인된 경우만 성공
+        // RPC가 true/false 반환 — 실제 확인된 경우만 성공. 본문이 명시적 true가 아니면 실패로 간주
+        // (거래 확인은 신뢰 신호이므로 fail-closed — 비-Bool/null/빈 본문을 성공으로 위조하지 않는다).
         if let b = (try? JSONSerialization.jsonObject(with: data)) as? Bool { return b }
-        return true
+        if let s = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+            return s == "true"
+        }
+        return false
     }
 
     /// 매물 삭제(+사진 객체 정리).

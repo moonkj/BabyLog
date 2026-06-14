@@ -205,10 +205,12 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(UUID.self, forKey: .id)
-        childId = try c.decode(UUID.self, forKey: .childId)
-        date = try c.decode(Date.self, forKey: .date)
-        recordType = try c.decode(String.self, forKey: .recordType)
+        // 한 항목의 키 하나가 없거나 깨져도 diaryEntries 배열 전체가 소실되지 않게 관대 디코딩
+        // (다른 모델과 동일 정책 — '무료 데이터 영구 보존' 원칙). 손상 항목은 안전한 기본값으로 흡수.
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        childId = try c.decodeIfPresent(UUID.self, forKey: .childId) ?? UUID()
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        recordType = try c.decodeIfPresent(String.self, forKey: .recordType) ?? "diary"
         content = try c.decodeIfPresent(String.self, forKey: .content)
         milestone = try c.decodeIfPresent(String.self, forKey: .milestone)
         photoRef = try c.decodeIfPresent(String.self, forKey: .photoRef)

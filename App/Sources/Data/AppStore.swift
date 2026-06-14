@@ -692,6 +692,12 @@ final class AppStore: ObservableObject {
         var updated = pregnancies[idx]
         updated.status = status
         pregnancies[idx] = updated
+        // active를 벗어나면(상실·멈춤·출산) 검진 알림 토글을 끈다 — 알림은 이미 취소되는데
+        // UI가 "켜짐"으로 거짓 표시되고, 재개해도 재예약되지 않아 무음 상태가 되던 문제 방지.
+        if status != .active && checkupRemindersOn {
+            CheckupReminderService.cancel(pregnancyId: pregnancyId)
+            checkupRemindersOn = false
+        }
         if status == .loss {
             bus.publish(.pregnancyEndedInLoss(pregnancyId: pregnancyId))
         } else if status == .paused {
@@ -764,6 +770,11 @@ final class AppStore: ObservableObject {
             updatedPregnancy.status = .delivered
             pregnancies[index] = updatedPregnancy
             children.append(child)
+            // 출산 완료 — 검진 알림 정리(임신 종료)
+            if checkupRemindersOn {
+                CheckupReminderService.cancel(pregnancyId: pregnancyId)
+                checkupRemindersOn = false
+            }
             // 배 사진 → 성장 사진 승계: 태아 시절 배 사진을 아이 타임라인에 잇는다
             // (CLAUDE.md 핵심 데이터 전환 — "끊김 없는 하나의 여정"). 원본은 임신 기록에 그대로 보존.
             carryOverBellyPhotos(from: pregnancy, to: child)
@@ -790,7 +801,8 @@ final class AppStore: ObservableObject {
 
         for log in bellies {
             guard let copiedRef = PhotoStore.copy(log.photoRef) else { continue }
-            let week = Int(log.value)
+            // value(주차)가 NaN/Inf/비정상이면 Int() 변환이 트랩될 수 있어 방어 후 0~45주로 클램프.
+            let week = log.value.isFinite ? min(max(Int(log.value), 0), 45) : 0
             let estimated = pregnancy.lmpDate
                 .flatMap { cal.date(byAdding: .day, value: week * 7, to: $0) } ?? log.date
             let date = min(estimated, upperBound)

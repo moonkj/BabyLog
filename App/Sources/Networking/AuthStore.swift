@@ -54,6 +54,8 @@ final class AuthStore: ObservableObject {
         let task = Task { await self.refresh() }
         refreshTask = task
         let result = await task.value
+        // @MainActor + 위의 early-return 합류(coalesce)로 동시 호출은 이 task에 합류하므로
+        // 두 번째 task가 생기지 않는다 → 완료 후 비우는 것이 안전.
         refreshTask = nil
         return result?.accessToken
     }
