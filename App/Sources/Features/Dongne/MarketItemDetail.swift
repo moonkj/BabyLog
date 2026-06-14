@@ -168,7 +168,7 @@ struct MarketItemDetail: View {
         ZStack(alignment: .bottom) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    MarketDetailHeroPhoto(item: displayItem, onTap: { openHeroFullscreen() })
+                    MarketDetailHeroPhoto(item: displayItem, onTap: { openHeroFullscreen(index: $0) })
                     if needsBuyerConfirm { buyerConfirmCard }
                     MarketDetailContent(item: displayItem)
                         .padding(.bottom, 96) // 하단 바 여백
@@ -375,13 +375,15 @@ struct MarketItemDetail: View {
         }
     }
 
-    /// 히어로 사진 전체화면 — 로컬 사진 우선, 없으면 서버 URL 로드.
-    private func openHeroFullscreen() {
-        if let r = liveItem.photoRefs.first, let img = PhotoStore.image(r) { heroFull = img; return }
-        guard let s = liveItem.photoURLs.first, let url = URL(string: s) else { return }
-        Task { @MainActor in
-            if let (d, _) = try? await URLSession.shared.data(from: url), let img = UIImage(data: d) { heroFull = img }
+    /// 히어로 사진 전체화면 — 탭한 장(index)을 연다(서버 URL 우선, 없으면 로컬).
+    private func openHeroFullscreen(index: Int) {
+        if index < liveItem.photoURLs.count, let url = URL(string: liveItem.photoURLs[index]) {
+            Task { @MainActor in
+                if let (d, _) = try? await URLSession.shared.data(from: url), let img = UIImage(data: d) { heroFull = img }
+            }
+            return
         }
+        if index < liveItem.photoRefs.count, let img = PhotoStore.image(liveItem.photoRefs[index]) { heroFull = img }
     }
 
     /// 구매자: 거래 확인 → 양쪽 확인 완료(인증 거래).

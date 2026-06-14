@@ -193,9 +193,29 @@ struct CrewMeetupDetail: View {
                     label: "정원",
                     value: "\(joinedCount)/\(meetup.capacity)명 · 남은 자리 \(spotsLeft)자리"
                 )
+                Rectangle()
+                    .fill(AppColors.line)
+                    .frame(height: 1)
+                    .padding(.vertical, 10)
+                // 단발성 모임 — 10일 후 자동 삭제(생성·참가자 모두에게 고지)
+                CrewInfoRow(
+                    icon: "clock.badge.xmark",
+                    iconColor: AppColors.ink3,
+                    label: "기간",
+                    value: expiryLabel
+                )
             }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    /// 생성 10일 후 자동 삭제까지 남은 일수 안내(단발성 모임).
+    private var expiryLabel: String {
+        let expiry = Calendar.current.date(byAdding: .day, value: 10, to: meetup.createdAt) ?? meetup.createdAt
+        let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: Date()),
+                                                   to: Calendar.current.startOfDay(for: expiry)).day ?? 0
+        if days <= 0 { return "오늘 사라져요 · 단발성 모임" }
+        return "\(days)일 후 사라져요 · 단발성 모임"
     }
 
     // MARK: 참가자 섹션

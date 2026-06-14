@@ -8,22 +8,51 @@ import Foundation
 
 // MARK: - MarketDetailHeroPhoto
 
-/// 히어로 사진
+/// 히어로 사진 — 여러 장이면 좌우로 넘겨보는 갤러리(페이지 도트). 탭하면 해당 장 전체화면.
 struct MarketDetailHeroPhoto: View {
     let item: MarketItem
-    var onTap: () -> Void = {}
+    var onTap: (Int) -> Void = { _ in }
+    @State private var page = 0
+
+    /// 표시할 사진 수(서버 URL 우선, 없으면 로컬 ref). 최소 1(플레이스홀더).
+    private var photoCount: Int { max(1, max(item.photoURLs.count, item.photoRefs.count)) }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             // 사진 + 장식 뱃지 — VoiceOver에서 숨김(장식)
             ZStack(alignment: .topLeading) {
-                // 전체 표시(scaledToFit) — 잘림 없음. 탭하면 전체화면.
-                MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs, seed: item.photoSeed, index: 0, cornerRadius: 0, fill: false)
-                    .frame(maxWidth: .infinity)
-                    .frame(maxHeight: 420)
+                // 전체 표시(scaledToFit) — 잘림 없음. 여러 장이면 스와이프 갤러리. 탭하면 전체화면.
+                if photoCount > 1 {
+                    TabView(selection: $page) {
+                        ForEach(0..<photoCount, id: \.self) { i in
+                            MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs, seed: item.photoSeed, index: i, cornerRadius: 0, fill: false)
+                                .frame(maxWidth: .infinity, maxHeight: 420)
+                                .contentShape(Rectangle())
+                                .onTapGesture { onTap(i) }
+                                .tag(i)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .always))
+                    .frame(height: 420)
                     .background(AppColors.surface2)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onTap() }
+                    .overlay(alignment: .topTrailing) {
+                        // 장수 표시 — 상태 뱃지와 겹치지 않게 상태 없을 때만
+                        if item.status == .selling {
+                            Text("\(page + 1)/\(photoCount)")
+                                .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 8).frame(height: 22)
+                                .background(.black.opacity(0.45), in: Capsule())
+                                .padding(.top, 52).padding(.trailing, Spacing.s5)
+                        }
+                    }
+                } else {
+                    MarketPhotoView(urls: item.photoURLs, refs: item.photoRefs, seed: item.photoSeed, index: 0, cornerRadius: 0, fill: false)
+                        .frame(maxWidth: .infinity)
+                        .frame(maxHeight: 420)
+                        .background(AppColors.surface2)
+                        .contentShape(Rectangle())
+                        .onTapGesture { onTap(0) }
+                }
 
                 // 상태 뱃지 (예약/판매완료)
                 if item.status != .selling {
