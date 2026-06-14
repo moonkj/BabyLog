@@ -135,6 +135,8 @@ struct HomeTab: View {
 
     /// 홈 카드(요약·진입점) 탭 시 해당 탭으로 이동시키는 콜백. MainTabView가 주입.
     var onNavigate: (AppTab) -> Void = { _ in }
+    /// 빠른 기록(사진 등록 시트) 바로 열기 콜백. MainTabView가 주입(FAB와 동일 동작).
+    var onQuickRecord: () -> Void = {}
     @State private var showEmergency = false
     @State private var showAddChild = false
     @State private var showLayoutMenu = false
@@ -696,13 +698,14 @@ struct HomeTab: View {
                 Text("사진 한 장이면 기록 끝 — 2탭이면 돼요").font(AppFont.caption).foregroundStyle(AppColors.ink2)
             }
             Spacer()
-            Button { onNavigate(.record) } label: {
+            Button { onQuickRecord() } label: {
                 Text("기록").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 18).frame(height: 44)
                     .background(AppColors.primary, in: Capsule())
             }
             .buttonStyle(LiquidPressStyle())
             .accessibilityLabel("기록하기")
+            .accessibilityHint("사진 등록 화면을 바로 엽니다")
         }
         .padding(14)
         .background(AppColors.primaryTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))

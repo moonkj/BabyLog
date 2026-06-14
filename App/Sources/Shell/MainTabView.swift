@@ -97,6 +97,23 @@ struct MainTabView: View {
         }
     }
 
+    /// 빠른 기록 진입 — FAB·홈 권유카드 공용. 아이/임신 미등록이면 등록부터 안내.
+    private func triggerQuickRecord() {
+        Haptics.light()
+        if mode == .baby && store.children.isEmpty {
+            showAddChild = true
+        } else if mode == .pregnancy && store.activePregnancy == nil {
+            // 멈춤/상실 임신이 있고 활성 임신이 없으면 새 등록을 권하지 않는다(민감영역).
+            if store.pregnancies.contains(where: { $0.status == .paused || $0.status == .loss }) {
+                showPausedNotice = true
+            } else {
+                showAddPregnancy = true
+            }
+        } else {
+            showQuickRecord = true
+        }
+    }
+
     /// 야간 초저휘도 — 설정 ON 시 22~06시에 은은한 디밍(새벽 수유 배려). 5분마다 시간 재평가.
     @ViewBuilder
     private var nightDimOverlay: some View {
@@ -118,7 +135,7 @@ struct MainTabView: View {
         ZStack(alignment: fabOnLeft ? .bottomLeading : .bottomTrailing) {
             TabView(selection: $tab) {
                 Group {
-                    if mode == .pregnancy { PregnancyHomeView(onNavigate: { tab = $0 }) } else { HomeTab(onNavigate: { tab = $0 }) }
+                    if mode == .pregnancy { PregnancyHomeView(onNavigate: { tab = $0 }) } else { HomeTab(onNavigate: { tab = $0 }, onQuickRecord: { triggerQuickRecord() }) }
                 }
                 .tabItem { Label("홈", systemImage: "house") }
                 .tag(AppTab.home)
