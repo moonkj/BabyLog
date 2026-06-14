@@ -899,6 +899,18 @@ final class AppStore: ObservableObject {
         expenses.append(expense)
     }
 
+    /// 지출 항목을 수정한다(금액·카테고리·날짜·메모). 0 이하 금액 무시.
+    func updateExpense(id: UUID, amount: Int, category: ExpenseCategory, date: Date, memo: String?) {
+        guard amount > 0, let idx = expenses.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = memo?.trimmingCharacters(in: .whitespacesAndNewlines)
+        var e = expenses[idx]
+        e.amount = amount
+        e.category = category
+        e.date = date
+        e.memo = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        expenses[idx] = e
+    }
+
     /// 지출 항목을 삭제한다.
     func deleteExpense(id: UUID) {
         expenses.removeAll { $0.id == id }

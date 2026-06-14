@@ -541,8 +541,8 @@ struct MarketScreen: View {
                         .foregroundStyle(selectedCategory == cat ? Color.white : AppColors.ink2)
                         .padding(.horizontal, 16)
                         .frame(height: 36)
-                        .background(selectedCategory == cat ? AppColors.ink : AppColors.surface, in: Capsule())
-                        .overlay { Capsule().stroke(selectedCategory == cat ? AppColors.ink.opacity(0.25) : AppColors.line, lineWidth: 1) }
+                        .background(selectedCategory == cat ? AppColors.primary : AppColors.surface, in: Capsule())
+                        .overlay { Capsule().stroke(selectedCategory == cat ? AppColors.primary.opacity(0.25) : AppColors.line, lineWidth: 1) }
                     }
                     .buttonStyle(LiquidPressStyle(scale: 0.96))
                     .accessibilityLabel(cat.rawValue)
@@ -817,7 +817,20 @@ private struct MkItemCard: View {
         }
         .overlay(alignment: .topLeading) {
             if item.isFree {
-                BLBadge(tone: .mint, text: "나눔", systemIcon: nil, dot: false).padding(7)
+                BLBadge(tone: .mint, text: "무료나눔", systemIcon: nil, dot: false).padding(7)
+            }
+        }
+        // 종료(판매완료)·예약 매물은 사진을 딤 + 라벨로 가려 목록에서 시각적으로 구분(색+텍스트 2중)
+        .overlay {
+            if item.status == .sold || item.status == .reserved {
+                ZStack {
+                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                        .fill(Color.black.opacity(item.status == .sold ? 0.5 : 0.32))
+                    Text(item.status == .sold ? "거래완료" : "예약중")
+                        .font(.system(size: 12.5, weight: .heavy)).foregroundStyle(.white)
+                        .padding(.horizontal, 10).frame(height: 24)
+                        .background(.black.opacity(0.55), in: Capsule())
+                }
             }
         }
         .accessibilityHidden(true)

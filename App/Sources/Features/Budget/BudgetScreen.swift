@@ -59,6 +59,7 @@ struct BudgetScreen: View {
     @State private var isLoadingSubsidies = true
     @State private var period: BudgetPeriod = .month
     @State private var showAddExpense = false
+    @State private var editingExpense: Expense? = nil   // 지출 행 탭 → 편집
     @State private var showAllExpenses = false
     /// '1년' 모드에서 보는 연도(연도별 탐색). 기본 = 올해.
     @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
@@ -206,6 +207,9 @@ struct BudgetScreen: View {
         .appFAB { Haptics.light(); showAddExpense = true }
         .sheet(isPresented: $showAddExpense) {
             AddExpenseSheet().environmentObject(store)
+        }
+        .sheet(item: $editingExpense) { exp in
+            AddExpenseSheet(editing: exp).environmentObject(store)
         }
     }
 
@@ -523,7 +527,12 @@ struct BudgetScreen: View {
                         }
 
                         ExpenseRow(expense: expense)
+                            .contentShape(Rectangle())
+                            .onTapGesture { Haptics.light(); editingExpense = expense }
                             .contextMenu {
+                                Button { editingExpense = expense } label: {
+                                    Label("수정", systemImage: "pencil")
+                                }
                                 Button(role: .destructive) {
                                     store.deleteExpense(id: expense.id)
                                 } label: {

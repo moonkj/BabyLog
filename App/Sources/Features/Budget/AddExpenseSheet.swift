@@ -9,12 +9,16 @@ struct AddExpenseSheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
 
+    /// 편집 대상(있으면 수정 모드, 없으면 추가 모드)
+    var editing: Expense? = nil
+
     @State private var title: String = ""
     @State private var amountText: String = ""
     @State private var category: ExpenseCategory = .diaper
     @State private var date: Date = Date()
     @State private var titleShake = 0
     @State private var amountShake = 0
+    @State private var didPrefill = false
 
     // 포커스된 필드에 primary 보더로 입력 위치를 또렷이 안내
     private enum Field { case title, amount }
@@ -112,19 +116,32 @@ struct AddExpenseSheet: View {
                             if amount <= 0 { amountShake += 1 }
                             return
                         }
-                        store.addExpense(amount: amount, category: category, date: date,
-                                         memo: trimmedTitle)
+                        if let editing {
+                            store.updateExpense(id: editing.id, amount: amount, category: category,
+                                                date: date, memo: trimmedTitle)
+                        } else {
+                            store.addExpense(amount: amount, category: category, date: date,
+                                             memo: trimmedTitle)
+                        }
                         Haptics.success()
                         dismiss()
                     } label: {
-                        Text("저장하기").frame(maxWidth: .infinity)
+                        Text(editing == nil ? "저장하기" : "수정 완료").frame(maxWidth: .infinity)
                     }
-                    .accessibilityLabel("지출 저장하기")
+                    .accessibilityLabel(editing == nil ? "지출 저장하기" : "지출 수정 완료")
                 }
                 .padding(Spacing.s4)
             }
             .background(AppColors.canvas.ignoresSafeArea())
-            .navigationTitle("지출 추가")
+            .navigationTitle(editing == nil ? "지출 추가" : "지출 수정")
+            .onAppear {
+                guard let e = editing, !didPrefill else { return }
+                didPrefill = true
+                title = e.memo ?? ""
+                amountText = String(e.amount)
+                category = e.category
+                date = e.date
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
