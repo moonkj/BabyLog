@@ -89,6 +89,15 @@ struct CrewGroup: Identifiable, Hashable {
     var mine: Bool = false
 }
 
+/// 동네 게시판 댓글 — 작성자 표시·신고를 위해 본문 외 작성자 정보 포함.
+struct CrewReply: Identifiable, Equatable {
+    let id: String
+    let authorName: String?
+    let authorId: String?
+    let body: String
+    let mine: Bool
+}
+
 struct CrewPost: Identifiable, Codable, Hashable {
     var id: String = UUID().uuidString
     var category: CrewPostCategory
@@ -331,8 +340,14 @@ private struct CrewActiveContent: View {
                         } else if loadFailed && posts.isEmpty && meetups.isEmpty && groups.isEmpty {
                             crewLoadFailedView
                         } else {
+                            // 용어 안내 — '같이가요(단발 모임)' vs '크루(지속 그룹)' 구분
+                            Text("‘같이가요’는 한 번 모이는 모임, ‘크루’는 꾸준히 함께하는 그룹이에요.")
+                                .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, Spacing.s5)
+                                .padding(.top, Spacing.s4)
                             meetupSection
-                                .padding(.top, Spacing.s5)
+                                .padding(.top, Spacing.s3)
                             crewSection
                             boardSection
                                 .padding(.bottom, 100)

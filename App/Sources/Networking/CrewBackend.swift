@@ -607,13 +607,13 @@ enum CrewBackend {
 
     // MARK: - 게시판 좋아요·댓글(동네 공유)
 
-    private struct CrewReplyDTO: Decodable { let id: String; let body: String? }
+    private struct CrewReplyDTO: Decodable { let id: String; let author: String?; let author_name: String?; let body: String? }
 
-    /// 게시글 댓글 시간순 조회(본문 문자열). 미구성/실패 시 nil.
-    static func fetchReplies(postId: String) async -> [String]? {
+    /// 게시글 댓글 시간순 조회(작성자명·신고용 식별 포함). 미구성/실패 시 nil.
+    static func fetchReplies(postId: String) async -> [CrewReply]? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let p = postId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
-        guard let url = URL(string: "\(base)/rest/v1/crew_post_reply?post_id=eq.\(p)&select=id,body&order=created_at.asc&limit=300") else { return nil }
+        guard let url = URL(string: "\(base)/rest/v1/crew_post_reply?post_id=eq.\(p)&select=id,author,author_name,body&order=created_at.asc&limit=300") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
@@ -626,7 +626,11 @@ enum CrewBackend {
             return nil
         }
         guard let dtos = try? JSONDecoder().decode([CrewReplyDTO].self, from: data) else { return nil }
-        return dtos.compactMap { $0.body }
+        let me = await SupabaseConfig.ownerID()
+        return dtos.map { d in
+            CrewReply(id: d.id, authorName: d.author_name, authorId: d.author,
+                      body: d.body ?? "", mine: d.author == me)
+        }
     }
 
     /// 게시글 댓글 작성. 성공 true.

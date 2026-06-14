@@ -137,12 +137,20 @@ struct CrewPostDetailSheet: View {
     @State private var deleteBusy = false     // 삭제 요청 중(중복 탭 방지)
     @State private var deleteFailed = false   // 서버 삭제 실패 안내
     /// 서버 공유 댓글(미구성/미로드 시 nil → 로컬 폴백)
-    @State private var serverComments: [String]? = nil
+    @State private var serverComments: [CrewReply]? = nil
+    @State private var reportTarget: CrewReply? = nil   // 댓글 작성자명 탭 → 신고
+    @State private var reportDone = false
     @AppStorage("bl_nickname") private var nickname: String = "양육자님"
 
     private var isLiked: Bool { store.isCrewPostLiked(post.id) }
     private var likeCount: Int { post.likeCount + (isLiked ? 1 : 0) }
-    private var comments: [String] { serverComments ?? store.crewPostCommentList(postId: post.id) }
+    /// 표시용 댓글 — 서버는 작성자 포함, 로컬 폴백은 본인 작성으로 매핑.
+    private var comments: [CrewReply] {
+        if let s = serverComments { return s }
+        return store.crewPostCommentList(postId: post.id).enumerated().map {
+            CrewReply(id: "local-\($0.offset)", authorName: nil, authorId: nil, body: $0.element, mine: true)
+        }
+    }
     private var replyCount: Int {
         serverComments?.count ?? (SupabaseConfig.isConfigured ? post.replyCount : store.crewPostReplyCount(post))
     }
@@ -264,6 +272,22 @@ struct CrewPostDetailSheet: View {
         .sheet(isPresented: $showLogin) {
             AppleLoginSheet(message: "좋아요·댓글은 로그인이 필요해요.") {}
         }
+        .confirmationDialog("이 댓글 작성자를 신고할까요?", isPresented: Binding(
+            get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }
+        ), titleVisibility: .visible, presenting: reportTarget) { reply in
+            ForEach(ReportBackend.reasons, id: \.self) { reason in
+                Button(reason, role: .destructive) {
+                    let snap = [["author": reply.authorName ?? "이웃", "text": reply.body]]
+                    Task { _ = await ReportBackend.submit(surface: "crew_post", contextId: post.id,
+                        reportedName: reply.authorName, reportedId: reply.authorId, reason: reason, transcript: snap) }
+                    reportDone = true
+                }
+            }
+            Button("취소", role: .cancel) {}
+        } message: { reply in Text("‘\(reply.authorName ?? "이웃")’ 님의 댓글을 신고합니다. 내용이 운영자에게 증거로 전달돼요.") }
+        .alert("신고 접수됐어요", isPresented: $reportDone) {
+            Button("확인", role: .cancel) {}
+        } message: { Text("운영자가 확인 후 조치합니다. 감사합니다.") }
     }
 
     // MARK: 헤더
@@ -387,7 +411,7 @@ struct CrewPostDetailSheet: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, Spacing.s5)
             } else {
-                ForEach(Array(comments.enumerated()), id: \.offset) { _, text in
+                ForEach(comments) { reply in
                     HStack(alignment: .top, spacing: 10) {
                         Circle()
                             .fill(AppColors.surface3)
@@ -398,15 +422,28 @@ struct CrewPostDetailSheet: View {
                                     .foregroundStyle(AppColors.ink3)
                             }
                             .accessibilityHidden(true)
-                        Text(text)
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(AppColors.ink)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            // 작성자명 — 본인이면 '나', 타인이면 탭해서 신고
+                            if reply.mine {
+                                Text("나").font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                            } else if let name = reply.authorName, !name.isEmpty {
+                                Button { reportTarget = reply } label: {
+                                    HStack(spacing: 3) {
+                                        Text(name).font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                                        Image(systemName: "ellipsis").font(.system(size: 9, weight: .bold)).foregroundStyle(AppColors.ink3)
+                                    }
+                                }.buttonStyle(.plain)
+                            }
+                            Text(reply.body)
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.ink)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding(.vertical, 4)
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("댓글: \(text)")
+                    .accessibilityLabel("\(reply.mine ? "내 댓글" : (reply.authorName ?? "이웃") + " 댓글"): \(reply.body)")
                 }
             }
         }
