@@ -120,9 +120,21 @@ enum FamilyFeedBackend {
 
     /// 기록→가족 자동 공유: 가족이 없으면 만들고, 한 기록의 사진들을 한 포스트로 올린다.
     /// (기록 탭에서 사진을 저장하면 Pro 사용자는 이 경로로 가족 피드에 자동 게시)
+    /// ⚠️ DEV ONLY — 로컬 Pro 검증용으로 서버 bl_profile.is_pro=true를 설정한다.
+    /// (미디어 업로드 Edge가 서버 is_pro를 검사하므로, 개발 토글만으론 업로드가 403난다.)
+    /// 출시 시 제거 — 실제 is_pro는 StoreKit 영수증 검증(verify-subscription)이 service_role로 설정.
+    /// 서버에 `bl_dev_set_pro(boolean)` SECURITY DEFINER 함수가 있어야 동작(없으면 무시).
+    static func ensureProForDev() async {
+        guard await AuthStore.shared.userId != nil,
+              var req = await rest("/rpc/bl_dev_set_pro", method: "POST") else { return }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_on": true])
+        _ = try? await URLSession.shared.data(for: req)
+    }
+
     @discardableResult
     static func shareRecordToFamily(postId: String?, images: [UIImage], caption: String?, childLabel: String?) async -> Bool {
         guard !images.isEmpty else { return false }
+        await ensureProForDev()   // DEV: 서버 is_pro 동기화(출시 시 제거)
         var fam = await myFamily()
         if fam == nil { fam = await createFamily(name: "우리 가족") }
         guard let f = fam else { return false }

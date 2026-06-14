@@ -766,7 +766,10 @@ struct QuickRecordSheet: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
             if !feedImages.isEmpty {
                 let imgs = feedImages, cap = feedCaption, child = feedChild, pid = feedPostId
-                Task { await FamilyFeedBackend.shareRecordToFamily(postId: pid, images: imgs, caption: cap, childLabel: child) }
+                Task {
+                    let ok = await FamilyFeedBackend.shareRecordToFamily(postId: pid, images: imgs, caption: cap, childLabel: child)
+                    if ok { await MainActor.run { store.familyFeedVersion += 1 } }  // 타임라인 가족 반응 재로드
+                }
                 onSave()
                 onClose()
             } else if mode == .baby, shareToFamily, !pendingShareURLs.isEmpty {

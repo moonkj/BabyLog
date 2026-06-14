@@ -102,8 +102,8 @@ struct TimelineSection: View {
                         .padding(.top, Spacing.s2)
                 }
             }
-            // Pro: 가족 피드 반응 로드(기록↔포스트 id 매칭). isPro 토글 시 재로드.
-            .task(id: store.isPro) { await loadFamilySocial() }
+            // Pro: 가족 피드 반응 로드(기록↔포스트 id 매칭). isPro 토글·공유 완료 시 재로드.
+            .task(id: "\(store.isPro)_\(store.familyFeedVersion)") { await loadFamilySocial() }
         }
     }
 

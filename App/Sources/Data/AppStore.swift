@@ -30,6 +30,8 @@ final class AppStore: ObservableObject {
     @Published var isPro: Bool = UserDefaults.standard.bool(forKey: "bl_is_pro") {
         didSet { UserDefaults.standard.set(isPro, forKey: "bl_is_pro") }
     }
+    /// 가족 피드 변경 신호(공유 완료 등). 증가 시 타임라인이 가족 반응을 다시 읽는다(메모리 전용).
+    @Published var familyFeedVersion = 0
     // 마켓 (로컬 백본)
     @Published private(set) var marketItems: [MarketItem] = []
     @Published private(set) var savedMarketIds: Set<String> = []
