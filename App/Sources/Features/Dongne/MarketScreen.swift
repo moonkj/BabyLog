@@ -324,7 +324,10 @@ struct MarketScreen: View {
     private func loadItems() async {
         guard serverMode else { return }
         if let s = await MarketBackend.fetchItems(city: city) {
-            sharedItems = s
+            // 내 매물은 시(city)와 무관하게 항상 포함 — city 없는 옛 매물도 보고 관리/삭제 가능.
+            let cityIDs = Set(s.map { $0.id })
+            let mineExtra = (await MarketBackend.fetchMyItems() ?? []).filter { !cityIDs.contains($0.id) }
+            sharedItems = (s + mineExtra).sorted { $0.createdAt > $1.createdAt }
             loadFailed = false
         } else {
             loadFailed = true   // 네트워크 실패 — 빈 동네와 구분
