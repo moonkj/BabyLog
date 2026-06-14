@@ -254,12 +254,17 @@ private struct DiaryTimelineCard: View {
     // 가족 소셜(서버) — 부모가 넘긴 familyPost를 받아 로컬에서 하트·댓글 후 즉시 갱신.
     @State private var fpost: BLFeedPost? = nil
     @State private var commentDraft = ""
+    @State private var sharing = false
+    @State private var showLoginForShare = false
 
     private var isMilestone: Bool { entry.milestone != nil }
     private var liked: Bool { store.isDiaryLiked(entry.id) }
     private var commentCount: Int { store.comments(for: entry.id).count }
+    private var hasPhoto: Bool { !entry.photoRefList.isEmpty }
     /// Pro 모드 + 이 기록이 가족에 공유됨 → 가족 하트·댓글 표시.
     private var showsFamilySocial: Bool { store.isPro && fpost != nil }
+    /// Pro 모드에서 카드 하단에 가족 UI(하트·댓글 또는 '공유하기')가 보이는지 — 패딩 조절용.
+    private var showsAnyFamilyUI: Bool { store.isPro && (fpost != nil || hasPhoto) }
 
     var body: some View {
         let photos = entry.photoRefList.compactMap { PhotoStore.image($0) }
@@ -334,6 +339,23 @@ private struct DiaryTimelineCard: View {
             set: { if $0 == nil { fullPhoto = nil } }
         )) { wrapper in
             FullScreenPhotoView(image: wrapper.image, onClose: { fullPhoto = nil })
+        }
+        .sheet(isPresented: $showLoginForShare) {
+            VStack(spacing: Spacing.s4) {
+                Image(systemName: "person.2.fill").font(.system(size: 34))
+                    .foregroundStyle(AppColors.primary).padding(.top, Spacing.s6)
+                Text("로그인하고 가족과 공유").font(.system(size: 18, weight: .bold)).foregroundStyle(AppColors.ink)
+                Text("로그인하면 이 기록을 가족과 함께 보고\n하트·댓글을 받을 수 있어요.")
+                    .font(.system(size: 13)).foregroundStyle(AppColors.ink2)
+                    .multilineTextAlignment(.center)
+                AppleSignInButton { ok in
+                    if ok { showLoginForShare = false; Task { await shareThisRecord() } }
+                }
+                .frame(height: 50).padding(.horizontal, Spacing.s5)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity).background(AppColors.canvas)
+            .presentationDetents([.height(300)])
         }
         .sheet(isPresented: $showComments) {
             DiaryCommentSheet(entryId: entry.id, authorName: child.name)
@@ -449,13 +471,48 @@ private struct DiaryTimelineCard: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 2)
-        .padding(.bottom, showsFamilySocial ? 6 : 14)
+        .padding(.bottom, showsAnyFamilyUI ? 6 : 14)
     }
 
-    // Pro 가족 소셜 — 가족 하트·댓글(서버). 프리/미공유에는 미표시.
+    // Pro 가족 소셜 — 공유됨이면 하트·댓글, 사진 있는데 미공유면 '가족과 공유하기'. 프리엔 미표시.
     @ViewBuilder
     private var familySocialBlock: some View {
-        if showsFamilySocial, let p = fpost {
+        if store.isPro {
+            if fpost != nil {
+                sharedSocialView
+            } else if hasPhoto {
+                shareToFamilyBar
+            }
+        }
+    }
+
+    // 사진 있는데 아직 가족 피드에 없음 → 한 번에 공유(연결 id = entry.id).
+    private var shareToFamilyBar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Divider().overlay(AppColors.line)
+            Button {
+                if AuthStore.shared.isLoggedIn { Task { await shareThisRecord() } }
+                else { showLoginForShare = true }
+            } label: {
+                HStack(spacing: 6) {
+                    if sharing { ProgressView().controlSize(.small).tint(AppColors.primary) }
+                    else { Image(systemName: "person.2.fill").font(.system(size: 14)) }
+                    Text(sharing ? "공유 중…" : "가족과 공유하기")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(AppColors.primary)
+                .frame(minHeight: 40)
+            }
+            .disabled(sharing)
+            .accessibilityHint("이 기록을 가족 보관함에 올려 함께 하트·댓글을 남길 수 있어요")
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
+    }
+
+    @ViewBuilder
+    private var sharedSocialView: some View {
+        if let p = fpost {
             let myUid = AuthStore.shared.userId
             let famLiked = myUid != nil && p.reactions.contains { $0.uid == myUid }
             VStack(alignment: .leading, spacing: 8) {
@@ -520,6 +577,20 @@ private struct DiaryTimelineCard: View {
         commentDraft = ""; Haptics.light()
         if await FamilyFeedBackend.addComment(post: p, text: t) {
             fpost = await FamilyFeedBackend.fetchPost(postId: p.id)
+        }
+    }
+
+    /// 이 기록을 가족 피드에 공유(연결 id = entry.id) — 공유 후 하트·댓글 UI가 열린다.
+    private func shareThisRecord() async {
+        let imgs = entry.photoRefList.compactMap { PhotoStore.image($0) }
+        guard !imgs.isEmpty else { return }
+        sharing = true; defer { sharing = false }
+        let ok = await FamilyFeedBackend.shareRecordToFamily(
+            postId: entry.id.uuidString, images: imgs,
+            caption: entry.content, childLabel: child.name)
+        if ok {
+            Haptics.success()
+            fpost = await FamilyFeedBackend.fetchPost(postId: entry.id.uuidString)
         }
     }
 
