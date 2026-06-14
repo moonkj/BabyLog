@@ -392,23 +392,24 @@ struct MarketDetailBottomBar: View {
                 Button { onThreads() } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "bubble.left.and.bubble.right.fill").font(.system(size: 16, weight: .bold))
-                        Text(threadCount > 0 ? "들어온 문의 \(threadCount)" : "들어온 문의")
-                            .font(.system(size: 16, weight: .bold))
+                        Text("들어온 문의").font(.system(size: 16, weight: .bold))
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(threadCount > 0 ? AppColors.danger : AppColors.primary,
-                                in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                     .overlay(alignment: .topTrailing) {
+                        // 신규(안 읽은) 채팅수만 빨간 배지로
                         if threadCount > 0 {
-                            Text("\(threadCount)").font(.system(size: 11, weight: .heavy)).foregroundStyle(AppColors.danger)
-                                .frame(minWidth: 18, minHeight: 18).background(.white, in: Circle())
-                                .offset(x: 6, y: -6)
+                            Text("\(threadCount)").font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
+                                .frame(minWidth: 20, minHeight: 20)
+                                .background(AppColors.danger, in: Circle())
+                                .overlay(Circle().stroke(.white, lineWidth: 1.5))
+                                .offset(x: 7, y: -7)
                         }
                     }
                 }
                 .buttonStyle(LiquidPressStyle(scale: 0.98))
-                .accessibilityLabel(threadCount > 0 ? "들어온 문의 \(threadCount)건 보기" : "들어온 문의 보기")
+                .accessibilityLabel(threadCount > 0 ? "들어온 문의, 신규 \(threadCount)건" : "들어온 문의 보기")
             } else if item.status == .sold {
                 // 판매완료 — 비활성
                 Text("판매완료된 상품")
