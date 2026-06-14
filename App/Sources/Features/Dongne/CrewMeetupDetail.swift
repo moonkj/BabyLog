@@ -18,6 +18,7 @@ struct CrewMeetupDetail: View {
     @State private var joinBusy = false   // 참가 토글 중복 탭 방지(서버 정합)
     @State private var deleteBusy = false   // 삭제 요청 중(중복 탭 방지)
     @State private var deleteFailed = false // 서버 삭제 실패 안내
+    @State private var showLogin = false    // 로그인 게이트(참가·채팅)
     @Environment(\.dismiss) private var dismiss
 
     private var isJoined: Bool { store.isJoinedCrew(meetup.id) }
@@ -61,6 +62,9 @@ struct CrewMeetupDetail: View {
         .sheet(isPresented: $showGroupChatGuide) {
             CrewGroupChatGuideSheet(meetup: meetup)
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showLogin) {
+            AppleLoginSheet(message: "모임 참가·채팅은 로그인이 필요해요.") {}
         }
         .sheet(isPresented: $showChat) {
             CrewChatSheet(meetup: meetup)
@@ -303,6 +307,7 @@ struct CrewMeetupDetail: View {
     private var groupChatCard: some View {
         Button {
             Haptics.selection()
+            guard LoginGate.ready() else { showLogin = true; return }   // 로그인 필수(신상 특정)
             // 누구나 채팅 가능(참석 희망자·이웃 코디네이션). 미참가 상태면 채팅 입장과 함께 자동 참가
             // 처리해 알림 대상에 포함시킨다(crew_meetup_join). 호스트는 이미 참가 상태.
             if !isJoined {
@@ -388,6 +393,7 @@ struct CrewMeetupDetail: View {
                     fill: isFull ? AppColors.surface3 : (isJoined ? AppColors.ink3 : AppColors.primary),
                     action: {
                         guard !joinBusy else { return }
+                        guard LoginGate.ready() else { showLogin = true; return }   // 로그인 필수
                         Haptics.selection()
                         let willJoin = !isJoined
                         store.toggleJoinCrew(meetup.id)

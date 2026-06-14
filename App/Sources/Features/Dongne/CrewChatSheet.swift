@@ -83,7 +83,7 @@ struct CrewChatSheet: View {
                                 .frame(maxWidth: .infinity).padding(.vertical, Spacing.s4)
                         }
                         ForEach(messages) { msg in
-                            CrewChatBubble(text: msg.text, isMe: msg.mine)
+                            CrewChatBubble(text: msg.text, isMe: msg.mine, author: msg.author)
                         }
 
                         // 안전 안내 뱃지
@@ -267,12 +267,18 @@ struct CrewChatSheet: View {
 private struct CrewChatBubble: View {
     let text: String
     let isMe: Bool
+    var author: String? = nil
 
     var body: some View {
-        HStack {
+        HStack(alignment: .top) {
             if isMe { Spacer(minLength: 48) }
 
-            Text(text)
+            VStack(alignment: isMe ? .trailing : .leading, spacing: 2) {
+                if !isMe, let author, !author.isEmpty {
+                    Text(author).font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                        .padding(.leading, 2)
+                }
+                Text(text)
                 .font(.system(size: 14.5, weight: .regular))
                 .foregroundStyle(isMe ? Color.white : AppColors.ink)
                 .lineSpacing(2)
@@ -288,6 +294,7 @@ private struct CrewChatBubble: View {
                             .stroke(AppColors.line, lineWidth: 1)
                     }
                 }
+            }   // VStack
 
             if !isMe { Spacer(minLength: 48) }
         }

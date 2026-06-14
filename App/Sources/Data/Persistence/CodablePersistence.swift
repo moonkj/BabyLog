@@ -7,18 +7,23 @@ struct ChatMessage: Identifiable, Codable, Equatable, Hashable {
     var text: String
     var mine: Bool
     var date: Date = Date()
+    /// 작성자 표시명(닉네임) — 단체 채팅에서 '누가 썼는지' 표시용. 작성자 식별자(신고용).
+    var author: String? = nil
+    var authorId: String? = nil
 }
 
 // 하위 호환 디코딩 — 신규 키 추가/누락에도 전체 상태 디코딩이 깨지지 않게(decodeIfPresent+기본값).
 // ⚠️ 정책: 영속되는 모든 중첩 모델은 이 패턴을 따른다(필드 추가 시 구 저장파일 keyNotFound → 전체 데이터 소실 방지).
 extension ChatMessage {
-    enum CodingKeys: String, CodingKey { case id, text, mine, date }
+    enum CodingKeys: String, CodingKey { case id, text, mine, date, author, authorId }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id   = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
         text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
         mine = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? false
         date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        author = try c.decodeIfPresent(String.self, forKey: .author)
+        authorId = try c.decodeIfPresent(String.self, forKey: .authorId)
     }
 }
 

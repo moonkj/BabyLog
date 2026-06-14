@@ -10,6 +10,7 @@ struct CrewGroupDetail: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showChat = false
     @State private var joinBusy = false
+    @State private var showLogin = false   // 로그인 게이트(가입·채팅)
 
     private var isJoined: Bool { store.isJoinedGroup(group.id) }
     private var memberCount: Int { group.memberCount + (isJoined ? 1 : 0) }
@@ -33,6 +34,9 @@ struct CrewGroupDetail: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showChat) {
             CrewGroupChatSheet(group: group).environmentObject(store)
+        }
+        .sheet(isPresented: $showLogin) {
+            AppleLoginSheet(message: "그룹 가입·채팅은 로그인이 필요해요.") {}
         }
     }
 
@@ -111,6 +115,7 @@ struct CrewGroupDetail: View {
     private var bottomBar: some View {
         Button {
             guard !joinBusy else { return }
+            guard LoginGate.ready() else { showLogin = true; return }   // 로그인 필수(신상 특정)
             let willJoin = !isJoined
             Haptics.light()
             store.toggleJoinGroup(group.id)
@@ -210,11 +215,16 @@ struct CrewGroupChatSheet: View {
     @ViewBuilder private func bubble(_ m: ChatMessage) -> some View {
         HStack {
             if m.mine { Spacer(minLength: 40) }
-            Text(m.text)
-                .font(.system(size: 14)).foregroundStyle(m.mine ? .white : AppColors.ink)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(m.mine ? AppColors.primary : AppColors.surface2,
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            VStack(alignment: m.mine ? .trailing : .leading, spacing: 2) {
+                if !m.mine, let name = m.author, !name.isEmpty {
+                    Text(name).font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                }
+                Text(m.text)
+                    .font(.system(size: 14)).foregroundStyle(m.mine ? .white : AppColors.ink)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(m.mine ? AppColors.primary : AppColors.surface2,
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
             if !m.mine { Spacer(minLength: 40) }
         }
     }

@@ -171,6 +171,7 @@ struct CrewScreen: View {
     @EnvironmentObject private var store: AppStore
     @State private var isActive: Bool = true   // 로컬 기능 활성 (콜드스타트는 토글로 미리보기)
     @State private var showCreate = false
+    @State private var showLogin = false
     @State private var refreshTick = 0          // 모임 생성 후 활성 화면 재로드 트리거
 
     var body: some View {
@@ -186,10 +187,13 @@ struct CrewScreen: View {
             #endif
         }
         .background(AppColors.canvas.ignoresSafeArea())
-        // 공용 글래스 FAB — 모임 만들기 (모양·위치는 전 화면 공유, 기능만 다름)
-        .appFAB { if isActive { Haptics.light(); showCreate = true } }
+        // 공용 글래스 FAB — 모임 만들기 (로그인 필수: 신상 특정)
+        .appFAB { if isActive { Haptics.light(); if LoginGate.ready() { showCreate = true } else { showLogin = true } } }
         .sheet(isPresented: $showCreate) {
             CrewCreateSheet().environmentObject(store).presentationDetents([.large])
+        }
+        .sheet(isPresented: $showLogin) {
+            AppleLoginSheet(message: "모임 만들기는 로그인이 필요해요.") { showCreate = true }
         }
         .onChange(of: showCreate) { _, open in if !open { refreshTick += 1 } }
     }
@@ -226,6 +230,7 @@ private struct CrewActiveContent: View {
     @EnvironmentObject private var store: AppStore
     @ObservedObject private var location = NearbyLocationProvider.shared
     @State private var showWrite = false
+    @State private var showLogin = false   // 로그인 게이트(글쓰기·그룹 만들기)
     @State private var selectedPost: CrewPost?
     @State private var showAllMeetups = false
     @State private var showAllGroups = false
@@ -300,6 +305,9 @@ private struct CrewActiveContent: View {
             }
         }
         .refreshable { await loadCrew() }
+        .sheet(isPresented: $showLogin) {
+            AppleLoginSheet(message: "글쓰기·그룹 만들기는 로그인이 필요해요.") {}
+        }
         .sheet(isPresented: $showWrite) {
             CrewPostWriteSheet()
                 .environmentObject(store)
@@ -381,7 +389,7 @@ private struct CrewActiveContent: View {
 
             // 그룹 개설 (서버 연동 시에만 — 로컬 목업 모드에선 숨김)
             if SupabaseConfig.isConfigured {
-                Button { Haptics.light(); showCreateGroup = true } label: {
+                Button { Haptics.light(); if LoginGate.ready() { showCreateGroup = true } else { showLogin = true } } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "plus.circle.fill").font(.system(size: 15, weight: .semibold))
                         Text("우리 또래 그룹 만들기").font(.system(size: 14, weight: .bold))
@@ -504,7 +512,7 @@ private struct CrewActiveContent: View {
                 )
                 Button {
                     Haptics.light()
-                    showWrite = true
+                    if LoginGate.ready() { showWrite = true } else { showLogin = true }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "square.and.pencil").font(.system(size: 13, weight: .bold))

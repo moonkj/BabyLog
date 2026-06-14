@@ -446,6 +446,7 @@ enum CrewBackend {
     private struct CrewMessageDTO: Decodable {
         let id: String
         let device_id: String?
+        let author_name: String?
         let body: String?
         let created_at: String?
     }
@@ -454,7 +455,7 @@ enum CrewBackend {
     static func fetchMessages(meetupId: String) async -> [ChatMessage]? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let m = meetupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
-        let select = "id,device_id,body,created_at"
+        let select = "id,device_id,author_name,body,created_at"
         guard let url = URL(string: "\(base)/rest/v1/crew_meetup_message?meetup_id=eq.\(m)&select=\(select)&order=created_at.asc&limit=300") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
@@ -476,7 +477,8 @@ enum CrewBackend {
                 id: d.id,
                 text: d.body ?? "",
                 mine: d.device_id == me,
-                date: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date()
+                date: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date(),
+                author: d.author_name, authorId: d.device_id
             )
         }
     }
@@ -520,7 +522,7 @@ enum CrewBackend {
     static func fetchGroupMessages(groupId: String) async -> [ChatMessage]? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let g = groupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
-        let select = "id,device_id,body,created_at"
+        let select = "id,device_id,author_name,body,created_at"
         guard let url = URL(string: "\(base)/rest/v1/crew_group_message?group_id=eq.\(g)&select=\(select)&order=created_at.asc&limit=300") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
@@ -533,7 +535,8 @@ enum CrewBackend {
         let isoPlain = ISO8601DateFormatter()
         return dtos.map { d in
             ChatMessage(id: d.id, text: d.body ?? "", mine: d.device_id == me,
-                        date: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date())
+                        date: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date(),
+                        author: d.author_name, authorId: d.device_id)
         }
     }
 

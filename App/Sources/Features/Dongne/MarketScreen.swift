@@ -279,6 +279,7 @@ struct MarketScreen: View {
     @ObservedObject private var location = NearbyLocationProvider.shared
     @State private var selectedCategory: MarketCategory = .all
     @State private var showSellSheet: Bool = false
+    @State private var showLogin: Bool = false
     @State private var sharedItems: [MarketItem]? = nil
     @State private var didLoad = false
     @State private var loadFailed = false
@@ -385,12 +386,15 @@ struct MarketScreen: View {
         }
         .background(AppColors.canvas.ignoresSafeArea())
         .refreshable { await loadItems() }
-        // 공용 글래스 FAB — 팔기 (모양·위치는 전 화면 공유, 기능만 다름)
-        .appFAB { Haptics.light(); showSellSheet = true }
+        // 공용 글래스 FAB — 팔기 (로그인 필수: 신상 특정)
+        .appFAB { Haptics.light(); if LoginGate.ready() { showSellSheet = true } else { showLogin = true } }
         .sheet(isPresented: $showSellSheet) {
             MkSellFlowSheet()
                 .environmentObject(store)
                 .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showLogin) {
+            AppleLoginSheet(message: "매물 등록은 로그인이 필요해요.") { showSellSheet = true }
         }
         .task(id: city) { didLoad = false; loadFailed = false; await loadItems() }
         .onChange(of: showSellSheet) { _, open in if !open { Task { await loadItems() } } }

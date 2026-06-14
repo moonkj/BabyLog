@@ -33,6 +33,7 @@ struct MarketItemDetail: View {
     @State private var showConfirmPrompt = false         // 구매자: 거래 확인 알람
     @State private var heroFull: UIImage? = nil          // 사진 전체화면
     @State private var readTick = 0                       // 읽음 표시 갱신 트리거
+    @State private var showLogin = false                 // 로그인 게이트(채팅·구매)
     @Environment(\.dismiss) private var dismiss
 
     // MARK: 채팅 안 읽음(로컬 추적) — 스레드 최신 메시지가 마지막 확인 이후면 '안 읽음'.
@@ -149,8 +150,8 @@ struct MarketItemDetail: View {
                     set: { _ in store.toggleMarketSaved(displayItem) }   // 스냅샷 저장(관심 목록 보존)
                 ),
                 isMine: liveItem.mine,
-                onChat: { showChatSheet = true },
-                onBuy: { showBuySheet = true },
+                onChat: { if LoginGate.ready() { showChatSheet = true } else { showLogin = true } },
+                onBuy: { if LoginGate.ready() { showBuySheet = true } else { showLogin = true } },
                 onThreads: { markThreadsSeen(); showThreads = true },
                 threadCount: unreadThreadCount
             )
@@ -210,6 +211,9 @@ struct MarketItemDetail: View {
             Button("확인", role: .cancel) { }
         } message: {
             Text("네트워크 문제로 판매 상태를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.")
+        }
+        .sheet(isPresented: $showLogin) {
+            AppleLoginSheet(message: "채팅·구매는 로그인이 필요해요.") {}
         }
         // 사진 전체화면
         .fullScreenCover(item: Binding(
