@@ -57,6 +57,17 @@ create table if not exists public.crew_meetup_message (
 );
 create index if not exists crew_meetup_message_idx on public.crew_meetup_message (meetup_id, created_at);
 
+-- 또래 그룹 채팅 (가입자 대화). 개인정보 비저장: 익명 기기ID + 닉네임 + 본문.
+create table if not exists public.crew_group_message (
+    id          uuid primary key default gen_random_uuid(),
+    group_id    uuid not null references public.crew_group(id) on delete cascade,
+    device_id   text not null,
+    author_name text,
+    body        text not null,
+    created_at  timestamptz not null default now()
+);
+create index if not exists crew_group_message_idx on public.crew_group_message (group_id, created_at);
+
 -- ───────── 게시판 ─────────
 create table if not exists public.crew_post (
     id          uuid primary key default gen_random_uuid(),
@@ -94,7 +105,7 @@ declare t text;
 begin
   foreach t in array array[
     'crew_group','crew_group_member','crew_meetup','crew_meetup_join',
-    'crew_meetup_message','crew_post','crew_post_like','crew_post_reply'
+    'crew_meetup_message','crew_group_message','crew_post','crew_post_like','crew_post_reply'
   ] loop
     execute format('alter table public.%I enable row level security;', t);
     execute format('drop policy if exists %I_all on public.%I;', t, t);

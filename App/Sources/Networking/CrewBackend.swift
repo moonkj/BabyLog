@@ -497,6 +497,45 @@ enum CrewBackend {
         return true
     }
 
+    // MARK: - 그룹 채팅(가입자 공유)
+
+    /// 그룹 채팅 메시지 시간순 조회. 미구성/실패 시 nil.
+    static func fetchGroupMessages(groupId: String) async -> [ChatMessage]? {
+        guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let g = groupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+        let select = "id,device_id,body,created_at"
+        guard let url = URL(string: "\(base)/rest/v1/crew_group_message?group_id=eq.\(g)&select=\(select)&order=created_at.asc&limit=300") else { return nil }
+        var req = URLRequest(url: url); req.timeoutInterval = 10
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dtos = try? JSONDecoder().decode([CrewMessageDTO].self, from: data) else { return nil }
+        let me = await SupabaseConfig.ownerID()
+        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoPlain = ISO8601DateFormatter()
+        return dtos.map { d in
+            ChatMessage(id: d.id, text: d.body ?? "", mine: d.device_id == me,
+                        date: d.created_at.flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } ?? Date())
+        }
+    }
+
+    /// 그룹 채팅 전송. 성공 true.
+    @discardableResult
+    static func sendGroupMessage(groupId: String, body: String, authorName: String) async -> Bool {
+        let t = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard SupabaseConfig.isConfigured, !t.isEmpty,
+              var req = await request("/rest/v1/crew_group_message", method: "POST") else { return false }
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "group_id": groupId, "device_id": await SupabaseConfig.ownerID(),
+            "author_name": cap(authorName, Cap.name), "body": cap(t, Cap.body),
+        ])
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
     // MARK: - 게시판 좋아요·댓글(동네 공유)
 
     private struct CrewReplyDTO: Decodable { let id: String; let body: String? }

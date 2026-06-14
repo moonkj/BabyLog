@@ -76,7 +76,7 @@ struct CrewMeetup: Identifiable, Hashable, Codable {
     var createdAt: Date = Date()
 }
 
-struct CrewGroup: Identifiable {
+struct CrewGroup: Identifiable, Hashable {
     let id: String
     let name: String
     let memberCount: Int
@@ -353,6 +353,9 @@ private struct CrewActiveContent: View {
         .navigationDestination(for: CrewMeetup.self) { meetup in
             CrewMeetupDetail(meetup: meetup)
         }
+        .navigationDestination(for: CrewGroup.self) { group in
+            CrewGroupDetail(group: group)
+        }
     }
 
     // MARK: 비슷한 또래 크루
@@ -370,7 +373,8 @@ private struct CrewActiveContent: View {
                 emptyGroupNotice
             } else {
                 ForEach(groups.prefix(sectionLimit)) { group in
-                    CrewGroupCard(group: group, onToggle: { join in syncGroupJoin(group.id, join: join) })
+                    NavigationLink(value: group) { CrewGroupCard(group: group) }
+                        .buttonStyle(PlainButtonStyle())
                         .padding(.horizontal, Spacing.s5)
                 }
             }
@@ -586,7 +590,8 @@ private struct CrewGroupListScreen: View {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: Spacing.s3) {
                     ForEach(groups) { group in
-                        CrewGroupCard(group: group, onToggle: { join in onToggle(group.id, join) })
+                        NavigationLink(value: group) { CrewGroupCard(group: group) }
+                            .buttonStyle(PlainButtonStyle())
                             .padding(.horizontal, Spacing.s5)
                     }
                 }
@@ -595,6 +600,7 @@ private struct CrewGroupListScreen: View {
             .background(AppColors.canvas.ignoresSafeArea())
             .navigationTitle("비슷한 또래 크루")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: CrewGroup.self) { group in CrewGroupDetail(group: group) }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기") { dismiss() } } }
         }
     }
@@ -731,7 +737,6 @@ private struct CrewMeetupCard: View {
 private struct CrewGroupCard: View {
     @EnvironmentObject private var store: AppStore
     let group: CrewGroup
-    var onToggle: (Bool) -> Void = { _ in }
     private var isJoined: Bool { store.isJoinedGroup(group.id) }
     // group.memberCount는 "나 제외"(서버 fetch 시 본인을 뺌) → 가입 시 +1.
     private var memberCount: Int { group.memberCount + (isJoined ? 1 : 0) }
@@ -776,25 +781,19 @@ private struct CrewGroupCard: View {
 
                 Spacer(minLength: 0)
 
-                // 가입 토글
-                Button {
-                    Haptics.selection()
-                    let willJoin = !isJoined
-                    store.toggleJoinGroup(group.id)
-                    onToggle(willJoin)
-                } label: {
-                    Text(isJoined ? "가입중" : "가입")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(isJoined ? AppColors.ink2 : Color.white)
-                        .padding(.horizontal, Spacing.s4).frame(height: 44)
-                        .background(isJoined ? AppColors.surface2 : AppColors.primary,
-                                    in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                // 가입 상태 + 입장 안내(가입/채팅은 상세에서)
+                VStack(spacing: 3) {
+                    if isJoined {
+                        Text("가입중").font(.system(size: 11, weight: .heavy)).foregroundStyle(AppColors.primary)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(AppColors.primarySoft, in: Capsule())
+                    }
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(AppColors.ink3)
                 }
-                .buttonStyle(LiquidPressStyle(scale: 0.94))
-                .accessibilityLabel(isJoined ? "\(group.name) 가입 취소" : "\(group.name) 가입")
             }
         }
-        .accessibilityElement(children: .contain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(group.name), \(memberCount)명, \(group.ageRange). \(isJoined ? "가입중. " : "")탭하면 그룹 입장")
     }
 }
 
