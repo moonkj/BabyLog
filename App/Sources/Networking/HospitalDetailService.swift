@@ -13,7 +13,7 @@ enum HospitalDetailService {
 
     /// 현재 영업 중 여부. 응급실(주/야간) 또는 해당 요일 진료시간 기준.
     /// - Returns: 영업중 true / 영업종료 false / 조회 실패·시간 데이터 전무(미확인) nil
-    static func isOpenNow(ykiho: String, at date: Date = Date()) async -> Bool? {
+    static func isOpenNow(ykiho: String, at date: Date = Date(), emergencyCounts: Bool = true) async -> Bool? {
         guard let key = APIConfig.key(APIConfig.hiraKeyName), !ykiho.isEmpty else { return nil }
         // LiveProviders와 동일한 패턴 — URLComponents + queryItems로 일관 인코딩.
         // (키를 문자열에 직접 보간하면 +/%/= 포함 키가 한쪽 경로에서만 깨진다.)
@@ -40,7 +40,7 @@ enum HospitalDetailService {
            !(200...299).contains(http.statusCode) { return nil }
         guard let resp = try? JSONDecoder().decode(HIRADetailResponse.self, from: data),
               let item = resp.response?.body?.items?.item?.first else { return nil }
-        return item.isOpen(at: date)
+        return item.isOpen(at: date, emergencyCounts: emergencyCounts)
     }
 }
 
@@ -138,23 +138,33 @@ struct HIRADetailItem: Decodable {
 
     /// 영업 판정. 시간 데이터가 전무한 기관은 '영업종료'(false)가 아니라 '미확인'(nil) —
     /// 데이터 없음을 확정 종료로 단정하면 실제 영업 중인 곳을 닫힌 곳으로 오표시한다.
-    func isOpen(at date: Date) -> Bool? {
-        // 시간 관련 필드가 하나도 없으면 판정 불가 → nil(미확인)
-        let hourFields = [trmtMonStart, trmtMonEnd, trmtTueStart, trmtTueEnd,
-                          trmtWedStart, trmtWedEnd, trmtThuStart, trmtThuEnd,
-                          trmtFriStart, trmtFriEnd, trmtSatStart, trmtSatEnd,
-                          trmtSunStart, trmtSunEnd,
-                          emyDayStart, emyDayEnd, emyNgtStart, emyNgtEnd]
-        let hasAnyData = emyDayYn == "Y" || emyNgtYn == "Y" || hourFields.contains { hhmm($0) != nil }
+    /// - Parameter emergencyCounts: 응급실 운영을 '영업중'으로 칠지. 외래(소아과 진료) 관점에선
+    ///   false로 — 24시간 응급실만 있고 외래는 닫힌 종합병원이 '영업중'으로 오표시되던 문제 방지.
+    ///   (응급 화면에선 true로 응급실 운영도 '열림'으로 본다.)
+    func isOpen(at date: Date, emergencyCounts: Bool = true) -> Bool? {
+        // 외래(요일별 진료) 시간 필드
+        let outpatientFields = [trmtMonStart, trmtMonEnd, trmtTueStart, trmtTueEnd,
+                                trmtWedStart, trmtWedEnd, trmtThuStart, trmtThuEnd,
+                                trmtFriStart, trmtFriEnd, trmtSatStart, trmtSatEnd,
+                                trmtSunStart, trmtSunEnd]
+        let hasOutpatient = outpatientFields.contains { hhmm($0) != nil }
+        let hasEmergency = emyDayYn == "Y" || emyNgtYn == "Y"
+            || [emyDayStart, emyDayEnd, emyNgtStart, emyNgtEnd].contains { hhmm($0) != nil }
+        // 판정에 쓸 데이터가 없으면 미확인(nil). 외래 관점(emergencyCounts=false)이면 외래 데이터만 본다.
+        let hasAnyData = hasOutpatient || (emergencyCounts && hasEmergency)
         guard hasAnyData else { return nil }
         // 한국 의료기관의 영업시간이므로 KST 고정 — 해외 체류 중 현지 시각으로 오판하지 않게.
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "Asia/Seoul") ?? cal.timeZone
         let now = cal.component(.hour, from: date) * 100 + cal.component(.minute, from: date)
-        // 응급실(야간/주간) — 24시간 응급이면 항상 열림
-        if emyDayYn == "Y" && emyNgtYn == "Y" { return true }
-        if emyNgtYn == "Y", inRange(now, hhmm(emyNgtStart), hhmm(emyNgtEnd)) { return true }
-        if emyDayYn == "Y", inRange(now, hhmm(emyDayStart), hhmm(emyDayEnd)) { return true }
+        // 응급실(야간/주간) — 응급 관점일 때만 '열림'으로 반영
+        if emergencyCounts {
+            if emyDayYn == "Y" && emyNgtYn == "Y" { return true }   // 24시간 응급
+            if emyNgtYn == "Y", inRange(now, hhmm(emyNgtStart), hhmm(emyNgtEnd)) { return true }
+            if emyDayYn == "Y", inRange(now, hhmm(emyDayStart), hhmm(emyDayEnd)) { return true }
+        }
+        // 외래 데이터가 없으면(응급만 있는 곳) 외래 관점에선 미확인 — '닫힘' 단정 금지.
+        if !hasOutpatient { return emergencyCounts ? false : nil }
         // 요일별 정규 진료시간
         let weekday = cal.component(.weekday, from: date)   // 1=일 … 7=토
         let (st, en): (String?, String?)

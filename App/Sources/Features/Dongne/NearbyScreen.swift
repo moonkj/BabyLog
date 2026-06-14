@@ -518,7 +518,9 @@ struct NearbyScreen: View {
         openLoading = true
         await withTaskGroup(of: (String, Bool?).self) { group in
             for h in targets {
-                group.addTask { (h.id, await HospitalDetailService.isOpenNow(ykiho: h.id)) }
+                // 소아과 외래 관점 — 24시간 응급실만 있고 외래는 닫힌 종합병원을 '영업중'으로
+                // 오표시하지 않게 응급실은 영업 판정에서 제외(emergencyCounts: false).
+                group.addTask { (h.id, await HospitalDetailService.isOpenNow(ykiho: h.id, emergencyCounts: false)) }
             }
             for await (id, open) in group {
                 guard selectedCategory == category else { return }   // 카테고리 바뀌면 중단
