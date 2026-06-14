@@ -4,7 +4,6 @@
 // 이미지는 R2 공개 베이스(Secrets R2_PUBLIC_BASE, CDN/r2.dev 연결 후 점등) + 키로 구성.
 
 import SwiftUI
-import PhotosUI
 
 struct FamilyFeedScreen: View {
     @ObservedObject private var auth = AuthStore.shared
@@ -13,8 +12,6 @@ struct FamilyFeedScreen: View {
     @State private var posts: [BLFeedPost] = []
     @State private var loading = true
     @State private var busy = false
-    @State private var pickerItem: PhotosPickerItem?
-    @State private var caption = ""
     @State private var errorMsg: String?
 
     private var myUid: String? { auth.userId }
@@ -32,7 +29,7 @@ struct FamilyFeedScreen: View {
         .background(AppColors.canvas.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .onChange(of: pickerItem) { _, item in if item != nil { Task { await upload() } } }
+        .refreshable { await load() }
         .alert("가족 보관함", isPresented: Binding(get: { errorMsg != nil }, set: { if !$0 { errorMsg = nil } })) {
             Button("확인", role: .cancel) {}
         } message: { Text(errorMsg ?? "") }
@@ -56,10 +53,9 @@ struct FamilyFeedScreen: View {
         } else if family == nil {
             createFamilyCard
         } else {
-            composeBar
             if posts.isEmpty {
-                BLEmptyState(icon: "photo.on.rectangle.angled", title: "첫 사진을 올려보세요",
-                             message: "위 ‘사진 올리기’로 가족과 나눌 첫 순간을 담아요.")
+                BLEmptyState(icon: "photo.on.rectangle.angled", title: "기록하면 여기 모여요",
+                             message: "기록 탭에서 사진을 올리면 가족 보관함에 자동으로 공유돼요. 가족이 하트·댓글로 함께해요.")
             } else {
                 ForEach(posts) { post in postCard(post) }
             }
@@ -81,25 +77,6 @@ struct FamilyFeedScreen: View {
                         .frame(maxWidth: .infinity).frame(height: 50)
                         .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                 }.buttonStyle(LiquidPressStyle(scale: 0.98)).disabled(busy)
-            }
-        }
-    }
-
-    private var composeBar: some View {
-        BLCard {
-            VStack(alignment: .leading, spacing: Spacing.s3) {
-                TextField("한 줄 메모 (선택)", text: $caption)
-                    .font(AppFont.body).padding(.horizontal, Spacing.s3).frame(height: 44)
-                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
-                    HStack(spacing: Spacing.s2) {
-                        if busy { ProgressView().tint(.white) }
-                        Image(systemName: "photo.badge.plus"); Text(busy ? "올리는 중…" : "사진 올리기")
-                    }
-                    .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                }.disabled(busy)
             }
         }
     }
@@ -162,18 +139,6 @@ struct FamilyFeedScreen: View {
         family = await FamilyFeedBackend.myFamily()
         if let f = family { posts = await FamilyFeedBackend.fetchFeed(familyId: f.id) }
         loading = false
-    }
-
-    private func upload() async {
-        guard let f = family, let item = pickerItem else { return }
-        busy = true; defer { busy = false; pickerItem = nil }
-        guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
-            errorMsg = "사진을 불러오지 못했어요."; return
-        }
-        let ok = await FamilyFeedBackend.createPhotoPost(familyId: f.id, image: img,
-                                                         caption: caption, childLabel: nil)
-        if ok { caption = ""; posts = await FamilyFeedBackend.fetchFeed(familyId: f.id) }
-        else { errorMsg = "올리지 못했어요. (Pro 권한·네트워크 확인)" }
     }
 
     private func toggleHeart(_ post: BLFeedPost, to on: Bool) async {

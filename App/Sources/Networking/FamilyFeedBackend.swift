@@ -99,17 +99,34 @@ enum FamilyFeedBackend {
         return posts
     }
 
-    /// 사진 포스트 작성: 압축 → R2 업로드(Edge presigned) → bl_feed_post + bl_post_media 기록.
+    /// 기록→가족 자동 공유: 가족이 없으면 만들고, 한 기록의 사진들을 한 포스트로 올린다.
+    /// (기록 탭에서 사진을 저장하면 Pro 사용자는 이 경로로 가족 피드에 자동 게시)
     @discardableResult
-    static func createPhotoPost(familyId: String, image: UIImage,
+    static func shareRecordToFamily(images: [UIImage], caption: String?, childLabel: String?) async -> Bool {
+        guard !images.isEmpty else { return false }
+        var fam = await myFamily()
+        if fam == nil { fam = await createFamily(name: "우리 가족") }
+        guard let f = fam else { return false }
+        return await createPhotoPost(familyId: f.id, images: images, caption: caption, childLabel: childLabel)
+    }
+
+    /// 사진 포스트 작성: (사진들) 압축 → R2 업로드(Edge presigned) → bl_feed_post 1개 + bl_post_media N개.
+    /// 한 기록(한 순간)이 사진 여러 장이어도 피드에선 한 포스트(여러 미디어).
+    @discardableResult
+    static func createPhotoPost(familyId: String, images: [UIImage],
                                 caption: String?, childLabel: String?) async -> Bool {
-        guard let uid = await AuthStore.shared.userId else { return false }
-        // 1) 압축(긴변 1280, jpeg 0.7) — 풀화질 백업은 추후 옵션, 피드용은 경량.
-        guard let data = compressedJPEG(image, maxDimension: 1280, quality: 0.7) else { return false }
-        // 2) R2 업로드 키 발급(Edge) + 직접 PUT
-        guard let key = await uploadToR2(familyId: familyId, data: data,
-                                         ext: "jpg", contentType: "image/jpeg") else { return false }
-        // 3) 포스트 행 생성 — id를 클라에서 생성(return=representation 금지: 되읽기 RLS 42501 회피)
+        guard let uid = await AuthStore.shared.userId, !images.isEmpty else { return false }
+        // 1) 모든 사진 압축(긴변 1280, jpeg 0.7) → R2 업로드. 실패분은 건너뜀.
+        //    포스트보다 먼저 업로드해 R2 실패(비Pro/네트워크) 시 고아 포스트가 안 생기게 한다.
+        var keys: [String] = []
+        for image in images.prefix(5) {
+            guard let data = compressedJPEG(image, maxDimension: 1280, quality: 0.7),
+                  let key = await uploadToR2(familyId: familyId, data: data,
+                                             ext: "jpg", contentType: "image/jpeg") else { continue }
+            keys.append(key)
+        }
+        guard !keys.isEmpty else { return false }
+        // 2) 포스트 행 생성 — id를 클라에서 생성(return=representation 금지: 되읽기 RLS 42501 회피)
         let postId = UUID().uuidString
         guard var preq = await rest("/bl_feed_post", method: "POST") else { return false }
         preq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
@@ -119,15 +136,18 @@ enum FamilyFeedBackend {
         preq.httpBody = try? JSONSerialization.data(withJSONObject: postBody)
         guard let (_, presp) = try? await URLSession.shared.data(for: preq),
               let phttp = presp as? HTTPURLResponse, (200...299).contains(phttp.statusCode) else { return false }
-        // 4) 미디어 행 기록(키만)
-        guard var mreq = await rest("/bl_post_media", method: "POST") else { return false }
-        mreq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
-        mreq.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "post_id": postId, "family_id": familyId, "kind": "photo", "r2_key": key,
-        ])
-        guard let (_, mresp) = try? await URLSession.shared.data(for: mreq),
-              let mhttp = mresp as? HTTPURLResponse, (200...299).contains(mhttp.statusCode) else { return false }
-        return true
+        // 3) 미디어 행 기록(키만)
+        var anyMedia = false
+        for key in keys {
+            guard var mreq = await rest("/bl_post_media", method: "POST") else { continue }
+            mreq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+            mreq.httpBody = try? JSONSerialization.data(withJSONObject: [
+                "post_id": postId, "family_id": familyId, "kind": "photo", "r2_key": key,
+            ])
+            if let (_, mresp) = try? await URLSession.shared.data(for: mreq),
+               let mhttp = mresp as? HTTPURLResponse, (200...299).contains(mhttp.statusCode) { anyMedia = true }
+        }
+        return anyMedia
     }
 
     // MARK: - 하트 / 댓글

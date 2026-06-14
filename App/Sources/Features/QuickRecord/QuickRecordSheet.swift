@@ -453,6 +453,9 @@ struct QuickRecordSheet: View {
         .accessibilityLabel("\(label) 입력")
     }
 
+    /// Pro 가족 피드가 켜져 있고 로그인 상태인지 — 토글 문구·기본값·자동 게시 분기 기준.
+    private var proFeedActive: Bool { AppFeatures.proFamilyFeed && AuthStore.shared.isLoggedIn }
+
     // 가족(조부모) 공유 토글 — 육아 모드 + 미디어 있을 때만. 저장 직후 공유 앨범에 추가.
     @ViewBuilder
     private var familyShareToggle: some View {
@@ -467,11 +470,19 @@ struct QuickRecordSheet: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("가족과 공유")
                         .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                    Text("저장 후 조부모님 공유 앨범에 바로 추가")
+                    Text(proFeedActive ? "가족 보관함에 자동 게시 (하트·댓글로 함께)"
+                                       : "저장 후 조부모님 공유 앨범에 바로 추가")
                         .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
                 }
                 Spacer(minLength: 0)
                 Toggle("", isOn: $shareToFamily).labelsHidden().tint(AppColors.primary)
+            }
+            // Pro(로그인)면 기본 ON — "기록하면 가족과 자동 공유". 사용자가 끄면 그 기록만 비공개.
+            .onAppear {
+                if proFeedActive, !UserDefaults.standard.bool(forKey: "bl_quickshare_family_proinit") {
+                    shareToFamily = true
+                    UserDefaults.standard.set(true, forKey: "bl_quickshare_family_proinit")
+                }
             }
             .padding(.horizontal, Spacing.s3).padding(.vertical, Spacing.s2)
             .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
@@ -616,6 +627,10 @@ struct QuickRecordSheet: View {
     private func handleSave() {
         // 이 저장으로 실제 무언가가 기록되었는지 추적 (성공 위장 금지 — 정직 원칙)
         var didSave = false
+        // Pro 가족 피드 자동 공유용 캡처(육아 모드 + 사진 + 공유 ON + 로그인일 때만 채움)
+        var feedImages: [UIImage] = []
+        var feedCaption: String? = nil
+        var feedChild: String? = nil
 
         if mode == .pregnancy {
             // 임신 모드: 배 사진 + 산모 체중을 활성 임신 기록에 저장
@@ -656,6 +671,20 @@ struct QuickRecordSheet: View {
                     didSave = true
                 }
                 pendingShareURLs = (shareToFamily && hasMedia) ? shareURLs : []
+                // Pro + 로그인 + 사진 공유 ON → 이 기록의 사진을 가족 피드(서버)로 자동 게시할 준비.
+                if shareToFamily, !selectedImages.isEmpty,
+                   AppFeatures.proFamilyFeed, AuthStore.shared.isLoggedIn {
+                    feedImages = selectedImages
+                    feedChild = store.selectedChild?.name
+                    feedCaption = {
+                        switch (milestoneText, trimmedMemo.isEmpty) {
+                        case let (ms?, false): return "\(ms) · \(trimmedMemo)"
+                        case let (ms?, true):  return ms
+                        case (nil, false):     return trimmedMemo
+                        case (nil, true):      return nil
+                        }
+                    }()
+                }
             }
             // 키·몸무게 입력값이 하나라도 있으면 GrowthRecord 기록
             // (showDetail 여부가 아니라 실제 입력 여부로 판단 — 상세를 접어도 입력값 누락 없음)
@@ -701,9 +730,16 @@ struct QuickRecordSheet: View {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
             savedOverlay = true
         }
-        // 2탭(1.6s): 오버레이 표시 후 — 가족 공유 ON이면 공유 시트를 띄우고, 아니면 닫기.
+        // 2탭(1.6s): 오버레이 표시 후 —
+        //  · Pro(로그인): 이 기록 사진을 가족 피드(서버)로 백그라운드 자동 게시 → 바로 닫기.
+        //  · 무료: 기존 iCloud 공유 앨범 시트.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-            if mode == .baby, shareToFamily, !pendingShareURLs.isEmpty {
+            if !feedImages.isEmpty {
+                let imgs = feedImages, cap = feedCaption, child = feedChild
+                Task { await FamilyFeedBackend.shareRecordToFamily(images: imgs, caption: cap, childLabel: child) }
+                onSave()
+                onClose()
+            } else if mode == .baby, shareToFamily, !pendingShareURLs.isEmpty {
                 showFamilyShare = true   // 닫기는 공유 시트 onDismiss에서
             } else {
                 onSave()
