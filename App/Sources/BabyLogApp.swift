@@ -29,6 +29,9 @@ struct BabyLogApp: App {
                 .environmentObject(store)
                 .tint(AppColors.primary)
                 .preferredColorScheme(.light)   // 무조건 라이트(데이) 모드 고정
+                // 접근성: 스케일 폰트(AppFont)가 사용자 글씨 설정에 반응하되, 아직 고정 pt가 남은
+                // 화면이 깨지지 않도록 상한을 둔다(점진 마이그레이션 중 안전장치). 추후 상향 가능.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 .task {
                     store.enableAutoPersist()
                     store.refreshBadgeAwards()   // 첫 실행 시드 / 닫힌 새 획득 감지
