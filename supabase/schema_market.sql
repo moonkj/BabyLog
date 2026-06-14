@@ -148,7 +148,7 @@ create policy market_report_ins on public.market_report for insert to anon, auth
 -- 판매자가 sold_to=구매자로 '판매완료'하면, 그 구매자만 buyer_confirmed=true로 확정 가능.
 -- 컬럼 단위 권한 대신 security definer 함수로 안전하게(다른 필드 위조 차단).
 create or replace function public.market_confirm_trade(p_item uuid)
-returns boolean language plpgsql security definer as $$
+returns boolean language plpgsql security definer set search_path = public as $$
 declare me text;
 begin
   me := coalesce(auth.uid()::text, nullif(current_setting('request.headers', true)::json ->> 'x-device-id',''));
