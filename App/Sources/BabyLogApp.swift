@@ -35,6 +35,7 @@ struct BabyLogApp: App {
                     notifications.start()
                     await flushPendingReports()  // 신고 증거 업로드 — 마켓 탭 재진입에 의존하지 않게
                     await setupNotifications()
+                    await syncPhotoLibrary()     // 사진 앱 자동 저장(켜둔 경우) — 새 사진 보존
                 }
                 // 백그라운드 전환 시 즉시 저장 — debounce(0.5s) 대기 중 강제종료로 마지막 기록이 유실되지 않게.
                 // 포그라운드 복귀 시 미업로드 신고 재시도(증거 서버 보존).
@@ -47,10 +48,17 @@ struct BabyLogApp: App {
                             let snapshot = store.snapshot()
                             Task { try? await CloudSyncService.shared.push(snapshot) }
                         }
+                        Task { await syncPhotoLibrary() }   // 닫을 때 새 사진을 사진 앱에 저장
                     }
                     else if phase == .active { Task { await flushPendingReports() } }
                 }
         }
+    }
+
+    /// 사진 앱 자동 저장 — 켜져 있으면 영구 보존 대상 사진을 사진 앱 앨범에 동기화(이미 저장된 건 건너뜀).
+    private func syncPhotoLibrary() async {
+        guard PhotoLibraryBackup.isEnabled else { return }
+        await PhotoLibraryBackup.sync(refs: store.memoryPhotoRefs())
     }
 
     /// 미업로드 거래 신고(증거)를 서버에 재전송 — 앱 시작/포그라운드 복귀 시점.

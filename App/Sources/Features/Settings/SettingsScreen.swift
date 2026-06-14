@@ -43,6 +43,8 @@ struct SettingsScreen: View {
     @State private var showBackupImporter = false
     @State private var backupBusy = false
     @State private var backupAlert: String? = nil
+    // 사진 앱 자동 저장(본인 iCloud 사진으로 보존)
+    @State private var photoLibBackupOn = PhotoLibraryBackup.isEnabled
     // 운영자 모드 — 버전 10회 탭 → 비밀번호 → 신고 목록
     @State private var versionTaps = 0
     @State private var showAdminPass = false
@@ -611,6 +613,27 @@ struct SettingsScreen: View {
             }
             Divider().overlay(AppColors.line).padding(.leading, 62)
 
+            // 사진 앱 자동 저장 — 등록 사진을 iOS '사진' 앱('베이비로그' 앨범)에 자동 저장.
+            // 본인 iCloud 사진으로 보존돼 앱을 삭제해도 사진이 남는다(우리 서버 X).
+            settingsRow(icon: "photo.on.rectangle.angled", iconBg: AppColors.primarySoft, iconFg: AppColors.primary) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("사진 앱에 자동 저장")
+                            .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Text("등록 사진을 ‘사진’ 앱 ‘베이비로그’ 앨범에 자동 저장 — 앱을 지워도 사진이 남아요")
+                            .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $photoLibBackupOn).labelsHidden()
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("사진 앱에 자동 저장")
+            .onChange(of: photoLibBackupOn) { _, on in togglePhotoLibBackup(on) }
+
+            Divider().overlay(AppColors.line).padding(.leading, 62)
+
             // 전체 백업 내보내기
             Button { handleBackupExport() } label: {
                 settingsRow(icon: "arrow.up.doc.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
@@ -638,6 +661,24 @@ struct SettingsScreen: View {
                     }
                 }
             }.buttonStyle(.plain).disabled(backupBusy).opacity(backupBusy ? 0.5 : 1)
+        }
+    }
+
+    /// 사진 앱 자동 저장 토글 — 켤 때 권한 요청 후 즉시 기존 사진을 일괄 저장. 거부 시 되돌림.
+    private func togglePhotoLibBackup(_ on: Bool) {
+        if on {
+            Task { @MainActor in
+                guard await PhotoLibraryBackup.requestAuthorization() else {
+                    photoLibBackupOn = false
+                    backupAlert = "‘사진’ 앱 추가 권한이 꺼져 있어요. 설정 > 베이비로그 > 사진에서 ‘추가만’을 허용해 주세요."
+                    return
+                }
+                PhotoLibraryBackup.isEnabled = true
+                let n = await PhotoLibraryBackup.sync(refs: store.memoryPhotoRefs())
+                backupAlert = "사진 앱 자동 저장을 켰어요. 기존 사진 \(n)장을 ‘베이비로그’ 앨범에 저장했어요."
+            }
+        } else {
+            PhotoLibraryBackup.isEnabled = false
         }
     }
 

@@ -977,6 +977,16 @@ final class AppStore: ObservableObject {
         pregnancyLogs.removeAll { $0.id == id }
     }
 
+    /// 사진 앱 자동 저장 대상 — 영구 보존 가치가 있는 사진 refs(다이어리·배사진·아이 프로필).
+    /// 마켓 등 일시 사진은 제외(개인 사진 앨범 오염 방지).
+    func memoryPhotoRefs() -> [String] {
+        var refs: [String] = []
+        for e in diaryEntries { refs.append(contentsOf: e.photoRefList) }
+        for log in pregnancyLogs where log.kind == .belly { if let r = log.photoRef, !r.isEmpty { refs.append(r) } }
+        for c in children { if let r = c.profileImageRef, !r.isEmpty { refs.append(r) } }
+        return refs
+    }
+
     /// 다이어리 항목을 삭제한다. 연결된 로컬 사진도 함께 정리한다.
     func deleteDiaryEntry(id: UUID) {
         if let entry = diaryEntries.first(where: { $0.id == id }) {
