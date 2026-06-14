@@ -327,6 +327,12 @@ private struct DiaryTimelineCard: View {
         }
         .onAppear { if fpost == nil { fpost = familyPost } }
         .onChange(of: familyPost) { _, new in if new != nil { fpost = new } }
+        // 배치(familyPosts)가 아직 못 잡은 기록은 카드가 자기 id로 직접 확인 — 자동공유 직후 반영 보장.
+        // 공유 완료 시 store.familyFeedVersion이 증가 → 이 task 재실행 → 새 포스트를 잡아 버튼→하트로 전환.
+        .task(id: store.familyFeedVersion) {
+            guard store.isPro, AuthStore.shared.isLoggedIn, hasPhoto, familyPost == nil else { return }
+            if let p = await FamilyFeedBackend.fetchPost(postId: entry.id.uuidString) { fpost = p }
+        }
         .contextMenu {
             Button { Haptics.light(); showEdit = true } label: {
                 Label("수정", systemImage: "pencil")
