@@ -48,7 +48,8 @@ enum FamilyFeedBackend {
 
     /// 내가 속한 가족(RLS가 멤버인 것만 반환). 첫 가족 반환.
     static func myFamily() async -> BLFamily? {
-        guard let req = await rest("/bl_family?select=*&limit=1", method: "GET") else { return nil }
+        // created_at 오름차순 → 가장 오래된(정규) 가족을 일관되게 선택(고아 가족 여러 개여도 안정).
+        guard let req = await rest("/bl_family?select=*&order=created_at.asc&limit=1", method: "GET") else { return nil }
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let arr = decode(data, [BLFamily].self) else { return nil }
@@ -99,11 +100,17 @@ enum FamilyFeedBackend {
         return posts
     }
 
-    /// 타임라인 매칭용 — 내 가족 피드 전체를 post.id로 색인해 반환(기록 entry.id로 조회).
+    /// 타임라인 매칭용 — 내가 볼 수 있는 모든 포스트를 post.id로 색인(가족 무관).
+    /// RLS가 내 가족(소유/멤버)만 보여주므로, 고아 가족이 여러 개여도 흩어진 포스트를 모두 찾는다.
     static func fetchFamilySocial() async -> [String: BLFeedPost] {
-        guard let f = await myFamily() else { return [:] }
+        let sel = "select=*,bl_post_media(*),bl_reaction(uid),bl_comment(*)"
+        let path = "/bl_feed_post?\(sel)&order=created_at.desc&limit=200"
+        guard let req = await rest(path, method: "GET"),
+              let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let posts = decode(data, [BLFeedPost].self) else { return [:] }
         var map: [String: BLFeedPost] = [:]
-        for p in await fetchFeed(familyId: f.id) { map[p.id] = p }
+        for p in posts { map[p.id] = p }
         return map
     }
 
@@ -196,6 +203,8 @@ enum FamilyFeedBackend {
         preq.httpBody = try? JSONSerialization.data(withJSONObject: postBody)
         guard let (pdata, presp) = try? await URLSession.shared.data(for: preq),
               let phttp = presp as? HTTPURLResponse else { lastError = "포스트 생성: 네트워크 오류"; return false }
+        // 409 = 같은 id 포스트가 이미 존재 = 이미 공유된 기록 → 성공으로 간주(미디어 재삽입 생략).
+        if phttp.statusCode == 409 { return true }
         guard (200...299).contains(phttp.statusCode) else {
             lastError = "포스트 생성 실패 HTTP \(phttp.statusCode): \(String(data: pdata, encoding: .utf8)?.prefix(120) ?? "")"
             return false
