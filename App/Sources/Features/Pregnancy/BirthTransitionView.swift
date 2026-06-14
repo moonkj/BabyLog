@@ -499,11 +499,18 @@ struct BirthTransitionView: View {
                 }
             }
         } else {
-            // activePregnancy 없음 — 목업 모드(프리뷰/테스트)에서 동작
+            // activePregnancy 없음 — 프리뷰/테스트에서만 축하 단계로. 실제 빌드에선
+            // 아이를 만들지 못한 채 가짜 축하를 띄우면 안 되므로 오류 안내.
+            #if DEBUG
             createdChildName = trimmed
             withAnimation(.easeInOut(duration: 0.35)) {
                 step = .celebration
             }
+            #else
+            withAnimation {
+                transitionError = "진행 중인 임신 기록을 찾을 수 없어요. 잠시 후 다시 시도해 주세요."
+            }
+            #endif
         }
     }
 }

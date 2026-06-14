@@ -160,18 +160,11 @@ struct PregnancyMomRecordSection: View {
 
     private var pregnancyId: UUID? { store.activePregnancy?.id }
 
-    /// 현재 임신 주차 (LMP 우선, 없으면 EDD 역산)
+    /// 현재 임신 주차 — 앱 전체와 동일한 단일 소스(AgeCalculator, EDD 우선)로 계산.
+    /// (이전엔 LMP 우선 자체 계산이라 히어로·태아 가이드와 주차가 어긋나 배 사진에 잘못된 주차가 박제됐다.)
     private var currentWeek: Int {
-        let cal = Calendar.current
-        if let lmp = store.activePregnancy?.lmpDate {
-            let days = cal.dateComponents([.day], from: lmp, to: Date()).day ?? 0
-            return max(0, min(42, days / 7))
-        }
-        if let edd = store.activePregnancy?.eddDate {
-            let daysToEdd = cal.dateComponents([.day], from: Date(), to: edd).day ?? 0
-            return max(0, min(42, 40 - daysToEdd / 7))
-        }
-        return 0
+        let p = store.activePregnancy
+        return AgeCalculator.pregnancyWeeks(lmp: p?.lmpDate, edd: p?.eddDate, asOf: Date())?.weeks ?? 0
     }
 
     /// 배 사진 (store 영속)
