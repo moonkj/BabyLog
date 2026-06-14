@@ -96,6 +96,9 @@ struct MarketDetailContent: View {
             // 안심 거래존 안내
             MarketDetailSafeTradeGuide()
 
+            // 택배거래·선입금 위험 안내
+            MarketDetailTradeSafetyGuide()
+
             // 면책 문구
             MarketDetailDisclaimerLine()
         }
@@ -335,6 +338,58 @@ struct MarketDetailSafeTradeGuide: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("안심 거래존 이용 권장. 주민센터·공공도서관 앞 등 공공장소에서 거래하면 더 안전해요.")
+    }
+}
+
+// MARK: - MarketDetailTradeSafetyGuide
+
+/// 택배거래·선입금 위험 안내 — 위험도(색+라벨) 3중 인코딩. (신뢰·안전 최우선)
+struct MarketDetailTradeSafetyGuide: View {
+    private enum Risk { case high, mid, low
+        var label: String { self == .high ? "위험 높음" : (self == .mid ? "주의" : "확인") }
+        var tone: BadgeTone { self == .high ? .coral : (self == .mid ? .amber : .grey) }
+    }
+
+    var body: some View {
+        BLCard(padding: 14, flat: true) {
+            VStack(alignment: .leading, spacing: 11) {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .font(.system(size: 18, weight: .semibold)).foregroundStyle(BadgeTone.coral.ink)
+                        .accessibilityHidden(true)
+                    Text("거래 안전 수칙").font(.system(size: 13.5, weight: .bold)).foregroundStyle(AppColors.ink)
+                }
+                row(.high, "선입금·계좌이체 요구는 사기 1순위",
+                    "만나서 물건을 확인하기 전엔 절대 송금하지 마세요. ‘급해서 먼저 입금’ 요구는 대부분 사기예요.")
+                row(.mid, "택배거래는 안전결제(에스크로)로",
+                    "직접 계좌이체 대신 안전결제를 쓰고, 운송장 번호를 받은 뒤 결제하세요.")
+                row(.mid, "상대 정보를 먼저 확인",
+                    "계좌주명·연락처를 ‘더치트’ 등 사기이력 조회로 확인하세요.")
+                row(.low, "시세보다 너무 싸면 의심",
+                    "파격가로 선입금을 유도하는 경우가 많아요. 직거래가 가장 안전합니다.")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(BadgeTone.coral.bg, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("거래 안전 수칙. 선입금·계좌이체 요구는 사기 위험이 높습니다. 만나서 확인 전 송금 금지, 택배는 안전결제 권장.")
+    }
+
+    private func row(_ risk: Risk, _ title: String, _ desc: String) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Text(risk.label)
+                .font(.system(size: 10.5, weight: .heavy)).foregroundStyle(risk.tone.ink)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(risk.tone.bg, in: Capsule())
+                .overlay(Capsule().stroke(risk.tone.ink.opacity(0.35), lineWidth: 1))
+                .frame(width: 58, alignment: .center)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 12.5, weight: .bold)).foregroundStyle(AppColors.ink)
+                Text(desc).font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink2)
+                    .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 
