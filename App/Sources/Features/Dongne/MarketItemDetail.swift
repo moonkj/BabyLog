@@ -49,6 +49,15 @@ struct MarketItemDetail: View {
 
     /// 구매자 동작 진입 — 본인 매물이면 차단, 비로그인이면 로그인 후 이어서 실행.
     private func startBuyerAction(_ action: BuyerAction) {
+        // 신원(myID)이 아직 비동기 해석 전이면 먼저 확정한 뒤 재평가 — '내 매물' 판정 레이스 차단
+        // (재설치/로그아웃 직후 fetch된 mine 스냅샷이 false여도 로그인하면 본인으로 잡힘).
+        if myID.isEmpty {
+            Task { @MainActor in
+                myID = await SupabaseConfig.ownerID()
+                startBuyerAction(action)
+            }
+            return
+        }
         if isMineLive { showMineAlert = true; return }
         guard LoginGate.ready() else { pendingBuyerAction = action; showLogin = true; return }
         openBuyerAction(action)
@@ -345,7 +354,9 @@ struct MarketItemDetail: View {
 
     /// 판매자: 판매완료 처리(구매자 지정 또는 직거래). 화면 낙관 반영 + 서버 동기화.
     private func completeSale(buyer: String?) {
+        guard !statusBusy else { return }                 // 중복 탭 방지(이중 완료·이중 푸시 차단)
         showBuyerPicker = false
+        let prev = currentStatus                           // 실패 시 로컬 store 복구용
         overrideStatus = .sold
         overrideSoldTo = buyer
         overrideBuyerConfirmed = false
@@ -354,7 +365,11 @@ struct MarketItemDetail: View {
         statusBusy = true
         Task { @MainActor in
             let ok = await MarketBackend.completeSale(id: item.id, buyer: buyer)
-            if !ok { overrideStatus = nil; overrideSoldTo = nil; overrideBuyerConfirmed = nil; showStatusFailAlert = true }
+            if !ok {
+                overrideStatus = nil; overrideSoldTo = nil; overrideBuyerConfirmed = nil
+                store.setMarketStatus(id: item.id, prev)   // 로컬 store도 되돌림(.sold 누수 방지)
+                showStatusFailAlert = true
+            }
             else if buyer != nil { await MarketBackend.notifyTradeConfirm(id: item.id) }  // 구매자에게 확인 푸시
             statusBusy = false
         }

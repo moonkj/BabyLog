@@ -305,9 +305,14 @@ struct CrewMeetupDetail: View {
             guard LoginGate.ready() else { showLogin = true; return }   // 로그인 필수(신상 특정)
             // 누구나 채팅 가능(참석 희망자·이웃 코디네이션). 미참가 상태면 채팅 입장과 함께 자동 참가
             // 처리해 알림 대상에 포함시킨다(crew_meetup_join). 호스트는 이미 참가 상태.
-            if !isJoined {
-                store.toggleJoinCrew(meetup.id)
-                Task { _ = await CrewBackend.joinMeetup(meetupId: meetup.id) }
+            if !isJoined && !joinBusy {
+                store.toggleJoinCrew(meetup.id)            // 낙관 참가
+                joinBusy = true
+                Task { @MainActor in
+                    let ok = await CrewBackend.joinMeetup(meetupId: meetup.id)
+                    if !ok { store.toggleJoinCrew(meetup.id) }   // 실패 시 롤백(알림 대상에서 제외)
+                    joinBusy = false
+                }
             }
             showChat = true
         } label: {
