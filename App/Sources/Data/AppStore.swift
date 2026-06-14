@@ -32,6 +32,12 @@ final class AppStore: ObservableObject {
     }
     /// 가족 피드 변경 신호(공유 완료 등). 증가 시 타임라인이 가족 반응을 다시 읽는다(메모리 전용).
     @Published var familyFeedVersion = 0
+    /// 임신 홈에서 '검진 일정 보기' 탭 시 기록 화면을 검진 세그먼트로 여는 딥링크 신호(메모리 전용).
+    @Published var openPregnancyCheckup = false
+    /// 검진 알림 켜짐 여부(영속). 켜면 권장 시기 전 로컬 알림.
+    @Published var checkupRemindersOn: Bool = UserDefaults.standard.bool(forKey: "bl_checkup_reminders") {
+        didSet { UserDefaults.standard.set(checkupRemindersOn, forKey: "bl_checkup_reminders") }
+    }
     /// 가족 공유 의도/진행 중인 기록 id — 업로드가 끝나기 전에도 카드가 즉시 '공유 중'을 보이게(메모리 전용).
     @Published var sharedFeedEntryIds: Set<String> = []
     func markFeedShared(_ id: String)   { sharedFeedEntryIds.insert(id) }

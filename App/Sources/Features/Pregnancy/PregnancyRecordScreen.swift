@@ -127,6 +127,13 @@ struct PregnancyRecordScreen: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
+            // 홈 '검진 일정 보기' 딥링크 — 진입 시 검진 세그먼트로 전환
+            .onChange(of: store.openPregnancyCheckup) { _, open in
+                if open { withAnimation { selectedSegment = .checkup }; store.openPregnancyCheckup = false }
+            }
+            .onAppear {
+                if store.openPregnancyCheckup { selectedSegment = .checkup; store.openPregnancyCheckup = false }
+            }
             .alert("잠시 멈춰도 괜찮아요", isPresented: $showPauseConfirm) {
                 if let preg = pauseTargetPregnancy {
                     Button("잠시 멈출게요") {

@@ -21,6 +21,7 @@ struct PregnancyHomeView: View {
 
     @State private var showPregReg = false
     @State private var editingPregnancy: Pregnancy? = nil
+    @State private var checkupAlert: String? = nil   // 검진 알림 켜기/끄기 안내
 
     // MARK: 가계부 실데이터
     private var monthTotal: Int { BudgetSummary.monthlyTotal(store.expenses, in: Date()) }
@@ -131,6 +132,9 @@ struct PregnancyHomeView: View {
         .sheet(item: $editingPregnancy) { preg in
             AddPregnancySheet(editing: preg).environmentObject(store)
         }
+        .alert("검진 알림", isPresented: Binding(get: { checkupAlert != nil }, set: { if !$0 { checkupAlert = nil } })) {
+            Button("확인", role: .cancel) {}
+        } message: { Text(checkupAlert ?? "") }
     }
 
     // 임신 미등록 상태 — 등록 CTA
@@ -325,12 +329,33 @@ struct PregnancyHomeView: View {
         }
     }
 
+    /// 검진 일정 보기 — 기록 탭의 검진 세그먼트로 딥링크.
+    private func openCheckupSchedule() {
+        store.openPregnancyCheckup = true
+        onNavigate(.record)
+    }
+    /// 검진 알림 켜기/끄기 — 권장 시기 전 로컬 알림 예약/취소.
+    private func toggleCheckupReminders() {
+        guard let p = activePregnancy else { return }
+        if store.checkupRemindersOn {
+            CheckupReminderService.cancel(pregnancyId: p.id)
+            store.checkupRemindersOn = false
+            Haptics.light(); checkupAlert = "검진 알림을 껐어요."
+        } else {
+            let ref = CheckupReminderService.referenceLMP(lmpDate: p.lmpDate, eddDate: p.eddDate)
+            Task { @MainActor in
+                let ok = await CheckupReminderService.enable(pregnancyId: p.id, lmp: ref)
+                store.checkupRemindersOn = ok
+                Haptics.success()
+                checkupAlert = ok ? "검진 알림을 켰어요. 권장 시기 며칠 전에 알려드릴게요." : "알림 권한이 꺼져 있어요. 설정에서 허용해 주세요."
+            }
+        }
+    }
+
     private var checkupPriorityCard: some View {
         let suggestion = suggestedCheckup(week: pregnancyWeek.weeks)
-        return Button {
-            onNavigate(.record)
-        } label: {
-            ZStack(alignment: .topTrailing) {
+        // 카드 자체는 onTapGesture(검진 일정), 내부 버튼(일정 보기/알림)은 독립 동작 — 중첩 버튼 충돌 방지.
+        return ZStack(alignment: .topTrailing) {
                 // 배경
                 RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
                     .fill(
@@ -367,31 +392,31 @@ struct PregnancyHomeView: View {
                     }
                     .padding(.top, Spacing.s3)
 
-                    // 예약 버튼 + 알림 버튼
+                    // 검진 일정 보기 + 알림 켜기/끄기
                     HStack(spacing: Spacing.s2) {
                         LiquidButton(
                             fill: AppColors.pregnancyPink,
                             cornerRadius: Radius.sm
                         ) {
-                            onNavigate(.record)
+                            openCheckupSchedule()
                         } label: {
                             Text("검진 일정 보기")
                                 .font(.system(size: 15, weight: .bold))
                         }
 
                         Button {
-                            onNavigate(.record)
+                            toggleCheckupReminders()
                         } label: {
                             ZStack {
                                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                    .fill(Color.white.opacity(0.6))
+                                    .fill(store.checkupRemindersOn ? AppColors.pregnancyPink : Color.white.opacity(0.6))
                                     .frame(width: 44, height: 44)
-                                Image(systemName: "bell.fill")
+                                Image(systemName: store.checkupRemindersOn ? "bell.fill" : "bell")
                                     .font(.system(size: 18))
-                                    .foregroundStyle(AppColors.pregnancyPink)
+                                    .foregroundStyle(store.checkupRemindersOn ? .white : AppColors.pregnancyPink)
                             }
                         }
-                        .accessibilityLabel("검진 알림 설정")
+                        .accessibilityLabel(store.checkupRemindersOn ? "검진 알림 끄기" : "검진 알림 켜기")
                         .frame(width: 44, height: 44)
                     }
                     .padding(.top, Spacing.s4)
@@ -399,12 +424,13 @@ struct PregnancyHomeView: View {
                 .padding(Spacing.s5)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .blShadow(.card)
-            .frame(minHeight: 44)
-        }
-        .buttonStyle(LiquidPressStyle(scale: 0.98))
+        .blShadow(.card)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .onTapGesture { openCheckupSchedule() }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("이 시기 권장 검사: \(suggestion.title), \(suggestion.detail)")
-        .accessibilityHint("탭하면 검진 상세로 이동")
+        .accessibilityHint("탭하면 검진 일정으로 이동")
     }
 
     // MARK: - 주차별 발달 가이드 카드

@@ -516,6 +516,60 @@ struct PregnancyCheckupSection: View {
         store.toggleCheckupDone(pregnancyId: pid, checkupId: checkup.name)
     }
 
+    private var lmp: Date? {
+        CheckupReminderService.referenceLMP(lmpDate: store.activePregnancy?.lmpDate,
+                                            eddDate: store.activePregnancy?.eddDate)
+    }
+
+    /// "11~13주"·"28주" → 시작 주차 정수.
+    private func startWeek(_ range: String) -> Int? { Int(range.prefix(while: { $0.isNumber })) }
+
+    /// 권장 시기 예상 날짜 라벨(LMP + 시작주차·7일). LMP 없으면 nil.
+    private func estimatedDateLabel(_ range: String) -> String? {
+        guard let lmp, let w = startWeek(range),
+              let d = Calendar.current.date(byAdding: .day, value: w * 7, to: lmp) else { return nil }
+        let f = DateFormatter(); f.locale = Locale(identifier: "ko_KR"); f.dateFormat = "M월 d일"
+        return "\(f.string(from: d))경"
+    }
+
+    /// 검진 알림 켜기/끄기 — 권장 시기 전 로컬 알림.
+    private func setReminders(_ on: Bool) {
+        guard let p = store.activePregnancy else { return }
+        if on {
+            let ref = CheckupReminderService.referenceLMP(lmpDate: p.lmpDate, eddDate: p.eddDate)
+            Task { @MainActor in
+                let ok = await CheckupReminderService.enable(pregnancyId: p.id, lmp: ref)
+                store.checkupRemindersOn = ok
+                Haptics.success()
+            }
+        } else {
+            CheckupReminderService.cancel(pregnancyId: p.id)
+            store.checkupRemindersOn = false
+            Haptics.light()
+        }
+    }
+
+    private var reminderToggle: some View {
+        HStack(spacing: Spacing.s3) {
+            Image(systemName: store.checkupRemindersOn ? "bell.badge.fill" : "bell")
+                .font(.system(size: 16, weight: .semibold)).foregroundStyle(AppColors.pregnancyPink)
+                .frame(width: 34, height: 34)
+                .background(Color(hex: 0xFBEAF0), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("검진 알림 받기").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                Text("권장 시기 며칠 전에 알려드려요").font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+            }
+            Spacer(minLength: 0)
+            Toggle("", isOn: Binding(get: { store.checkupRemindersOn }, set: { setReminders($0) }))
+                .labelsHidden().tint(AppColors.pregnancyPink)
+        }
+        .padding(.horizontal, Spacing.s3).padding(.vertical, Spacing.s2)
+        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("검진 알림 받기. \(store.checkupRemindersOn ? "켜짐" : "꺼짐")")
+    }
+
     /// 현재 주차에 맞는 이 시기 권장 검사. 실제 예약일이 없으므로 D-day는 만들어내지 않는다.
     private var suggestedCheckup: (title: String, detail: String) {
         switch week.weeks {
@@ -537,6 +591,11 @@ struct PregnancyCheckupSection: View {
                 detail: suggestedCheckup.detail
             )
             .padding(.horizontal, Spacing.s5)
+
+            // 검진 알림 토글
+            reminderToggle
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, Spacing.s2)
 
             // 전체 검사 목록
             BLSectionHead(eyebrow: "산전 검사", title: "검사 일정")
@@ -631,7 +690,8 @@ struct PregnancyCheckupSection: View {
                         Text(checkup.name)
                             .font(.system(size: 14.5, weight: .bold))
                             .foregroundStyle(done ? AppColors.ink2 : AppColors.ink)
-                        Text(checkup.weekRange)
+                        // 권장 주차 + 예상 날짜(LMP 기준)
+                        Text(estimatedDateLabel(checkup.weekRange).map { "\(checkup.weekRange) · \($0)" } ?? checkup.weekRange)
                             .font(AppFont.caption)
                             .foregroundStyle(AppColors.ink3)
                     }
