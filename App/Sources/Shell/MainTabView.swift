@@ -14,6 +14,7 @@ struct MainTabView: View {
     @AppStorage("bl_app_mode") private var mode: AppMode = .baby   // 세션 간 유지(매번 baby로 리셋되던 문제)
     @AppStorage("bl_mode_initialized") private var modeInitialized = false
     @State private var showQuickRecord = false
+    @State private var recordDetent: PresentationDetent = .large   // 기록 시트는 크게 열림(원하면 줄이기)
     @State private var showAddChild = false
     @State private var showAddPregnancy = false
     /// 멈춤/상실 임신만 있는 경우 — 새 임신 등록을 권하지 않고 부드러운 안내(민감영역)
@@ -188,10 +189,11 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $showQuickRecord) {
             QuickRecordSheet(mode: mode, onSave: {}, onClose: { showQuickRecord = false })
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.medium, .large], selection: $recordDetent)
                 .presentationDragIndicator(.visible)
                 .nightDimmable()
         }
+        .onChange(of: showQuickRecord) { _, shown in if shown { recordDetent = .large } }
         .onAppear {
             // 최초 1회 모드 기본값: 활성 임신 있고 아이 없으면 임신 모드로(이후엔 사용자 선택 유지)
             if !modeInitialized {
