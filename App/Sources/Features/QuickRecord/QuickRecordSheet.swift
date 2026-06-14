@@ -171,12 +171,26 @@ struct QuickRecordSheet: View {
     }
 
     // 헤더 행 (타이틀 + 모드 뱃지 + 닫기)
+    /// 이 기록의 대상(아이 이름 / 태명) — 누구 기록인지 헤더에 명시(형제·자매 혼동 방지).
+    private var targetLabel: String? {
+        let name = mode == .pregnancy ? store.activePregnancy?.nickname : store.selectedChild?.name
+        guard let name, !name.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return name
+    }
+
     private var headerRow: some View {
         HStack(alignment: .center) {
-            Text(sheetTitle)
-                .font(AppFont.title)
-                .foregroundStyle(AppColors.ink)
-                .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(sheetTitle)
+                    .font(AppFont.title)
+                    .foregroundStyle(AppColors.ink)
+                    .accessibilityAddTraits(.isHeader)
+                if let name = targetLabel {
+                    Text(mode == .pregnancy ? "\(name) · 태아 기록" : "\(name)의 기록")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppColors.ink3)
+                }
+            }
 
             BLBadge(tone: modeBadgeTone, text: modeBadgeLabel, systemIcon: nil, dot: true)
                 .accessibilityLabel("모드: \(modeBadgeLabel)")
@@ -813,10 +827,10 @@ struct QuickRecordSheet: View {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
             savedOverlay = true
         }
-        // 2탭(1.6s): 오버레이 표시 후 —
+        // 짧은 보상(0.6s) 후 — 매 저장마다 긴 대기는 속도를 해쳐 단축.
         //  · Pro(로그인): 이 기록 사진을 가족 피드(서버)로 백그라운드 자동 게시 → 바로 닫기.
         //  · 무료: 기존 iCloud 공유 앨범 시트.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             if !feedImages.isEmpty {
                 let imgs = feedImages, cap = feedCaption, child = feedChild, pid = feedPostId
                 Task {

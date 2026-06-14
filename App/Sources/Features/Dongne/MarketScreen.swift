@@ -478,6 +478,13 @@ struct MarketScreen: View {
         .accessibilityLabel("곧 필요해요 — \(age)개월 기준 추천")
     }
 
+    /// "○○시 전체 · N개 매물" — 마켓은 시 단위 노출이므로 범위를 라벨로 명시(동만 보고 오해 방지).
+    private var marketScopeCountText: String {
+        if showSavedOnly { return "관심 \(filteredItems.count)개 매물" }
+        let scope = (city != "우리 동네") ? "\(city) 전체 · " : ""
+        return "\(scope)\(filteredItems.count)개 매물"
+    }
+
     // 정렬·필터 칩(공통)
     private func marketFilterChip(label: String, icon: String? = nil, on: Bool,
                                   tint: Color, tintBg: Color, action: @escaping () -> Void) -> some View {
@@ -560,8 +567,8 @@ struct MarketScreen: View {
             if loadFailed && items.isEmpty {
                 marketLoadFailedView
             } else {
-                // 개수
-                Text("\(showSavedOnly ? "관심 " : "")\(filteredItems.count)개 매물")
+                // 개수 + 노출 범위(시 단위) — '어디 매물을 보는지' 명시
+                Text(marketScopeCountText)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.ink3)
                     .padding(.horizontal, 2)
