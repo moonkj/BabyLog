@@ -277,6 +277,9 @@ extension MarketItem {
 
 // MARK: - MarketScreen
 
+/// 매물 정렬 기준.
+enum MarketSort: String, CaseIterable { case latest = "최신순", priceLow = "낮은 가격순", priceHigh = "높은 가격순" }
+
 /// DongneTab의 "마켓" 세그먼트에 임베드하는 메인 뷰.
 struct MarketScreen: View {
     @EnvironmentObject private var store: AppStore
@@ -289,6 +292,10 @@ struct MarketScreen: View {
     @State private var loadFailed = false
     /// '관심'만 보기 — 내가 좋아요(저장)한 매물만 필터.
     @State private var showSavedOnly = false
+    /// 키워드 검색(제목) · 정렬 · 무료나눔만 보기
+    @State private var searchText = ""
+    @State private var sortMode: MarketSort = .latest
+    @State private var freeOnly = false
     /// 첫 등장 이후 재등장(상세에서 복귀 등) 시 목록을 갱신해 상태 변경을 반영하기 위한 플래그.
     @State private var hasAppeared = false
 
@@ -323,6 +330,17 @@ struct MarketScreen: View {
             result = items
         }
         if selectedCategory != .all { result = result.filter { $0.category == selectedCategory } }
+        // 키워드 검색(제목)
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !q.isEmpty { result = result.filter { $0.title.localizedCaseInsensitiveContains(q) } }
+        // 무료나눔만
+        if freeOnly { result = result.filter { $0.isFree || $0.price == 0 } }
+        // 정렬
+        switch sortMode {
+        case .latest:    result.sort { $0.createdAt > $1.createdAt }
+        case .priceLow:  result.sort { $0.price < $1.price }
+        case .priceHigh: result.sort { $0.price > $1.price }
+        }
         return result
     }
 
@@ -381,6 +399,7 @@ struct MarketScreen: View {
                 if let age = childAgeMonths {
                     needSoonSection(age: age)
                 }
+                searchBar
                 categoryChips
                 if isLoading {
                     marketLoadingView
@@ -459,6 +478,52 @@ struct MarketScreen: View {
         .accessibilityLabel("곧 필요해요 — \(age)개월 기준 추천")
     }
 
+    // 정렬·필터 칩(공통)
+    private func marketFilterChip(label: String, icon: String? = nil, on: Bool,
+                                  tint: Color, tintBg: Color, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.selection()
+            withAnimation(.easeInOut(duration: 0.2)) { action() }
+        } label: {
+            HStack(spacing: 4) {
+                if let icon { Image(systemName: icon).font(.system(size: 12, weight: .bold)) }
+                Text(label).font(.system(size: 13, weight: .bold))
+            }
+            .foregroundStyle(on ? tint : AppColors.ink2)
+            .padding(.horizontal, 12).frame(height: 32)
+            .background(on ? tintBg : AppColors.surface, in: Capsule())
+            .overlay { Capsule().stroke(on ? tint.opacity(0.4) : AppColors.line, lineWidth: 1) }
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.95))
+        .accessibilityLabel("\(label)\(on ? " 켜짐" : "")")
+        .accessibilityAddTraits(on ? [.isSelected] : [])
+    }
+
+    // MARK: 검색
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppColors.ink3)
+            TextField("매물 검색 (예: 유모차)", text: $searchText)
+                .font(.system(size: 15))
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+                .accessibilityLabel("매물 검색")
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(AppColors.ink3)
+                }
+                .accessibilityLabel("검색어 지우기")
+            }
+        }
+        .padding(.horizontal, 14).frame(height: 44)
+        .background(AppColors.surface, in: Capsule())
+        .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
+        .padding(.horizontal, Spacing.s5)
+        .padding(.top, Spacing.s2)
+        .padding(.bottom, 12)
+    }
+
     // MARK: 카테고리 칩
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -495,38 +560,52 @@ struct MarketScreen: View {
             if loadFailed && items.isEmpty {
                 marketLoadFailedView
             } else {
-                // 개수 + '관심만 보기' 토글
-                HStack(spacing: Spacing.s2) {
-                    Text("\(showSavedOnly ? "관심 " : "")\(filteredItems.count)개 매물")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppColors.ink3)
-                    Spacer(minLength: 0)
-                    Button {
-                        Haptics.selection()
-                        withAnimation(.easeInOut(duration: 0.2)) { showSavedOnly.toggle() }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: showSavedOnly ? "heart.fill" : "heart")
-                                .font(.system(size: 12, weight: .bold))
-                            Text("관심").font(.system(size: 13, weight: .bold))
+                // 개수
+                Text("\(showSavedOnly ? "관심 " : "")\(filteredItems.count)개 매물")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.ink3)
+                    .padding(.horizontal, 2)
+                    .padding(.bottom, 6)
+
+                // 정렬 · 필터 컨트롤(가로 스크롤 — 좁은 화면에서도 안 잘림)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.s2) {
+                        Menu {
+                            ForEach(MarketSort.allCases, id: \.self) { s in
+                                Button { sortMode = s } label: {
+                                    if sortMode == s { Label(s.rawValue, systemImage: "checkmark") } else { Text(s.rawValue) }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.up.arrow.down").font(.system(size: 12, weight: .bold))
+                                Text(sortMode.rawValue).font(.system(size: 13, weight: .bold))
+                            }
+                            .foregroundStyle(AppColors.ink2)
+                            .padding(.horizontal, 12).frame(height: 32)
+                            .background(AppColors.surface, in: Capsule())
+                            .overlay { Capsule().stroke(AppColors.line, lineWidth: 1) }
                         }
-                        .foregroundStyle(showSavedOnly ? AppColors.danger : AppColors.ink2)
-                        .padding(.horizontal, 12).frame(height: 32)
-                        .background(showSavedOnly ? AppColors.dangerTint : AppColors.surface, in: Capsule())
-                        .overlay { Capsule().stroke(showSavedOnly ? AppColors.danger.opacity(0.4) : AppColors.line, lineWidth: 1) }
+                        .accessibilityLabel("정렬: \(sortMode.rawValue)")
+
+                        marketFilterChip(label: "무료나눔", on: freeOnly, tint: AppColors.primary,
+                                         tintBg: AppColors.primaryTint) { freeOnly.toggle() }
+                        marketFilterChip(label: "관심", icon: showSavedOnly ? "heart.fill" : "heart",
+                                         on: showSavedOnly, tint: AppColors.danger,
+                                         tintBg: AppColors.dangerTint) { showSavedOnly.toggle() }
                     }
-                    .buttonStyle(LiquidPressStyle(scale: 0.95))
-                    .accessibilityLabel(showSavedOnly ? "관심 매물만 보는 중 — 해제" : "관심 매물만 보기")
-                    .accessibilityAddTraits(showSavedOnly ? [.isSelected] : [])
+                    .padding(.horizontal, 2)
                 }
-                .padding(.horizontal, 2)
                 .padding(.bottom, Spacing.s2)
 
                 if filteredItems.isEmpty {
                     BLEmptyState(
-                        icon: showSavedOnly ? "heart" : "tag",
-                        title: showSavedOnly ? "관심 매물이 없어요" : "이 카테고리에 매물이 없어요",
-                        message: showSavedOnly ? "마음에 드는 매물에 하트를 눌러 모아보세요." : "다른 카테고리를 둘러보거나 직접 올려보세요."
+                        icon: !searchText.trimmingCharacters(in: .whitespaces).isEmpty ? "magnifyingglass"
+                              : (showSavedOnly ? "heart" : "tag"),
+                        title: !searchText.trimmingCharacters(in: .whitespaces).isEmpty ? "검색 결과가 없어요"
+                               : (showSavedOnly ? "관심 매물이 없어요" : "이 카테고리에 매물이 없어요"),
+                        message: !searchText.trimmingCharacters(in: .whitespaces).isEmpty ? "다른 키워드로 검색해 보세요."
+                                 : (showSavedOnly ? "마음에 드는 매물에 하트를 눌러 모아보세요." : "다른 카테고리를 둘러보거나 직접 올려보세요.")
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.top, Spacing.s4)
