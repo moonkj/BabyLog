@@ -29,6 +29,8 @@ struct OnboardingView: View {
     @State private var nickname: String = ""
     @State private var dueOrBirthDate: Date = Date()
     @State private var dateEntered: Bool = false
+    /// 등록 단계에서 '나중에 할게요'를 누르면 — 이름/날짜를 건드렸어도 등록하지 않는다(무음 등록 방지).
+    @State private var skipRegistration: Bool = false
 
     // 4단계: 권한 — 실제 시스템 프롬프트 + 카드 상태 반영
     @StateObject private var locationCoordinator = LocationPermissionCoordinator()
@@ -550,8 +552,8 @@ struct OnboardingView: View {
 
                 // CTA
                 VStack(spacing: Spacing.s2) {
-                    nextButton(title: "다음") { advance() }
-                    skipButton { advance() }
+                    nextButton(title: "다음") { skipRegistration = false; advance() }
+                    skipButton { skipRegistration = true; advance() }   // 나중에 → 등록하지 않음
                 }
                 .padding(.top, Spacing.s5)
                 .padding(.bottom, Spacing.s8)
@@ -561,6 +563,7 @@ struct OnboardingView: View {
         // 임신/출산 전환 시, 다른 단계의 "날짜 입력됨" 안내 카드가 남지 않도록 리셋
         .onChange(of: phase) { _, _ in
             dateEntered = false
+            skipRegistration = false
         }
     }
 
@@ -744,7 +747,7 @@ struct OnboardingView: View {
     /// 날짜를 골랐거나 이름을 입력했으면 등록한다(이름이 비면 기본 이름, 날짜는 표시된 값 사용).
     /// 둘 다 건드리지 않았으면 아무것도 등록하지 않는다(가짜 오늘 날짜 등록 방지).
     private func finish() {
-        if willRegister {
+        if willRegister && !skipRegistration {
             let name = resolvedName
             if phase == .baby {
                 store.completeBabyOnboarding(name: name, birthDate: dueOrBirthDate, gender: nil)

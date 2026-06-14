@@ -22,7 +22,8 @@ struct AddExpenseSheet: View {
 
     private var amount: Int { Int(amountText.filter(\.isNumber)) ?? 0 }
     private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canSave: Bool { amount > 0 && !trimmedTitle.isEmpty }
+    // 금액만 필수(2탭 완료 원칙). 제목 비우면 카테고리명으로 표시(addExpense가 빈 memo→nil 처리).
+    private var canSave: Bool { amount > 0 }
 
     var body: some View {
         NavigationStack {
@@ -31,8 +32,8 @@ struct AddExpenseSheet: View {
 
                     // 제목 (항목 이름)
                     VStack(alignment: .leading, spacing: Spacing.s2) {
-                        Text("제목").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
-                        TextField("예: 기저귀", text: $title)
+                        Text("제목 (선택)").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
+                        TextField("예: 기저귀 (비우면 카테고리명)", text: $title)
                             .font(.system(size: 18, weight: .bold))
                             .focused($focusedField, equals: .title)
                             .padding(.horizontal, Spacing.s4)
@@ -108,7 +109,6 @@ struct AddExpenseSheet: View {
                     LiquidButton(fill: canSave ? AppColors.primary : AppColors.ink3,
                                  cornerRadius: Radius.md) {
                         guard canSave else {
-                            if trimmedTitle.isEmpty { titleShake += 1 }
                             if amount <= 0 { amountShake += 1 }
                             return
                         }
@@ -129,6 +129,11 @@ struct AddExpenseSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("닫기") { dismiss() }
+                }
+                // 숫자 패드는 리턴키가 없어 키보드가 갇힌다 → '완료'로 내릴 수 있게.
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("완료") { focusedField = nil }
                 }
             }
         }
