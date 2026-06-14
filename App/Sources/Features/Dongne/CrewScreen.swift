@@ -173,14 +173,14 @@ struct CrewScreen: View {
     @State private var showLogin = false
     @State private var refreshTick = 0          // 모임 생성 후 활성 화면 재로드 트리거
     #if DEBUG
-    @State private var forceCold = false        // 팀 QA — 콜드스타트 강제 미리보기
+    @State private var previewOverride: Bool? = nil   // 팀 QA — nil 자동 / true 콜드 / false 활성
     #endif
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             // 활성/콜드스타트는 CrewActiveContent가 실데이터(콘텐츠 유무 + 대기 수)로 자체 판정한다.
             #if DEBUG
-            CrewActiveContent(refreshTick: refreshTick, forceColdPreview: forceCold)
+            CrewActiveContent(refreshTick: refreshTick, coldStartOverride: previewOverride)
             previewToggle   // 팀 QA 전용 — 릴리스 빌드 미노출
             #else
             CrewActiveContent(refreshTick: refreshTick)
@@ -200,15 +200,23 @@ struct CrewScreen: View {
     }
 
     #if DEBUG
+    // 미리보기 강제 3단계: 자동(실데이터) → 콜드스타트 → 활성 → 자동…
+    private var previewLabel: String {
+        switch previewOverride { case nil: return "자동"; case .some(true): return "오픈전"; case .some(false): return "활성" }
+    }
     private var previewToggle: some View {
         Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { forceCold.toggle() }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                switch previewOverride {
+                case nil:          previewOverride = true    // 콜드 강제
+                case .some(true):  previewOverride = false   // 활성 강제
+                case .some(false): previewOverride = nil      // 자동(실데이터)
+                }
+            }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: forceCold ? "eye.fill" : "eye.slash.fill")
-                    .font(.system(size: 11, weight: .bold))
-                Text(forceCold ? "활성화" : "오픈전")
-                    .font(.system(size: 11, weight: .bold))
+                Image(systemName: "eye.fill").font(.system(size: 11, weight: .bold))
+                Text("미리보기: \(previewLabel)").font(.system(size: 11, weight: .bold))
             }
             .foregroundStyle(AppColors.ink3)
             .padding(.horizontal, 10)
@@ -219,7 +227,7 @@ struct CrewScreen: View {
         .buttonStyle(LiquidPressStyle(scale: 0.95))
         .padding(.top, Spacing.s2)
         .padding(.trailing, Spacing.s5)
-        .accessibilityLabel(forceCold ? "활성 보기로 전환" : "오픈 전 보기로 전환")
+        .accessibilityLabel("미리보기 모드 \(previewLabel). 탭하면 자동·오픈전·활성 순환")
         .accessibilityHint("팀 미리보기 토글")
     }
     #endif
@@ -249,8 +257,8 @@ private struct CrewActiveContent: View {
     @State private var waitlistCount: Int? = nil
     /// 부모(CrewScreen)에서 모임 생성 후 증가 → 재로드 트리거
     var refreshTick: Int = 0
-    /// DEBUG 미리보기 — 콜드스타트 강제 노출(팀 QA)
-    var forceColdPreview: Bool = false
+    /// DEBUG 미리보기 강제(팀 QA): nil=실데이터 자동, true=콜드스타트 강제, false=활성 강제
+    var coldStartOverride: Bool? = nil
 
     private let sectionLimit = 5
     // 크루는 '내 동네'(동 단위). 미설정 시에만 현재 GPS 동으로 폴백.
@@ -300,7 +308,7 @@ private struct CrewActiveContent: View {
     /// 콜드스타트(기대감 UI) 여부 — 실데이터 기반. 콘텐츠 0 + 대기 수 < 오픈 임계면 '오픈 전' 동네로 본다.
     /// (모임/그룹/게시글이 하나라도 있거나 대기 수가 임계 이상이면 활성.) 로컬 데모(미구성)는 항상 활성.
     private var isColdStart: Bool {
-        if forceColdPreview { return true }
+        if let o = coldStartOverride { return o }   // DEBUG 강제(콜드/활성 양방향)
         guard SupabaseConfig.isConfigured, didLoad, !loadFailed else { return false }
         let empty = posts.isEmpty && meetups.isEmpty && groups.isEmpty
         return empty && (waitlistCount ?? 0) < CrewBackend.openThreshold
