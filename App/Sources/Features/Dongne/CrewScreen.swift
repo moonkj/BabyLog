@@ -169,26 +169,27 @@ extension CrewPost {
 /// `isPreviewActive` 내부 토글로 콜드스타트 / 활성 상태 전환 가능 (팀 QA용).
 struct CrewScreen: View {
     @EnvironmentObject private var store: AppStore
-    @State private var isActive: Bool = true   // 로컬 기능 활성 (콜드스타트는 토글로 미리보기)
     @State private var showCreate = false
     @State private var showLogin = false
     @State private var refreshTick = 0          // 모임 생성 후 활성 화면 재로드 트리거
+    #if DEBUG
+    @State private var forceCold = false        // 팀 QA — 콜드스타트 강제 미리보기
+    #endif
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            if isActive {
-                CrewActiveContent(refreshTick: refreshTick)
-            } else {
-                CrewColdStartContent(onJoinWaitlist: { })
-            }
-
+            // 활성/콜드스타트는 CrewActiveContent가 실데이터(콘텐츠 유무 + 대기 수)로 자체 판정한다.
             #if DEBUG
+            CrewActiveContent(refreshTick: refreshTick, forceColdPreview: forceCold)
             previewToggle   // 팀 QA 전용 — 릴리스 빌드 미노출
+            #else
+            CrewActiveContent(refreshTick: refreshTick)
             #endif
         }
         .background(AppColors.canvas.ignoresSafeArea())
-        // 공용 글래스 FAB — 모임 만들기 (로그인 필수: 신상 특정)
-        .appFAB { if isActive { Haptics.light(); if LoginGate.ready() { showCreate = true } else { showLogin = true } } }
+        // 공용 글래스 FAB — 모임 만들기 (로그인 필수: 신상 특정).
+        // 콜드스타트 동네에서도 동작 — 첫 모임을 만들면 콘텐츠가 생겨 활성으로 전환된다.
+        .appFAB { Haptics.light(); if LoginGate.ready() { showCreate = true } else { showLogin = true } }
         .sheet(isPresented: $showCreate) {
             CrewCreateSheet().environmentObject(store).presentationDetents([.large])
         }
@@ -198,16 +199,15 @@ struct CrewScreen: View {
         .onChange(of: showCreate) { _, open in if !open { refreshTick += 1 } }
     }
 
+    #if DEBUG
     private var previewToggle: some View {
         Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                isActive.toggle()
-            }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { forceCold.toggle() }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: isActive ? "eye.slash.fill" : "eye.fill")
+                Image(systemName: forceCold ? "eye.fill" : "eye.slash.fill")
                     .font(.system(size: 11, weight: .bold))
-                Text(isActive ? "오픈전" : "활성화")
+                Text(forceCold ? "활성화" : "오픈전")
                     .font(.system(size: 11, weight: .bold))
             }
             .foregroundStyle(AppColors.ink3)
@@ -219,9 +219,10 @@ struct CrewScreen: View {
         .buttonStyle(LiquidPressStyle(scale: 0.95))
         .padding(.top, Spacing.s2)
         .padding(.trailing, Spacing.s5)
-        .accessibilityLabel(isActive ? "오픈 전 보기로 전환" : "활성 보기로 전환")
+        .accessibilityLabel(forceCold ? "활성 보기로 전환" : "오픈 전 보기로 전환")
         .accessibilityHint("팀 미리보기 토글")
     }
+    #endif
 }
 
 // MARK: - CrewActiveContent (활성 상태)
@@ -244,8 +245,12 @@ private struct CrewActiveContent: View {
     @State private var didLoad = false
     /// 세 요청(게시글·모임·그룹)이 모두 실패 — 네트워크 실패를 빈 동네와 구분
     @State private var loadFailed = false
+    /// 콘텐츠가 비었을 때만 조회하는 동네 대기 수(콜드스타트 판정용)
+    @State private var waitlistCount: Int? = nil
     /// 부모(CrewScreen)에서 모임 생성 후 증가 → 재로드 트리거
     var refreshTick: Int = 0
+    /// DEBUG 미리보기 — 콜드스타트 강제 노출(팀 QA)
+    var forceColdPreview: Bool = false
 
     private let sectionLimit = 5
     // 크루는 '내 동네'(동 단위). 미설정 시에만 현재 GPS 동으로 폴백.
@@ -282,29 +287,49 @@ private struct CrewActiveContent: View {
         }
         // 셋 다 nil이면 네트워크 실패 — 빈 동네와 구분해 재시도 UI를 띄운다.
         loadFailed = (p == nil && m == nil && g == nil)
+        // 콘텐츠가 하나도 없는 '밀도 미달' 동네면 대기 수를 받아 콜드스타트 판정에 쓴다.
+        if !loadFailed, posts.isEmpty, meetups.isEmpty, groups.isEmpty {
+            waitlistCount = await CrewBackend.waitlistCount(hood: hood)
+        }
         didLoad = true
     }
 
     /// 동네(내 동네 또는 GPS)가 아직 안 잡혔으면 빈/실패 화면 대신 로딩을 유지한다.
     private var isLoading: Bool { SupabaseConfig.isConfigured && (!didLoad || hood == "우리 동네") }
 
+    /// 콜드스타트(기대감 UI) 여부 — 실데이터 기반. 콘텐츠 0 + 대기 수 < 오픈 임계면 '오픈 전' 동네로 본다.
+    /// (모임/그룹/게시글이 하나라도 있거나 대기 수가 임계 이상이면 활성.) 로컬 데모(미구성)는 항상 활성.
+    private var isColdStart: Bool {
+        if forceColdPreview { return true }
+        guard SupabaseConfig.isConfigured, didLoad, !loadFailed else { return false }
+        let empty = posts.isEmpty && meetups.isEmpty && groups.isEmpty
+        return empty && (waitlistCount ?? 0) < CrewBackend.openThreshold
+    }
+
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                if isLoading {
-                    loadingView
-                } else if loadFailed && posts.isEmpty && meetups.isEmpty && groups.isEmpty {
-                    crewLoadFailedView
-                } else {
-                    meetupSection
-                        .padding(.top, Spacing.s5)
-                    crewSection
-                    boardSection
-                        .padding(.bottom, 100)
+        Group {
+            if isColdStart {
+                // 밀도 미달 동네 — 기대감 UI(준비도·오픈 알림). 모임을 만들면 콘텐츠가 생겨 활성으로 전환.
+                CrewColdStartContent(onJoinWaitlist: {})
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if isLoading {
+                            loadingView
+                        } else if loadFailed && posts.isEmpty && meetups.isEmpty && groups.isEmpty {
+                            crewLoadFailedView
+                        } else {
+                            meetupSection
+                                .padding(.top, Spacing.s5)
+                            crewSection
+                            boardSection
+                                .padding(.bottom, 100)
+                        }
+                    }
                 }
+                .refreshable { await loadCrew() }
             }
         }
-        .refreshable { await loadCrew() }
         .sheet(isPresented: $showLogin) {
             AppleLoginSheet(message: "글쓰기·그룹 만들기는 로그인이 필요해요.") {}
         }
