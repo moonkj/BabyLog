@@ -35,6 +35,7 @@ struct MarketDetailHeroPhoto: View {
                     .tabViewStyle(.page(indexDisplayMode: .always))
                     .frame(height: 420)
                     .background(AppColors.surface2)
+                    .onChange(of: photoCount) { _, n in if page >= n { page = max(0, n - 1) } }   // 사진 수 줄면 페이지 보정
                     .overlay(alignment: .topTrailing) {
                         // 장수 표시 — 상태 뱃지와 겹치지 않게 상태 없을 때만
                         if item.status == .selling {

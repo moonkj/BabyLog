@@ -422,7 +422,6 @@ private struct DiaryTimelineCard: View {
                     .contentShape(Rectangle())
             }
             .accessibilityLabel("기록 메뉴 — 수정·삭제")
-            .accessibilityLabel("더보기")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

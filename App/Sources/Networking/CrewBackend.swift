@@ -408,10 +408,13 @@ enum CrewBackend {
         guard SupabaseConfig.isConfigured,
               let g = groupId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
               var req = await request("/rest/v1/crew_group?id=eq.\(g)", method: "DELETE") else { return false }
-        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
-        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+        // return=representation — RLS로 0행 삭제돼도 2xx가 떨어지므로, 실제 삭제된 행이 있어야 성공으로 본다
+        // (크루장이 아니면 빈 배열 → false → 화면이 '삭제됨'으로 잘못 닫히지 않게).
+        req.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
-        return true
+        if let arr = try? JSONSerialization.jsonObject(with: data) as? [Any] { return !arr.isEmpty }
+        return false
     }
 
     /// 다음 크루장 후보 — 가입 시간이 가장 빠른 '나 제외' 멤버의 device_id. 없으면 nil.

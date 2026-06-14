@@ -111,6 +111,10 @@ struct MarketItemDetail: View {
         let prev = currentStatus                          // 화면이 현재 보여주는 상태(서버 모드에선 스냅샷 아님)
         guard prev != newStatus else { return }
         overrideStatus = newStatus                        // 화면 낙관적 반영(서버 모드 포함)
+        if newStatus != .sold {                           // 판매완료가 아니면 지정 구매자 표식 해제(스테일 방지)
+            overrideSoldTo = nil
+            overrideBuyerConfirmed = nil
+        }
         store.setMarketStatus(id: item.id, newStatus)     // 로컬 우선 반영(로컬 모드용)
         guard SupabaseConfig.isConfigured else { return }
         let id = item.id

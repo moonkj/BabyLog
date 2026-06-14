@@ -194,9 +194,15 @@ struct CrewGroupDetail: View {
                 guard transferred else { joinBusy = false; notice = "잠시 후 다시 시도해 주세요."; return }
                 store.toggleJoinGroup(group.id)
                 let left = await CrewBackend.setGroupMembership(groupId: group.id, join: false)
-                if !left { store.toggleJoinGroup(group.id) }
                 joinBusy = false
-                notice = "크루장을 다음 멤버에게 넘기고 나갔어요."
+                if left {
+                    notice = "크루장을 다음 멤버에게 넘기고 나갔어요."
+                } else {
+                    // 위임은 됐으나 탈퇴 요청 실패 — 멤버십만 롤백하면 '위임됨+가입중' 불일치라
+                    // 조용히 되돌리지 않고 안내(다음 진입 시 서버 기준으로 정정됨).
+                    store.toggleJoinGroup(group.id)
+                    notice = "크루장은 넘겼지만 나가기에 실패했어요. 잠시 후 다시 시도해 주세요."
+                }
             }
             return
         }
@@ -210,6 +216,7 @@ struct CrewGroupDetail: View {
     }
 
     private func deleteGroup() {
+        guard !joinBusy else { return }   // 중복 요청 방지
         joinBusy = true
         Task { @MainActor in
             let ok = await CrewBackend.deleteGroup(groupId: group.id)
