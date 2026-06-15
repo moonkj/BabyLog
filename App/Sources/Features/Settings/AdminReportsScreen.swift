@@ -174,15 +174,25 @@ struct AdminReportsScreen: View {
     }
 
     private var yearMenu: some View {
-        Menu {
-            ForEach((stats?.years ?? [statsYear]).sorted(by: >), id: \.self) { y in
-                Button("\(y)년") { statsYear = y }
+        // 최근 5년 + 데이터가 있는 연도를 항상 제공(데이터 없는 해도 선택해 0 확인 가능).
+        let cur = Calendar.current.component(.year, from: Date())
+        let yrs = Array(Set(Array((cur - 4)...cur)).union(stats?.years ?? [])).sorted(by: >)
+        return Menu {
+            ForEach(yrs, id: \.self) { y in
+                Button {
+                    statsYear = y
+                } label: {
+                    if y == statsYear { Label("\(y)년", systemImage: "checkmark") } else { Text("\(y)년") }
+                }
             }
         } label: {
-            Image(systemName: "chevron.down.circle.fill")
-                .font(.system(size: 16)).foregroundStyle(AppColors.primary)
+            HStack(spacing: 2) {
+                Text("\(statsYear)").font(AppFont.num(13, weight: .bold)).foregroundStyle(AppColors.primary)
+                Image(systemName: "chevron.down.circle.fill")
+                    .font(.system(size: 16)).foregroundStyle(AppColors.primary)
+            }
         }
-        .accessibilityLabel("연도 선택")
+        .accessibilityLabel("연도 선택, 현재 \(statsYear)년")
     }
 
     private func statCard(_ label: String, _ value: Int, suffix: String = "", accessory: AnyView? = nil) -> some View {
