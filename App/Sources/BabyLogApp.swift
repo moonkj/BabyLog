@@ -38,6 +38,7 @@ struct BabyLogApp: App {
                     await maybeAutoRestoreFromCloud()   // 재설치 직후 iCloud 백업 자동 복원(CloudKit 활성 시)
                     notifications.start()
                     await flushPendingReports()  // 신고 증거 업로드 — 마켓 탭 재진입에 의존하지 않게
+                    await AnalyticsBackend.ping()  // 익명 접속 통계(하루 1회, 관리자 대시보드용)
                     await setupNotifications()
                     await syncPhotoLibrary()     // 사진 앱 자동 저장(켜둔 경우) — 새 사진 보존
                 }

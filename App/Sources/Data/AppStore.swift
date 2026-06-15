@@ -37,6 +37,8 @@ final class AppStore: ObservableObject {
     @Published var lastPersistError: String? = nil
     /// 임신 홈에서 '검진 일정 보기' 탭 시 기록 화면을 검진 세그먼트로 여는 딥링크 신호(메모리 전용).
     @Published var openPregnancyCheckup = false
+    /// 홈 '접종 확인하기' 탭 시 기록 화면을 예방접종 세그먼트로 여는 딥링크 신호(메모리 전용).
+    @Published var openVaccineSegment = false
     /// 빈 타임라인 등에서 '빠른 기록'을 띄우라는 신호 — MainTabView가 mode에 맞춰 처리(메모리 전용).
     @Published var requestQuickRecord = false
     /// 검진 알림 켜짐 여부(영속). 켜면 권장 시기 전 로컬 알림.

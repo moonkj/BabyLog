@@ -19,7 +19,7 @@ const DELETABLE: Record<string, string> = {
 
 Deno.serve(async (req) => {
   try {
-    const { op, kind, id } = await req.json().catch(() => ({}));
+    const { op, kind, id, year } = await req.json().catch(() => ({}));
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -31,6 +31,16 @@ Deno.serve(async (req) => {
     const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
     const { data: u } = await supabase.auth.getUser(jwt);
     if (!u?.user || !allow.includes(u.user.id)) return new Response("forbidden", { status: 403 });
+
+    if (op === "stats") {
+      // 접속 통계 — 운영자(allow) device_id는 카운트에서 제외. 연도 미지정 시 KST 올해.
+      const yr = Number.isFinite(year) ? Number(year) : new Date().getUTCFullYear();
+      const { data, error } = await supabase.rpc("bl_admin_stats", { p_year: yr, p_exclude: allow });
+      if (error) return new Response(`stats failed: ${error.message}`, { status: 500 });
+      return new Response(JSON.stringify(data ?? {}), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }
 
     if (op === "delete") {
       const table = DELETABLE[kind];

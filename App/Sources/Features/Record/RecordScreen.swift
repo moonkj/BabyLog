@@ -57,6 +57,13 @@ struct RecordScreen: View {
             }
         }
         .background(AppColors.canvas)
+        // 홈 '접종 확인하기' 딥링크 — 기록 탭 진입 시 예방접종 세그먼트로 전환.
+        .onChange(of: store.openVaccineSegment) { _, on in
+            if on { segment = .vaccine; store.openVaccineSegment = false }
+        }
+        .onAppear {
+            if store.openVaccineSegment { segment = .vaccine; store.openVaccineSegment = false }
+        }
         .sheet(isPresented: $showShareCard) {
             if let child = store.selectedChild {
                 // 최신 성장 기록(키/몸무게) + 최근 이정표 텍스트를 함께 넘겨 카드 필드가 비지 않게 한다.

@@ -58,6 +58,27 @@ struct AdminContent: Decodable {
     let posts: [AdminContentRow]
 }
 
+/// 관리자 접속 통계(bl_admin_stats jsonb). 활성 인원·신규·재방문·리텐션·버전·역대.
+struct AdminStats: Decodable {
+    let today: Int
+    let week: Int
+    let month: Int
+    let year: Int
+    let allTime: Int
+    let newToday: Int
+    let returningToday: Int
+    let retD1: Int
+    let retD7: Int
+    let retD30: Int
+    let versions: [VersionStat]
+    let years: [Int]
+    struct VersionStat: Decodable, Identifiable {
+        let v: String
+        let n: Int
+        var id: String { v }
+    }
+}
+
 enum ReportBackend {
     static let reasons = ["욕설·비방", "사기·허위 정보", "부적절한 사진/내용", "광고·스팸", "안전 위협", "기타"]
 
@@ -117,6 +138,12 @@ enum ReportBackend {
     @discardableResult
     static func adminDelete(kind: String, id: String) async -> Bool {
         await adminAction(body: ["op": "delete", "kind": kind, "id": id]) != nil
+    }
+
+    /// 운영자 — 접속 통계(admin-action op=stats). 연도별 활성 인원·신규·재방문·리텐션·버전. 운영자 본인 제외(서버).
+    static func adminStats(year: Int) async -> AdminStats? {
+        guard let data = await adminAction(body: ["op": "stats", "year": year]) else { return nil }
+        return try? JSONDecoder().decode(AdminStats.self, from: data)
     }
 
     /// admin-action Edge 공통 호출 — 성공(2xx) 시 응답 바디, 실패 시 nil. 권한은 서버 JWT uid 화이트리스트.

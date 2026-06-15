@@ -4,10 +4,40 @@
 
 import SwiftUI
 import UIKit
+import AVFoundation
 
 private struct IdentifiableImage: Identifiable {
     let id = UUID()
     let image: UIImage
+}
+
+/// 로컬 영상 포스터(첫 프레임) + 재생 버튼. 인라인 AVPlayer 대신 사용 — 스크롤 목록에서
+/// 상태바가 가려지던 문제 방지 + 라이브 플레이어 다수로 인한 성능 저하 회피. 탭하면 전체화면 재생.
+private struct LocalVideoThumbView: View {
+    let url: URL
+    @State private var thumb: UIImage?
+    var body: some View {
+        ZStack {
+            if let thumb {
+                Image(uiImage: thumb).resizable().scaledToFill()
+            } else {
+                Rectangle().fill(AppColors.surface2)
+            }
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 52, weight: .regular))
+                .foregroundStyle(.white.opacity(0.92))
+                .shadow(radius: 6)
+        }
+        .task(id: url) { await loadThumb() }
+    }
+    private func loadThumb() async {
+        let asset = AVURLAsset(url: url)
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        gen.maximumSize = CGSize(width: 900, height: 900)
+        let cg = try? await gen.image(at: CMTime(seconds: 0.3, preferredTimescale: 600)).image
+        if let cg { thumb = UIImage(cgImage: cg) }
+    }
 }
 
 // MARK: - 타임라인 섹션
@@ -259,6 +289,7 @@ private struct DiaryTimelineCard: View {
     @State private var heartPop = false
     @State private var cardIndex = 0
     @State private var fullPhoto: UIImage? = nil
+    @State private var fullVideo: PlayingVideo? = nil   // 전체화면 영상(인라인 플레이어 제거 — 상태바 가림 방지)
     // 가족 소셜(서버) — 부모가 넘긴 familyPost를 받아 로컬에서 하트·댓글 후 즉시 갱신.
     @State private var fpost: BLFeedPost? = nil
     @State private var commentDraft = ""
@@ -309,9 +340,14 @@ private struct DiaryTimelineCard: View {
                                 .accessibilityAction { fullPhoto = img }
                         }
                         if let videoURL {
-                            VideoPreviewView(url: videoURL)
-                                .frame(maxWidth: .infinity).frame(height: 360)
-                                .tag(photos.count)
+                            // 인라인 AVPlayer는 스크롤 목록에서 상태바를 가리는 문제(+성능) → 포스터+재생, 탭하면 전체화면.
+                            Button { fullVideo = PlayingVideo(url: videoURL) } label: {
+                                LocalVideoThumbView(url: videoURL)
+                                    .frame(maxWidth: .infinity).frame(height: 360).clipped()
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(child.name) 영상 재생")
+                            .tag(photos.count)
                         }
                     }
                     .frame(height: 360)
@@ -361,6 +397,9 @@ private struct DiaryTimelineCard: View {
             set: { if $0 == nil { fullPhoto = nil } }
         )) { wrapper in
             FullScreenPhotoView(image: wrapper.image, onClose: { fullPhoto = nil })
+        }
+        .fullScreenCover(item: $fullVideo) { v in
+            FamilyVideoPlayer(url: v.url) { fullVideo = nil }
         }
         .alert("가족과 공유", isPresented: Binding(get: { shareError != nil }, set: { if !$0 { shareError = nil } })) {
             Button("확인", role: .cancel) {}

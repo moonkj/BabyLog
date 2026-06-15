@@ -8,8 +8,13 @@ struct AdminReportsScreen: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
 
-    private enum Tab: String, CaseIterable { case reports = "신고", content = "콘텐츠", dev = "개발" }
-    @State private var tab: Tab = .reports
+    private enum Tab: String, CaseIterable { case stats = "통계", reports = "신고", content = "콘텐츠", dev = "개발" }
+    @State private var tab: Tab = .stats
+
+    // 통계
+    @State private var stats: AdminStats?
+    @State private var loadingStats = true
+    @State private var statsYear: Int = Calendar.current.component(.year, from: Date())
 
     // 신고
     @State private var reports: [AdminReport] = []
@@ -59,19 +64,27 @@ struct AdminReportsScreen: View {
                 // 콘텐츠 영역이 항상 남은 높이를 채우게 해서 세그먼트가 위에 고정되도록(빈 상태 중앙 정렬).
                 Group {
                     switch tab {
+                    case .stats:   statsView
                     case .reports: reportsView
                     case .content: contentView
                     case .dev:     devView
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task(id: tab == .stats ? statsYear : -1) { if tab == .stats { await loadStats() } }
             }
             .navigationTitle("운영자")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("닫기") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("새로고침") { Task { tab == .reports ? await loadReports() : await loadContent() } }
+                    Button("새로고침") { Task {
+                        switch tab {
+                        case .stats: await loadStats()
+                        case .reports: await loadReports()
+                        default: await loadContent()
+                        }
+                    } }
                 }
             }
             .sheet(item: $selectedReport) { rep in
@@ -91,6 +104,100 @@ struct AdminReportsScreen: View {
             } message: { Text("네트워크 또는 권한 문제예요. 잠시 후 다시 시도해 주세요.") }
         }
         .task { await loadReports(); await loadContent() }
+    }
+
+    // MARK: - 통계 탭
+
+    private func loadStats() async {
+        loadingStats = true
+        stats = await ReportBackend.adminStats(year: statsYear)
+        loadingStats = false
+    }
+
+    @ViewBuilder private var statsView: some View {
+        if loadingStats && stats == nil {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let s = stats {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    // 활성 인원(A) + 역대(B)
+                    Text("활성 접속 인원").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink3)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.s3) {
+                        statCard("오늘", s.today)
+                        statCard("최근 7일", s.week)
+                        statCard("최근 30일", s.month)
+                        statCard("\(statsYear)년", s.year, accessory: AnyView(yearMenu))
+                    }
+                    statCard("역대 누적(설치)", s.allTime)
+
+                    Divider().padding(.vertical, 2)
+
+                    Text("신규 · 재방문 (오늘)").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink3)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.s3) {
+                        statCard("신규", s.newToday)
+                        statCard("재방문", s.returningToday)
+                    }
+
+                    Text("리텐션 (재방문율)").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink3)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.s3) {
+                        statCard("1일+", s.retD1, suffix: "%")
+                        statCard("7일+", s.retD7, suffix: "%")
+                        statCard("30일+", s.retD30, suffix: "%")
+                    }
+
+                    if !s.versions.isEmpty {
+                        Text("앱 버전 (최근 30일)").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink3)
+                        VStack(spacing: 0) {
+                            ForEach(Array(s.versions.enumerated()), id: \.element.id) { idx, ver in
+                                if idx > 0 { Divider() }
+                                HStack {
+                                    Text(ver.v).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink)
+                                    Spacer()
+                                    Text("\(ver.n)명").font(AppFont.num(14)).foregroundStyle(AppColors.ink2)
+                                }
+                                .padding(.vertical, Spacing.s2)
+                            }
+                        }
+                        .padding(.horizontal, Spacing.s3)
+                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    }
+
+                    Text("운영자 본인은 집계에서 제외돼요. 기기당 하루 1회, KST 기준. 개인·아동 정보 없는 익명 집계.")
+                        .font(.system(size: 11)).foregroundStyle(AppColors.ink3)
+                        .padding(.top, Spacing.s1)
+                }
+                .padding(Spacing.s4)
+            }
+        } else {
+            BLEmptyState(icon: "chart.bar", title: "불러오지 못했어요", message: "운영자 권한 또는 네트워크를 확인하세요.")
+        }
+    }
+
+    private var yearMenu: some View {
+        Menu {
+            ForEach((stats?.years ?? [statsYear]).sorted(by: >), id: \.self) { y in
+                Button("\(y)년") { statsYear = y }
+            }
+        } label: {
+            Image(systemName: "chevron.down.circle.fill")
+                .font(.system(size: 16)).foregroundStyle(AppColors.primary)
+        }
+        .accessibilityLabel("연도 선택")
+    }
+
+    private func statCard(_ label: String, _ value: Int, suffix: String = "", accessory: AnyView? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label).font(.system(size: 12, weight: .semibold)).foregroundStyle(AppColors.ink3)
+                Spacer(minLength: 4)
+                if let accessory { accessory }
+            }
+            Text("\(value)\(suffix)").font(AppFont.num(26, weight: .heavy)).foregroundStyle(AppColors.ink)
+        }
+        .padding(Spacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: Radius.md, style: .continuous).stroke(AppColors.line, lineWidth: 1) }
     }
 
     // MARK: - 신고 탭

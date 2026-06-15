@@ -595,7 +595,10 @@ struct HomeTab: View {
     /// 우선순위 종류별 라우팅 — 전용 내비 훅이 없으면 가장 가까운 탭으로 이동.
     private func priorityAction(_ kind: PriorityKind) {
         switch kind {
-        case .vaccine, .recordNudge, .memory, .emergency:
+        case .vaccine:
+            store.openVaccineSegment = true   // 기록 탭을 예방접종 세그먼트로 딥링크
+            onNavigate(.record)
+        case .recordNudge, .memory, .emergency:
             onNavigate(.record)
         case .subsidy:
             onNavigate(.budget)
