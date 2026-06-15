@@ -468,6 +468,8 @@ struct BudgetScreen: View {
         return GeometryReader { geo in
             let gap: CGFloat = 6
             let availW = geo.size.width - gap * CGFloat(max(0, cols.count - 1))
+            // 폭은 컬럼 합에 비례(면적 = 폭×높이가 금액에 비례). 컬럼이 LPT로 고르게
+            // 나뉘어 폭이 비슷하므로 작은 카테고리도 글자가 들어갈 폭을 받는다.
             HStack(spacing: gap) {
                 ForEach(cols.indices, id: \.self) { ci in
                     treemapColumn(cols[ci],
@@ -482,12 +484,27 @@ struct BudgetScreen: View {
     private func treemapColumns(_ cats: [(category: ExpenseCategory, amount: Int)])
         -> [[(category: ExpenseCategory, amount: Int)]] {
         guard !cats.isEmpty else { return [] }
-        var cols: [[(category: ExpenseCategory, amount: Int)]] = [[cats[0]]]
-        let mid = Array(cats.dropFirst().prefix(2))
-        if !mid.isEmpty { cols.append(mid) }
-        let small = Array(cats.dropFirst(3))
-        if !small.isEmpty { cols.append(small) }
-        return cols
+        // 컬럼 수 — 1~2개는 세로 스택(전폭이라 글자 항상 보임), 그 이상은 다중 컬럼.
+        let nCols: Int
+        switch cats.count {
+        case 1, 2: nCols = 1
+        case 3, 4: nCols = 2
+        default:   nCols = 3
+        }
+        // LPT(Longest Processing Time): 금액 큰 것부터 '현재 합이 가장 작은 컬럼'에 배치.
+        // 컬럼 합이 고르게 맞춰져 폭이 비슷해지고(작은 카테고리도 읽을 폭 확보),
+        // 면적 = 폭×높이는 분배와 무관하게 항상 금액에 비례한다.
+        var cols = Array(repeating: [(category: ExpenseCategory, amount: Int)](), count: nCols)
+        var sums = Array(repeating: 0, count: nCols)
+        for item in cats {   // cats는 금액 내림차순 정렬됨
+            let target = sums.indices.min(by: { sums[$0] < sums[$1] }) ?? 0
+            cols[target].append(item)
+            sums[target] += item.amount
+        }
+        // 합이 큰 컬럼을 왼쪽으로, 컬럼 내부도 큰 금액이 위로.
+        return sums.indices
+            .sorted { sums[$0] > sums[$1] }
+            .map { cols[$0].sorted { $0.amount > $1.amount } }
     }
 
     @ViewBuilder
@@ -525,10 +542,10 @@ struct BudgetScreen: View {
                 Text(amountShort(item.amount))
                     .font(AppFont.num(isBig ? 16 : 13.5, weight: .heavy))
                     .foregroundStyle(item.category.badgeTone.ink)
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .lineLimit(1).minimumScaleFactor(0.5)   // 좁은 컬럼에서도 금액이 안 잘리게
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(isBig ? 13 : 10)
+            .padding(isBig ? 13 : 9)
         }
         .background(item.category.badgeTone.bg, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .ignore)
