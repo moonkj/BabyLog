@@ -118,6 +118,16 @@ enum FamilyFeedBackend {
         return String((0..<8).map { _ in chars.randomElement()! })
     }
 
+    /// 내 가족 표시 이름을 닉네임으로 동기화(설정에서 닉네임 변경 시). 비로그인/빈값이면 무시.
+    /// bl_set_my_name이 내(uid) 모든 가족 멤버 행의 display_name을 갱신 → 가족 보관함 이름이 닉네임과 일치.
+    static func updateMyDisplayName(_ name: String) async {
+        let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, await AuthStore.shared.userId != nil,
+              var req = await rest("/rpc/bl_set_my_name", method: "POST") else { return }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_name": String(t.prefix(40))])
+        _ = try? await URLSession.shared.data(for: req)
+    }
+
     /// 가족 비밀번호 설정/변경(소유자) — 숫자 4~10자리. 링크와 함께 2차 확인.
     @discardableResult
     static func setFamilyPass(familyId: String, pass: String) async -> Bool {

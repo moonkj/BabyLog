@@ -369,6 +369,8 @@ struct SettingsScreen: View {
                             .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
                             .submitLabel(.done)
                             .accessibilityLabel("프로필 이름 입력")
+                            // 이름 바꾸면 가족 보관함에 보이는 내 이름도 함께 갱신(서버 사본 동기화)
+                            .onSubmit { Task { await FamilyFeedBackend.updateMyDisplayName(nickname) } }
                     }
 
                     Divider().overlay(AppColors.line)
