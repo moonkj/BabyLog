@@ -16,15 +16,31 @@ update public.bl_family_member m
 
 -- ② 멤버 판정 = '승인된' 멤버 또는 주인 (피드 RLS의 근간)
 --    미승인(대기)은 멤버로 안 침 → 피드/하트/댓글 전부 안 보임.
+-- 멤버 판정 + 구독 게이팅:
+--  · 주인 = 항상.
+--  · 무료 파트너 1명(가장 먼저 승인된 비주인=배우자) = 항상(부부는 무료).
+--  · 그 외(조부모·친척) = 주인이 '구독 중(is_pro)'일 때만. 만료되면 차단.
 create or replace function public.bl_is_family_member(p_family uuid)
-returns boolean language sql security definer stable as $$
-  select exists (
-    select 1 from public.bl_family_member m
-    where m.family_id = p_family and m.uid = public.bl_owner_id() and m.approved
-  ) or exists (
-    select 1 from public.bl_family f
-    where f.id = p_family and f.owner_uid = public.bl_owner_id()
-  );
+returns boolean language plpgsql security definer stable as $$
+declare me text; owner text; owner_pro boolean; free_partner uuid; my_row uuid;
+begin
+  me := public.bl_owner_id();
+  if me is null then return false; end if;
+  select f.owner_uid, coalesce(p.is_pro, false) into owner, owner_pro
+    from public.bl_family f left join public.bl_profile p on p.uid = f.owner_uid
+   where f.id = p_family;
+  if owner is null then return false; end if;
+  if owner = me then return true; end if;                  -- 주인은 항상
+  select id into my_row from public.bl_family_member
+   where family_id = p_family and uid = me and approved limit 1;
+  if my_row is null then return false; end if;             -- 미승인/비멤버
+  if owner_pro then return true; end if;                   -- 구독 중 → 모든 승인 멤버
+  -- 비구독: 무료 파트너 1명(배우자)만 유지, 조부모·친척은 차단
+  select id into free_partner from public.bl_family_member
+   where family_id = p_family and approved and uid <> owner
+   order by joined_at asc nulls last, id asc limit 1;
+  return my_row = free_partner;
+end;
 $$;
 
 -- ③ 멤버 조회 정책 — 본인 행은 항상 보임(대기 상태 확인용), 승인 멤버/주인은 가족 전체 조회.
