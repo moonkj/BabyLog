@@ -469,12 +469,8 @@ struct SettingsScreen: View {
             }
             Haptics.success()
         } catch {
-            // CloudSyncError는 안내 문구, 그 외(CloudKit 권한·스키마 등)는 실제 사유를 노출해 진단 가능하게.
-            if let e = error as? CloudSyncError {
-                cloudStatus = e.errorDescription
-            } else {
-                cloudStatus = "백업 실패: \(error.localizedDescription)"
-            }
+            // CloudKit 사유별 친절 안내(저장공간 부족·로그인·네트워크 등).
+            cloudStatus = CloudSyncService.message(for: error)
             Haptics.warning()
         }
     }

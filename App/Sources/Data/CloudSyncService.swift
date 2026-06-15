@@ -57,6 +57,28 @@ final class CloudSyncService {
         #endif
     }
 
+    /// 백업/복원 오류를 사용자 친화 메시지로 변환(CloudKit 사유별 안내).
+    nonisolated static func message(for error: Error) -> String {
+        if let e = error as? CloudSyncError { return e.errorDescription ?? "잠시 후 다시 시도해 주세요." }
+        #if BL_CLOUDKIT
+        if let ck = error as? CKError {
+            switch ck.code {
+            case .quotaExceeded:
+                return "iCloud 저장공간이 가득 찼어요. iOS 설정 > Apple 계정 > iCloud에서 공간을 비우거나 업그레이드한 뒤 다시 시도하세요."
+            case .notAuthenticated:
+                return "iCloud 로그인이 필요해요. iOS 설정 > Apple 계정에서 로그인 후 다시 시도하세요."
+            case .networkUnavailable, .networkFailure:
+                return "네트워크 연결을 확인하고 다시 시도해 주세요."
+            case .serviceUnavailable, .requestRateLimited, .zoneBusy:
+                return "iCloud가 잠시 바빠요. 잠시 후 다시 시도해 주세요."
+            default:
+                return "백업 실패: \(ck.localizedDescription)"
+            }
+        }
+        #endif
+        return "백업 실패: \(error.localizedDescription)"
+    }
+
     /// iCloud 계정 사용 가능 여부.
     func accountAvailable() async -> Bool {
         #if BL_CLOUDKIT
