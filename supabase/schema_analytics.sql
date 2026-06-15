@@ -73,4 +73,7 @@ returns jsonb language sql stable security definer set search_path = public as $
     'years', (select coalesce(jsonb_agg(distinct extract(year from day)::int order by extract(year from day)::int), '[]'::jsonb) from base)
   );
 $$;
--- 직접 호출 차단(anon/authenticated grant 없음) — service_role(Edge)만 호출. 운영자 화이트리스트 강제는 Edge에서.
+-- ⚠️ Postgres 함수는 기본 PUBLIC execute라 grant 안 해도 호출됨 → 명시적으로 회수하고 service_role만 허용.
+--    (운영자 화이트리스트 강제는 Edge admin-action에서, 집계 함수 자체는 service_role 전용)
+revoke execute on function public.bl_admin_stats(int, text[]) from public, anon, authenticated;
+grant execute on function public.bl_admin_stats(int, text[]) to service_role;
