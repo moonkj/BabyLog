@@ -46,13 +46,18 @@ struct ProUpsellSheet: View {
                 .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
 
                 // 가격 + 정직 고지(자동 갱신·해지 경로 명시 — App Store 요건 + 정직한 결제 원칙)
-                VStack(spacing: 4) {
+                VStack(spacing: 5) {
                     (Text("월 ").font(.system(size: 16, weight: .semibold))
                      + Text("990원").font(.system(size: 22, weight: .heavy)))
                         .foregroundStyle(AppColors.ink)
-                    Text("매월 자동 갱신 · 해지 전까지 청구돼요. 해지는 설정 > Apple 계정 > 구독에서 한 번에 가능해요. 무료 데이터는 영구 보존돼요.")
+                    (Text("연 ").font(.system(size: 14, weight: .semibold))
+                     + Text("9,900원").font(.system(size: 17, weight: .heavy))
+                     + Text("  2개월 무료").font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.primary))
+                        .foregroundStyle(AppColors.ink2)
+                    Text("월·연 구독 중 선택 · 자동 갱신, 해지 전까지 청구돼요. 해지는 설정 > Apple 계정 > 구독에서 한 번에 가능해요. 무료 데이터는 영구 보존돼요.")
                         .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
                 }
 
                 // CTA

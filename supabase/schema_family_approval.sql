@@ -47,10 +47,11 @@ begin
   end if;
   select coalesce(p.is_pro, false) into owner_pro
     from public.bl_family f left join public.bl_profile p on p.uid = f.owner_uid where f.id = fam;
-  cap := case when owner_pro then 8 else 2 end;
   select count(*) into approved_cnt
     from public.bl_family_member where family_id = fam and approved and uid is not null;
-  if approved_cnt >= cap then raise exception 'family_full'; end if;
+  -- 무료 = 부부 2명(플랫폼 무관). 그 이상(조부모·친척)은 Pro. Pro 상한 8명.
+  if not owner_pro and approved_cnt >= 2 then raise exception 'needs_pro'; end if;
+  if owner_pro and approved_cnt >= 8 then raise exception 'family_full'; end if;
   update public.bl_family_member set approved = true where id = p_member;
 end;
 $$;

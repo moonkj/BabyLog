@@ -213,7 +213,13 @@ enum FamilyFeedBackend {
               let http = resp as? HTTPURLResponse else { lastError = "승인 실패"; return false }
         guard (200...299).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
-            lastError = body.contains("family_full") ? "가족 인원이 가득 찼어요 (최대 8명)." : "승인 실패"
+            if body.contains("needs_pro") {
+                lastError = "무료는 부부 2명까지예요. Pro로 업그레이드하면 조부모·친척도 초대할 수 있어요."
+            } else if body.contains("family_full") {
+                lastError = "가족 인원이 가득 찼어요 (최대 8명)."
+            } else {
+                lastError = "승인 실패"
+            }
             return false
         }
         return true

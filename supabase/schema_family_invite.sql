@@ -134,19 +134,10 @@ begin
     end if;
   end if;
 
-  -- ── 등급 제한 ──
-  -- 무료: 앱(비익명) 2명까지만, 웹(익명=안드로이드/조부모)은 Pro 필요. Pro: 최대 8명.
+  -- ── 합류는 누구나 '승인 대기'로 ──
+  -- 플랫폼(아이폰/안드로이드) 무관하게 일단 합류 신청만 받는다. 실제 인원·등급 제한
+  -- (무료 2명=부부 / Pro 8명)은 '주인이 승인할 때' bl_approve_member에서 강제한다.
   is_anon := coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false);
-  select coalesce(p.is_pro, false) into owner_pro
-    from public.bl_family f left join public.bl_profile p on p.uid = f.owner_uid
-   where f.id = fam;
-  select count(*) into cnt from public.bl_family_member where family_id = fam and uid is not null;
-  if owner_pro then
-    if cnt >= 8 then raise exception 'family_full'; end if;       -- Pro 상한 8명
-  else
-    if is_anon then raise exception 'needs_pro_web'; end if;      -- 웹 합류 = Pro
-    if cnt >= 2 then raise exception 'needs_pro_cap'; end if;     -- 무료 2명 초과 = Pro
-  end if;
 
   -- 합류(미사용 초대 행 claim → 없으면 새 멤버 행). 웹(익명)=조부모, 앱=부모.
   update public.bl_family_member
