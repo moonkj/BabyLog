@@ -237,7 +237,8 @@ struct GrowthChartSection: View {
 
     /// 최신 키·몸무게 측정 각각이 밴드 안/밖 어디인지. 성별 미상이면 nil(판정 보류).
     private var latestBandPosition: BandPosition? {
-        guard hasKnownGender, let last = lastRecord else { return nil }
+        // 표시 수치(latestRecordWithValue)와 동일 기준으로 판정 — 헤드라인과 수치가 어긋나지 않게.
+        guard hasKnownGender, let last = latestRecordWithValue ?? lastRecord else { return nil }
         let month = AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: last.date).months
 
         let wPos = bandPosition(value: last.weightKg, month: month, bands: weightBands)

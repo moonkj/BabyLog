@@ -658,39 +658,37 @@ struct HomeTab: View {
     @ViewBuilder
     private var priorityCardCompact: some View {
         if let item = priorityItem {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("지금 가장 중요해요", systemImage: "sparkles")
-                        .font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.gold)
-                    Text(item.title)
-                        .font(.system(size: 15, weight: .heavy)).foregroundStyle(AppColors.ink)
-                    Text(item.subtitle)
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(AppColors.ink2)
-                        .lineLimit(1)
-                }
-                Spacer()
-                if let dDay = item.dDay {
-                    VStack(spacing: 0) {
+            // 카드 전체를 탭 → 종류별 라우팅(priorityAction): vaccine은 접종 세그먼트, subsidy는 가계부 등.
+            // (기존엔 dDay 있는 vaccine만 버튼이 있었고 그마저 타임라인으로 떨어졌음)
+            Button { priorityAction(item.kind) } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("지금 가장 중요해요", systemImage: "sparkles")
+                            .font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.gold)
+                        Text(item.title)
+                            .font(.system(size: 15, weight: .heavy)).foregroundStyle(AppColors.ink)
+                        Text(item.subtitle)
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(AppColors.ink2)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if let dDay = item.dDay {
                         Text("D-\(dDay)")
                             .font(.system(size: 26, weight: .heavy)).foregroundStyle(AppColors.gold)
-                        Button { onNavigate(.record) } label: {
-                            Text("확인").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
-                                .padding(.horizontal, 12).frame(height: 30)
-                                .background(AppColors.gold, in: Capsule())
-                        }
-                        .buttonStyle(LiquidPressStyle())
-                        .accessibilityLabel("접종 일정 확인하기")
                     }
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("디데이 \(dDay)일 전")
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold)).foregroundStyle(AppColors.gold)
                 }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+                .blShadow(.card)
+                .contentShape(Rectangle())
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-            .blShadow(.card)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("우선순위: \(item.title). \(item.subtitle)")
+            .buttonStyle(LiquidPressStyle(scale: 0.99))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("우선순위: \(item.title). \(item.subtitle)\(item.dDay.map { ", 디데이 \($0)일 전" } ?? "")")
+            .accessibilityHint("탭하면 바로 이동")
         }
     }
 

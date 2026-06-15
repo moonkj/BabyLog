@@ -95,6 +95,8 @@ const toastEl = document.getElementById("toast");
 const qs = (n) => new URLSearchParams(location.search).get(n);
 let sb, me, myName = "가족", familyId = null, pendingPass = "", claimError = null;
 let approvalPoll = null;   // 승인 대기 폴링 핸들(중복 방지)
+let feedTimer = null;      // 피드 60초 폴링 핸들(재로그인 시 중복 누적 방지)
+let feedVisBound = false;  // visibilitychange 리스너 1회만 등록
 
 function toast(m){ toastEl.textContent = m; toastEl.classList.add("show");
   clearTimeout(toast._t); toast._t = setTimeout(()=>toastEl.classList.remove("show"), 2200); }
@@ -293,8 +295,13 @@ async function start(){
 
   showFeedHeader();
   await loadFeed();
-  setInterval(()=>{ if(document.visibilityState==="visible") loadFeed(); }, 60000);
-  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") loadFeed(); });
+  // 재로그인/재진입마다 setInterval·리스너가 누적되던 누수 수정 — 기존 타이머 정리 후 1개만, 리스너는 1회만.
+  if (feedTimer) clearInterval(feedTimer);
+  feedTimer = setInterval(()=>{ if(document.visibilityState==="visible") loadFeed(); }, 60000);
+  if (!feedVisBound) {
+    document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && familyId) loadFeed(); });
+    feedVisBound = true;
+  }
 }
 
 // 지금 가족 피드를 볼 권한이 있는지(구독 게이팅 반영). 오류 시 기본 허용(최종 차단은 RLS).

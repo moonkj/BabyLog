@@ -543,12 +543,13 @@ struct VaccineSection: View {
         return BLCard(padding: Spacing.s4, flat: true) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("출생~만6세 표준 일정")
+                    Text("출생~만6세 주요 표준 일정")
                         .font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink2)
                     Spacer()
                     Text("\(done) / \(total) 기록")
                         .font(AppFont.num(13, weight: .heavy)).foregroundStyle(AppColors.primary)
                 }
+                // 분모는 '주요' 일정 — 일본뇌염 추가·독감 등은 미포함(아래 면책 참고). 100%여도 전체 완료를 뜻하지 않음.
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(AppColors.surface3).frame(height: 6)

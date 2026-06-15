@@ -54,10 +54,11 @@ Deno.serve(async (req) => {
     if (!owner) return new Response(JSON.stringify({ sent: 0, reason: "no_family" }), { status: 200, headers: CORS });
     if (owner === sender) return new Response(JSON.stringify({ sent: 0, reason: "self" }), { status: 200, headers: CORS });
 
-    // 스팸 방지 — 신청자는 이 가족의 멤버 행(대기 포함)이어야 함
+    // 스팸 방지 — 신청자는 이 가족의 멤버 행(대기 포함)이어야 함.
+    // limit(1) — maybeSingle()은 중복 멤버행(레이스로 같은 uid 2행)이 있으면 throw해 푸시가 통째로 누락됐다.
     const { data: mem } = await supabase.from("bl_family_member")
-      .select("id").eq("family_id", familyId).eq("uid", sender).maybeSingle();
-    if (!mem) return new Response(JSON.stringify({ sent: 0, reason: "not_member" }), { status: 200, headers: CORS });
+      .select("id").eq("family_id", familyId).eq("uid", sender).limit(1);
+    if (!mem?.length) return new Response(JSON.stringify({ sent: 0, reason: "not_member" }), { status: 200, headers: CORS });
 
     // 주인 토큰
     const { data: tokens } = await supabase.from("crew_push_token").select("apns_token, env").eq("device_id", owner);

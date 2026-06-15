@@ -428,7 +428,10 @@ struct BudgetScreen: View {
         .foregroundStyle(down ? AppColors.primary : AppColors.danger)
         .padding(.horizontal, 7).padding(.vertical, 3)
         .background((down ? AppColors.primaryTint : AppColors.dangerTint), in: Capsule())
-        .accessibilityLabel("직전 \(period.label) 대비 \(down ? "감소" : "증가") \(abs(pct))퍼센트")
+        // 연도 모드(과거 연도 탐색 포함)에선 '직전 1년'이 아니라 '전년(선택연도-1)' 대비임을 명확히.
+        .accessibilityLabel(isYearMode
+            ? "\(selectedYear - 1)년 대비 \(down ? "감소" : "증가") \(abs(pct))퍼센트"
+            : "직전 \(period.label) 대비 \(down ? "감소" : "증가") \(abs(pct))퍼센트")
     }
 
     // MARK: 2. 도넛 차트 대시보드 (카테고리 비중)
