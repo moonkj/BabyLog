@@ -149,6 +149,9 @@ async function resolveFamily(){
       const m = error.message || "";
       if (m.includes("wrong_password")) claimError = "비밀번호가 맞지 않아요. 다시 확인해 주세요.";
       else if (m.includes("invalid invite")) claimError = "초대 링크가 올바르지 않아요.";
+      else if (m.includes("needs_pro_web")) claimError = "조부모·친척 초대는 Pro 가족만 가능해요. 부모님께 문의해 주세요.";
+      else if (m.includes("needs_pro_cap")) claimError = "무료 가족은 2명까지예요. Pro로 업그레이드하면 더 초대할 수 있어요.";
+      else if (m.includes("family_full")) claimError = "가족 인원이 가득 찼어요 (최대 8명).";
       else claimError = "들어오지 못했어요. 잠시 후 다시 시도해 주세요.";
     } else if (data) familyId = data;
   }

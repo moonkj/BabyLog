@@ -565,15 +565,18 @@ struct ProfileScreen: View {
 
             BLCard(padding: 0) {
                 VStack(spacing: 0) {
-                    privacyRow(
-                        icon: "person.3.fill",
-                        iconBg: Color(hex: 0xE6F1FB),
-                        iconFg: Color(hex: 0x3B6FA8),
-                        title: "가족 공유",
-                        subtitle: "조부모님과 사진 공유 (아이폰·안드로이드)",
-                        showDivider: true,
-                        onTap: { showFamilyShare = true }
-                    )
+                    // 옛 'iCloud 가족 공유' 진입점은 숨김(가족 피드 R2로 대체). FamilyShareScreen은 보존.
+                    if false {
+                        privacyRow(
+                            icon: "person.3.fill",
+                            iconBg: Color(hex: 0xE6F1FB),
+                            iconFg: Color(hex: 0x3B6FA8),
+                            title: "가족 공유",
+                            subtitle: "조부모님과 사진 공유 (아이폰·안드로이드)",
+                            showDivider: true,
+                            onTap: { showFamilyShare = true }
+                        )
+                    }
                     privacyRow(
                         icon: "shield.fill",
                         iconBg: AppColors.primarySoft,

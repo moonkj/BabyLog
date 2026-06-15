@@ -127,6 +127,75 @@ enum FamilyFeedBackend {
         return true
     }
 
+    // MARK: - 참여 (부모 — 앱에서 초대코드+비번으로 합류)
+
+    /// 초대코드+비밀번호로 가족 합류 — 서버 RPC bl_claim_invite가 등급/비번/인원을 검증하고
+    /// 합류한 family_id(uuid)를 반환한다. 성공 시 family_id 문자열, 실패 시 lastError 설정 후 nil.
+    static func joinFamily(code: String, name: String, pass: String) async -> String? {
+        lastError = nil
+        guard var req = await rest("/rpc/bl_claim_invite", method: "POST") else { lastError = "서버 미구성"; return nil }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "p_code": code, "p_name": String(name.prefix(40)), "p_pass": pass,
+        ])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse else { lastError = "네트워크 오류"; return nil }
+        let body = String(data: data, encoding: .utf8) ?? ""
+        guard (200...299).contains(http.statusCode) else {
+            // 서버 에러 본문(message 등)에 담긴 사유에 맞춰 한국어 안내로 변환.
+            if body.contains("needs_pro_web") {
+                lastError = "조부모·친척은 Pro 가족만 초대할 수 있어요."
+            } else if body.contains("needs_pro_cap") {
+                lastError = "무료는 2명까지예요. Pro로 더 초대할 수 있어요."
+            } else if body.contains("family_full") {
+                lastError = "가족 인원이 가득 찼어요 (최대 8명)."
+            } else if body.contains("wrong_password") {
+                lastError = "비밀번호가 맞지 않아요."
+            } else if body.contains("invalid invite") {
+                lastError = "초대 코드가 올바르지 않아요."
+            } else {
+                lastError = "참여 실패 HTTP \(http.statusCode)"
+            }
+            return nil
+        }
+        // 성공 본문은 uuid가 따옴표로 둘러싸여 옴(예: "...uuid..."). 따옴표·공백 제거.
+        let fid = body.trimmingCharacters(in: CharacterSet(charactersIn: "\"\n\r \t"))
+        guard !fid.isEmpty else { lastError = "참여 응답이 비어 있어요."; return nil }
+        return fid
+    }
+
+    // MARK: - 가족 관리 (주인 — 멤버 조회/삭제)
+
+    /// 가족 멤버 목록(가입순). 실패/디코드 실패 시 [].
+    static func fetchMembers(familyId: String) async -> [BLFamilyMember] {
+        let path = "/bl_family_member?family_id=eq.\(familyId)&select=*&order=joined_at.asc"
+        guard let req = await rest(path, method: "GET"),
+              let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let members = decode(data, [BLFamilyMember].self) else { return [] }
+        return members
+    }
+
+    /// 멤버 내보내기(주인) — return=representation으로 실제 삭제된 행을 확인. 비어있으면 실패(권한·없음).
+    @discardableResult
+    static func removeMember(memberId: String) async -> Bool {
+        guard var req = await rest("/bl_family_member?id=eq.\(memberId)", method: "DELETE") else { return false }
+        req.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], !arr.isEmpty else { return false }
+        return true
+    }
+
+    /// 관리자 Pro 토글 — 서버 bl_profile.is_pro 동기화(개발/관리 용). 2xx면 true.
+    @discardableResult
+    static func setDevPro(on: Bool) async -> Bool {
+        guard var req = await rest("/rpc/bl_dev_set_pro", method: "POST") else { return false }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_on": on])
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
     // MARK: - 피드
 
     static func fetchFeed(familyId: String) async -> [BLFeedPost] {
@@ -207,7 +276,6 @@ enum FamilyFeedBackend {
         lastError = nil
         guard !images.isEmpty else { lastError = "사진이 없어요"; return false }
         guard let uid = await AuthStore.shared.userId else { lastError = "로그인이 필요해요"; return false }
-        await ensureProForDev()   // DEV: 서버 is_pro 동기화(출시 시 제거)
         var fam = await myFamily()
         if fam == nil { fam = await createFamily(name: "우리 가족") }
         guard let f = fam else { lastError = lastError ?? "가족 보관함 생성 실패"; return false }

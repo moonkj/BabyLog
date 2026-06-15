@@ -327,11 +327,13 @@ struct AdminReportsScreen: View {
                 Toggle(isOn: $store.isPro) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Pro 모드").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                        Text("켜면 가족 좋아요·댓글·공유·풀화질 백업 활성 (출시 시 구독으로 대체)")
+                        Text("켜면 조부모·친척(최대 8명) 초대 활성. 끄면 무료(부부 2명). 서버에도 반영 (출시 시 구독으로 대체)")
                             .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
                     }
                 }
                 .tint(AppColors.primary)
+                // 서버 bl_profile.is_pro 동기화 — 무료/Pro 등급 테스트(조부모 초대·인원 제한)용
+                .onChange(of: store.isPro) { _, on in Task { await FamilyFeedBackend.setDevPro(on: on) } }
             }
             Section {
                 Text("운영자 전용 도구입니다. 출시 전 제거 예정.")

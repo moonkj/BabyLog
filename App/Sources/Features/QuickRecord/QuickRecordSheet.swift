@@ -524,10 +524,10 @@ struct QuickRecordSheet: View {
         .accessibilityLabel("\(label) 입력")
     }
 
-    /// Pro 가족 피드가 켜져 있고 로그인 상태인지 — 자동 게시 분기 기준.
-    private var proFeedActive: Bool { store.isPro && AuthStore.shared.isLoggedIn }
-    /// 가족 공유 토글 사용 가능 여부(=Pro). 프리는 비활성 + 탭 시 안내 팝업.
-    private var familyShareEnabled: Bool { store.isPro }
+    /// 가족 피드가 켜져 있고(=로그인) 자동 게시 가능한지 — 자동 게시 분기 기준.
+    private var proFeedActive: Bool { AuthStore.shared.isLoggedIn }
+    /// 가족 공유 토글 사용 가능 여부(=로그인). 미로그인은 비활성 + 탭 시 안내 팝업.
+    private var familyShareEnabled: Bool { AuthStore.shared.isLoggedIn }
 
     // 가족(조부모) 공유 토글 — 육아 모드 + 미디어 있을 때만.
     //  · Pro: 활성 — 저장 시 가족 피드에 자동 게시(기본 ON).
@@ -765,9 +765,9 @@ struct QuickRecordSheet: View {
                     didSave = true
                 }
                 pendingShareURLs = (shareToFamily && hasMedia) ? shareURLs : []
-                // Pro + 로그인 + 사진 공유 ON → 이 기록의 사진을 가족 피드(서버)로 자동 게시할 준비.
+                // 로그인 + 사진 공유 ON → 이 기록의 사진을 가족 피드(서버)로 자동 게시할 준비.
                 // 피드 포스트 id = 기록 entry.id → 타임라인 카드가 같은 id로 가족 하트·댓글을 불러옴.
-                if shareToFamily, !selectedImages.isEmpty, store.isPro,
+                if shareToFamily, !selectedImages.isEmpty,
                    AuthStore.shared.isLoggedIn, let linkId = firstEntryId {
                     feedImages = selectedImages
                     feedChild = store.selectedChild?.name

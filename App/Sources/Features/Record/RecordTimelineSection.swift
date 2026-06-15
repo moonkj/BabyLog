@@ -104,13 +104,13 @@ struct TimelineSection: View {
                         .padding(.top, Spacing.s2)
                 }
             }
-            // Pro: 가족 피드 반응 로드(기록↔포스트 id 매칭). isPro 토글·공유 완료 시 재로드.
-            .task(id: "\(store.isPro)_\(store.familyFeedVersion)") { await loadFamilySocial() }
+            // 가족 피드 반응 로드(기록↔포스트 id 매칭). 로그인 상태·공유 완료 시 재로드.
+            .task(id: "\(AuthStore.shared.isLoggedIn)_\(store.familyFeedVersion)") { await loadFamilySocial() }
         }
     }
 
     private func loadFamilySocial() async {
-        guard store.isPro, AuthStore.shared.isLoggedIn else { familyPosts = [:]; return }
+        guard AuthStore.shared.isLoggedIn else { familyPosts = [:]; return }
         familyPosts = await FamilyFeedBackend.fetchFamilySocial()
     }
 
@@ -273,10 +273,10 @@ private struct DiaryTimelineCard: View {
     private var hasPhoto: Bool { !entry.photoRefList.isEmpty }
     /// 이 기록을 가족에 공유했거나(서버) 공유 진행 중(낙관적 표시).
     private var sharedIntent: Bool { store.sharedFeedEntryIds.contains(entry.id.uuidString) }
-    /// Pro 모드 + 이 기록이 가족에 공유됨 → 가족 하트·댓글 표시.
-    private var showsFamilySocial: Bool { store.isPro && fpost != nil }
-    /// Pro 모드에서 카드 하단에 가족 UI(하트·댓글/공유중/공유하기)가 보이는지 — 패딩 조절용.
-    private var showsAnyFamilyUI: Bool { store.isPro && (fpost != nil || hasPhoto) }
+    /// 이 기록이 가족에 공유됨 → 가족 하트·댓글 표시.
+    private var showsFamilySocial: Bool { fpost != nil }
+    /// 카드 하단에 가족 UI(하트·댓글/공유중/공유하기)가 보이는지 — 패딩 조절용.
+    private var showsAnyFamilyUI: Bool { fpost != nil || hasPhoto }
 
     var body: some View {
         let photos = entry.photoRefList.compactMap { PhotoStore.image($0) }
@@ -341,7 +341,7 @@ private struct DiaryTimelineCard: View {
         // 배치(familyPosts)가 아직 못 잡은 기록은 카드가 자기 id로 직접 확인 — 자동공유 직후 반영 보장.
         // 공유 완료 시 store.familyFeedVersion이 증가 → 이 task 재실행 → 새 포스트를 잡아 버튼→하트로 전환.
         .task(id: store.familyFeedVersion) {
-            guard store.isPro, AuthStore.shared.isLoggedIn, hasPhoto, familyPost == nil else { return }
+            guard AuthStore.shared.isLoggedIn, hasPhoto, familyPost == nil else { return }
             if let p = await FamilyFeedBackend.fetchPost(postId: entry.id.uuidString) { fpost = p }
         }
         .contextMenu {
@@ -522,10 +522,10 @@ private struct DiaryTimelineCard: View {
         .padding(.bottom, showsAnyFamilyUI ? 6 : 14)
     }
 
-    // Pro 가족 소셜 — 공유됨이면 하트·댓글, 사진 있는데 미공유면 '가족과 공유하기'. 프리엔 미표시.
+    // 가족 소셜 — 공유됨이면 하트·댓글, 사진 있는데 미공유면 '가족과 공유하기'. 미로그인엔 미표시.
     @ViewBuilder
     private var familySocialBlock: some View {
-        if store.isPro {
+        if AuthStore.shared.isLoggedIn {
             if fpost != nil {
                 sharedSocialView
             } else if sharedIntent, hasPhoto {

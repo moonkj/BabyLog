@@ -112,7 +112,7 @@ create or replace function public.bl_claim_invite(p_code text, p_name text, p_pa
 returns uuid
 language plpgsql security definer set search_path = public, extensions
 as $$
-declare me text; fam uuid; h text;
+declare me text; fam uuid; h text; is_anon boolean; owner_pro boolean; cnt int;
 begin
   me := public.bl_owner_id();
   if me is null then raise exception 'auth required'; end if;
@@ -121,7 +121,7 @@ begin
   select family_id into fam from public.bl_family_member where invite_code = p_code limit 1;
   if fam is null then raise exception 'invalid invite'; end if;
 
-  -- 이미 멤버면 비번 없이 통과(재방문)
+  -- 이미 멤버면 비번/등급 검사 없이 통과(재방문)
   if exists (select 1 from public.bl_family_member where family_id = fam and uid = me) then
     return fam;
   end if;
@@ -134,15 +134,44 @@ begin
     end if;
   end if;
 
-  -- 합류(미사용 초대 행 claim → 없으면 새 멤버 행)
+  -- ── 등급 제한 ──
+  -- 무료: 앱(비익명) 2명까지만, 웹(익명=안드로이드/조부모)은 Pro 필요. Pro: 최대 8명.
+  is_anon := coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false);
+  select coalesce(p.is_pro, false) into owner_pro
+    from public.bl_family f left join public.bl_profile p on p.uid = f.owner_uid
+   where f.id = fam;
+  select count(*) into cnt from public.bl_family_member where family_id = fam and uid is not null;
+  if owner_pro then
+    if cnt >= 8 then raise exception 'family_full'; end if;       -- Pro 상한 8명
+  else
+    if is_anon then raise exception 'needs_pro_web'; end if;      -- 웹 합류 = Pro
+    if cnt >= 2 then raise exception 'needs_pro_cap'; end if;     -- 무료 2명 초과 = Pro
+  end if;
+
+  -- 합류(미사용 초대 행 claim → 없으면 새 멤버 행). 웹(익명)=조부모, 앱=부모.
   update public.bl_family_member
-     set uid = me, joined_at = now(), display_name = coalesce(nullif(p_name, ''), display_name)
+     set uid = me, joined_at = now(),
+         role = case when is_anon then role else 'parent' end,
+         display_name = coalesce(nullif(p_name, ''), display_name)
    where invite_code = p_code and uid is null;
   if not found then
     insert into public.bl_family_member (family_id, uid, role, display_name, joined_at)
-    values (fam, me, 'grandparent', coalesce(nullif(p_name, ''), '가족'), now());
+    values (fam, me, case when is_anon then 'grandparent' else 'parent' end,
+            coalesce(nullif(p_name, ''), '가족'), now());
   end if;
   return fam;
 end;
 $$;
 grant execute on function public.bl_claim_invite(text, text, text) to anon, authenticated;
+
+-- ════════════════ 멤버 삭제(나가기 / 내보내기) 정책 ════════════════
+-- bl_family_member 에 DELETE 정책이 없으면 아무도 멤버 행을 지울 수 없다.
+-- 규칙:
+--   · 가족 주인(bl_family.owner_uid = bl_owner_id())은 자기 가족의 어떤 멤버든 삭제(내보내기) 가능.
+--   · 멤버 본인(uid = bl_owner_id())은 자기 행만 삭제(스스로 나가기) 가능.
+-- 멱등: 재실행 안전(기존 정책 drop 후 재생성).
+drop policy if exists bl_member_delete on public.bl_family_member;
+create policy bl_member_delete on public.bl_family_member for delete using (
+  uid = public.bl_owner_id()
+  or exists (select 1 from public.bl_family f where f.id = family_id and f.owner_uid = public.bl_owner_id())
+);

@@ -18,6 +18,10 @@ struct FamilyFeedScreen: View {
     @State private var pendingDelete: BLFeedPost?   // 본인 사진 삭제 확인
     @State private var creatingInvite = false
     @State private var inviteSheet: InviteInfo?     // 초대 링크 공유 시트
+    @State private var showJoinSheet = false        // 초대코드+비번 참여 시트
+    @State private var members: [BLFamilyMember] = []  // 가족 관리(주인) 멤버 목록
+    @State private var loadingMembers = false
+    @State private var pendingRemove: BLFamilyMember?  // 멤버 내보내기 확인
 
     private var myUid: String? { auth.userId }
     /// R2 공개 베이스(앱이 키로 이미지 URL 구성). 미설정이면 플레이스홀더.
@@ -47,6 +51,26 @@ struct FamilyFeedScreen: View {
             Text("가족 모두의 보관함에서 사라지고 하트·댓글도 함께 삭제돼요. 되돌릴 수 없어요.")
         }
         .sheet(item: $inviteSheet) { info in InviteShareSheet(info: info) }
+        .sheet(isPresented: $showJoinSheet) {
+            JoinFamilySheet { code, pass in
+                let name = UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님"
+                if await FamilyFeedBackend.joinFamily(code: code, name: name, pass: pass) != nil {
+                    await load()
+                    return true
+                } else {
+                    errorMsg = FamilyFeedBackend.lastError ?? "참여하지 못했어요. 잠시 후 다시 시도해 주세요."
+                    return false
+                }
+            }
+        }
+        .confirmationDialog("이 가족 구성원을 내보낼까요?", isPresented: Binding(
+            get: { pendingRemove != nil }, set: { if !$0 { pendingRemove = nil } }
+        ), titleVisibility: .visible, presenting: pendingRemove) { member in
+            Button("내보내기", role: .destructive) { Task { await removeMember(member) } }
+            Button("취소", role: .cancel) {}
+        } message: { member in
+            Text("‘\(member.displayName)’님이 가족 보관함에서 나가게 돼요. 다시 들어오려면 초대가 필요해요.")
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -66,8 +90,13 @@ struct FamilyFeedScreen: View {
             ProgressView().frame(maxWidth: .infinity).padding(.top, Spacing.s7)
         } else if family == nil {
             createFamilyCard
+            joinFamilyCard       // 초대코드+비번으로 기존 가족 합류
         } else {
-            inviteRow            // 조부모(안드로이드/아이폰) 초대 링크
+            if family?.ownerUid == myUid {
+                manageCard        // 주인: 가족 관리(멤버 목록·내보내기·초대)
+            } else {
+                inviteRow         // 멤버: 조부모 초대 링크만
+            }
             if posts.isEmpty {
                 BLEmptyState(icon: "photo.on.rectangle.angled", title: "기록하면 여기 모여요",
                              message: "기록 탭에서 사진을 올리면 가족 보관함에 자동으로 공유돼요. 가족이 하트·댓글로 함께해요.")
@@ -133,6 +162,86 @@ struct FamilyFeedScreen: View {
                         .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                 }.buttonStyle(LiquidPressStyle(scale: 0.98)).disabled(busy)
             }
+        }
+    }
+
+    /// 기존 가족에 합류 — 초대코드+비밀번호로 입장(가족이 없을 때 노출).
+    private var joinFamilyCard: some View {
+        BLCard {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                Text("이미 만든 가족에 참여하기").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                Text("가족이 알려준 초대 코드와 비밀번호로 들어오세요.")
+                    .font(.system(size: 13)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
+                Button { showJoinSheet = true } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.2.badge.key")
+                        Text("가족 참여하기")
+                    }
+                    .font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.primary)
+                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .background(AppColors.primarySoft, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                }.buttonStyle(LiquidPressStyle(scale: 0.98))
+            }
+        }
+    }
+
+    /// 가족 관리(주인) — 멤버 목록·내보내기 + 조부모 초대.
+    private var manageCard: some View {
+        BLCard {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                Text("가족 관리").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                if loadingMembers {
+                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, Spacing.s2)
+                } else if members.isEmpty {
+                    Text("아직 구성원이 없어요.").font(.system(size: 13)).foregroundStyle(AppColors.ink3)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(members.enumerated()), id: \.element.id) { idx, m in
+                            if idx > 0 { Divider() }
+                            memberRow(m)
+                        }
+                    }
+                }
+                inviteRow   // 조부모(안드로이드/아이폰) 초대 링크
+            }
+        }
+        .task { await loadMembers() }
+    }
+
+    /// 멤버 한 행 — 이름·역할 + (주인 본인·자기 자신 제외) 내보내기.
+    private func memberRow(_ m: BLFamilyMember) -> some View {
+        let isOwner = m.uid != nil && m.uid == family?.ownerUid
+        let isMe = m.uid != nil && m.uid == myUid
+        return HStack(spacing: Spacing.s2) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(m.displayName).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink)
+                    if isOwner {
+                        Text("주인").font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.primary)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(AppColors.primarySoft, in: Capsule())
+                    }
+                }
+                Text(roleLabel(m.role)).font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+            }
+            Spacer()
+            if !isOwner && !isMe {
+                Button { pendingRemove = m } label: {
+                    Text("내보내기").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.danger)
+                        .padding(.horizontal, Spacing.s3).frame(height: 34)
+                        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                }.buttonStyle(LiquidPressStyle(scale: 0.97))
+                .accessibilityLabel("\(m.displayName) 내보내기")
+            }
+        }
+        .padding(.vertical, Spacing.s2)
+    }
+
+    private func roleLabel(_ role: String) -> String {
+        switch role {
+        case "parent": return "부모"
+        case "grandparent": return "조부모·친척"
+        default: return role
         }
     }
 
@@ -214,8 +323,28 @@ struct FamilyFeedScreen: View {
         guard SupabaseConfig.isConfigured, auth.isLoggedIn else { loading = false; return }
         loading = true
         family = await FamilyFeedBackend.myFamily()
-        if let f = family { posts = await FamilyFeedBackend.fetchFeed(familyId: f.id) }
+        if let f = family {
+            posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
+            if f.ownerUid == myUid { await loadMembers() }
+        }
         loading = false
+    }
+
+    /// 가족 관리(주인) 멤버 목록 로드.
+    private func loadMembers() async {
+        guard let f = family else { return }
+        loadingMembers = true
+        members = await FamilyFeedBackend.fetchMembers(familyId: f.id)
+        loadingMembers = false
+    }
+
+    /// 멤버 내보내기(주인) — 성공 시 목록 갱신.
+    private func removeMember(_ m: BLFamilyMember) async {
+        if await FamilyFeedBackend.removeMember(memberId: m.id) {
+            await loadMembers()
+        } else {
+            errorMsg = "내보내지 못했어요. 잠시 후 다시 시도해 주세요."
+        }
     }
 
     private func toggleHeart(_ post: BLFeedPost, to on: Bool) async {
@@ -328,6 +457,77 @@ private struct InviteShareSheet: View {
         saving = true
         if await FamilyFeedBackend.setFamilyPass(familyId: info.familyId, pass: pin) { savedPin = pin }
         saving = false
+    }
+}
+
+// 가족 참여 시트 — 초대코드 + 비밀번호(숫자 4~10자리)로 합류
+private struct JoinFamilySheet: View {
+    /// (코드, 비번) → 성공 여부. 성공 시 시트 닫힘.
+    let onJoin: (String, String) async -> Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var code = ""
+    @State private var pin = ""
+    @State private var joining = false
+
+    private var trimmedCode: String { code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+    private var valid: Bool {
+        !trimmedCode.isEmpty && (4...10).contains(pin.count) && pin.allSatisfy(\.isNumber)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                Text("가족 참여하기").font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
+                Text("가족이 알려준 초대 코드와 비밀번호를 입력하세요. 둘 다 있어야 들어올 수 있어요.")
+                    .font(.system(size: 13.5)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
+
+                // ── 초대 코드 ──
+                Text("초대 코드").font(.system(size: 12.5, weight: .bold)).foregroundStyle(AppColors.ink3)
+                TextField("예: ABCD2345", text: $code)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled(true)
+                    .font(.system(size: 18, weight: .heavy, design: .monospaced)).foregroundStyle(AppColors.ink)
+                    .padding(.horizontal, Spacing.s3).frame(height: 50)
+                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+
+                // ── 비밀번호 ──
+                Text("가족 비밀번호 (숫자 4~10자리)").font(.system(size: 12.5, weight: .bold)).foregroundStyle(AppColors.ink3)
+                TextField("숫자 4~10자리", text: $pin)
+                    .keyboardType(.numberPad)
+                    .font(AppFont.num(20, weight: .heavy)).foregroundStyle(AppColors.ink)
+                    .padding(.horizontal, Spacing.s3).frame(height: 50)
+                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    .onChange(of: pin) { _, v in
+                        let d = String(v.filter(\.isNumber).prefix(10)); if d != pin { pin = d }
+                    }
+
+                Button { Task { await join() } } label: {
+                    Text(joining ? "참여 중…" : "참여하기")
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .background(valid && !joining ? AppColors.primary : AppColors.ink3,
+                                    in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.98))
+                .disabled(!valid || joining)
+
+                Text("초대 코드와 비밀번호는 가족에게 직접 받아 입력해 주세요.")
+                    .font(.system(size: 12)).foregroundStyle(AppColors.ink3).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(Spacing.s5)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func join() async {
+        guard valid, !joining else { return }
+        joining = true
+        let ok = await onJoin(trimmedCode, pin)
+        joining = false
+        if ok { dismiss() }
     }
 }
 
