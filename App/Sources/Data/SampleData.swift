@@ -97,6 +97,7 @@ enum SampleData {
     ///
     /// - Parameter bus: 주입할 이벤트 버스. nil이면 `.shared` 사용.
     /// - Returns: 샘플 pregnancies·children이 주입된 `AppStore` (영속화 없음).
+    @MainActor
     static func store(bus: EventBus = .shared) -> AppStore {
         AppStore(
             pregnancies: pregnancies,

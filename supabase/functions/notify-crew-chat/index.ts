@@ -42,6 +42,19 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+    // 스팸 방지 — 발신자가 실제로 이 방에 메시지를 남겼는지 확인(임의 호출로 푸시 무차별 발사 차단).
+    //  멤버십 비동기 우려를 메시지 존재로 대체: 정당 발신은 항상 메시지 행이 먼저 저장된다.
+    if (!sender) return new Response("missing sender", { status: 400 });
+    {
+      const msgTable = meetupId ? "crew_meetup_message" : "crew_group_message";
+      const idCol = meetupId ? "meetup_id" : "group_id";
+      const idVal = meetupId ?? groupId;
+      const { data: mine } = await supabase.from(msgTable)
+        .select("id").eq(idCol, idVal!).eq("device_id", sender)
+        .order("created_at", { ascending: false }).limit(1);
+      if (!mine?.length) return new Response(JSON.stringify({ sent: 0, reason: "not_participant" }), { status: 200 });
+    }
+
     // 참여자 + 방 이름
     let participants: string[] = [];
     let title = "크루";
@@ -57,8 +70,8 @@ Deno.serve(async (req) => {
       if (g?.name) title = g.name;
     }
 
-    // 보낸 사람 제외하고 참여자 전원에게. (채팅 입장 시 자동 참가가 비동기라 sender의 멤버 행이
-    //  아직 커밋 안 됐을 수 있어 '멤버 필수' 403을 두지 않는다 — 메시지는 이미 저장된 정당 발신.)
+    // 보낸 사람 제외하고 참여자 전원에게. (발신 정당성은 위 '메시지 존재' 검증으로 확인 — 멤버 행
+    //  자동참가 비동기와 무관하게 스팸을 차단한다.)
     const recipients = participants.filter((d) => d && d !== sender);
     if (!recipients.length) return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
 

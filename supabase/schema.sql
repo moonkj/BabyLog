@@ -35,11 +35,17 @@ $$;
 -- ───────────────────────────────────────────────
 alter table public.crew_waitlist enable row level security;
 
--- 신청(추가): 누구나 자기 행 추가 가능
+-- 신청(추가): 자기 행만 추가(임의 device_id로 30건 채워 크루 강제오픈·푸시스팸 방지).
+--   로그인 시 auth.uid, 비로그인 시 x-device-id 헤더와 일치해야 함(로그인 의무화 시 헤더 제거).
 drop policy if exists crew_waitlist_insert on public.crew_waitlist;
 create policy crew_waitlist_insert on public.crew_waitlist
     for insert to anon, authenticated
-    with check (true);
+    with check (
+      device_id = coalesce(
+        auth.uid()::text,
+        (current_setting('request.headers', true)::json ->> 'x-device-id')
+      )
+    );
 
 -- 취소(삭제): device_id 헤더와 일치하는 자기 행만 (간이 — 추후 인증 강화)
 drop policy if exists crew_waitlist_delete on public.crew_waitlist;

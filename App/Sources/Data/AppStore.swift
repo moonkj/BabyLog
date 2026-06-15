@@ -9,6 +9,7 @@ import WidgetKit           // 저장 직후 위젯 타임라인 갱신용
 ///
 /// - Note: `persistence` 인자를 주입하면 init 시 저장된 상태를 자동 복원하고,
 ///   `enableAutoPersist()`를 호출하면 상태 변경 시 0.5s debounce 후 자동 저장된다.
+@MainActor
 final class AppStore: ObservableObject {
 
     // MARK: Published State
