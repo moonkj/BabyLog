@@ -235,7 +235,7 @@ struct CrewPostDetailSheet: View {
         .background(AppColors.canvas)
         .accessibilityElement(children: .contain)
         .task(id: post.id) { await pollReplies() }
-        .confirmationDialog("이 글을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+        .alert("이 글을 삭제할까요?", isPresented: $showDeleteConfirm) {
             Button("삭제", role: .destructive) {
                 guard !deleteBusy else { return }
                 if SupabaseConfig.isConfigured {

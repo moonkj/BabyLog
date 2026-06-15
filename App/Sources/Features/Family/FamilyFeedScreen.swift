@@ -44,9 +44,9 @@ struct FamilyFeedScreen: View {
         .alert("가족 보관함", isPresented: Binding(get: { errorMsg != nil }, set: { if !$0 { errorMsg = nil } })) {
             Button("확인", role: .cancel) {}
         } message: { Text(errorMsg ?? "") }
-        .confirmationDialog("이 사진을 가족 보관함에서 삭제할까요?", isPresented: Binding(
+        .alert("이 사진을 삭제할까요?", isPresented: Binding(
             get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
-        ), titleVisibility: .visible, presenting: pendingDelete) { post in
+        ), presenting: pendingDelete) { post in
             Button("삭제", role: .destructive) { Task { await deletePost(post) } }
             Button("취소", role: .cancel) {}
         } message: { _ in

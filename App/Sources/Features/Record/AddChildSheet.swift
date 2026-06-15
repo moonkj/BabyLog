@@ -153,13 +153,14 @@ struct AddChildSheet: View {
                     Button("닫기") { dismiss() }
                 }
             }
-            .confirmationDialog("이 아이의 기록도 함께 삭제돼요. 계속할까요?",
-                                isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            .alert("이 아이를 삭제할까요?", isPresented: $showDeleteConfirm) {
                 Button("삭제", role: .destructive) {
                     if let editing { store.deleteChild(id: editing.id) }
                     dismiss()
                 }
                 Button("취소", role: .cancel) {}
+            } message: {
+                Text("이 아이의 기록(성장·일기·접종 등)도 함께 삭제돼요. 되돌릴 수 없어요.")
             }
         }
     }

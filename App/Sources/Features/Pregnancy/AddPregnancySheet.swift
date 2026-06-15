@@ -178,13 +178,15 @@ struct AddPregnancySheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } }
             }
-            .confirmationDialog("임신 기록을 삭제할까요? 관련 기록도 함께 삭제돼요.",
-                                isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            .alert("임신 기록을 삭제할까요?",
+                   isPresented: $showDeleteConfirm) {
                 Button("삭제", role: .destructive) {
                     if let editing { store.deletePregnancy(id: editing.id) }
                     dismiss()
                 }
                 Button("취소", role: .cancel) {}
+            } message: {
+                Text("관련 기록(주차·체중·배 사진 등)도 함께 삭제돼요. 되돌릴 수 없어요.")
             }
         }
     }

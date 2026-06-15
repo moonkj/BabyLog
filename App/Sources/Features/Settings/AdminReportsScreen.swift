@@ -79,9 +79,9 @@ struct AdminReportsScreen: View {
                 reportDetailSheet(rep)
                     .presentationDetents([.large])
             }
-            .confirmationDialog("정말 삭제할까요?", isPresented: Binding(
+            .alert("정말 삭제할까요?", isPresented: Binding(
                 get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
-            ), titleVisibility: .visible, presenting: pendingDelete) { target in
+            ), presenting: pendingDelete) { target in
                 Button("삭제", role: .destructive) { performDelete(target) }
                 Button("취소", role: .cancel) {}
             } message: { target in

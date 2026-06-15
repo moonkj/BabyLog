@@ -227,7 +227,7 @@ private struct GrowthTimelineCard: View {
                 Label("기록 삭제", systemImage: "trash")
             }
         }
-        .confirmationDialog("이 성장 기록을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+        .alert("이 성장 기록을 삭제할까요?", isPresented: $showDeleteConfirm) {
             Button("삭제", role: .destructive) { Haptics.warning(); store.deleteGrowthRecord(id: record.id) }
             Button("취소", role: .cancel) {}
         } message: {
@@ -414,37 +414,18 @@ private struct DiaryTimelineCard: View {
                     .contentShape(Rectangle())
             }
             .accessibilityLabel("기록 메뉴 — 수정·삭제")
-            // 삭제 확인을 '⋯' 버튼 옆 작은 팝오버로(아이폰에서도 누른 곳에서 뜸 — 하단 시트 대신)
-            .popover(isPresented: $showDeleteConfirm, arrowEdge: .top) { deleteConfirmPopover }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-    }
-
-    /// 삭제 확인 팝오버 — '⋯'에 앵커. iOS 16.4+ presentationCompactAdaptation로 아이폰에서도 팝오버 유지.
-    private var deleteConfirmPopover: some View {
-        VStack(spacing: 12) {
-            Text("이 기록을 삭제할까요?").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+        // 삭제 확인 — 중앙 알럿(위치 일관)
+        .alert("이 기록을 삭제할까요?", isPresented: $showDeleteConfirm) {
+            Button("삭제", role: .destructive) { deleteRecord() }
+            Button("취소", role: .cancel) {}
+        } message: {
             Text(showsFamilySocial || sharedIntent
-                 ? "사진·메모가 삭제되고 가족 보관함에서도 사라져요."
+                 ? "사진·메모가 삭제되고 가족 보관함에서도 사라져요. 되돌릴 수 없어요."
                  : "사진·메모가 삭제되며 되돌릴 수 없어요.")
-                .font(.system(size: 12.5)).foregroundStyle(AppColors.ink2)
-                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 10) {
-                Button { showDeleteConfirm = false } label: {
-                    Text("취소").font(.system(size: 14, weight: .bold)).foregroundStyle(AppColors.ink2)
-                        .frame(maxWidth: .infinity).frame(height: 40)
-                        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                }
-                Button { showDeleteConfirm = false; deleteRecord() } label: {
-                    Text("삭제").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).frame(height: 40)
-                        .background(AppColors.danger, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                }
-            }
         }
-        .padding(16).frame(width: 250)
-        .presentationCompactAdaptation(.popover)
     }
 
     private var avatar: some View {

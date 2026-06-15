@@ -66,7 +66,7 @@ struct CrewMeetupDetail: View {
                 .presentationDetents([.large])
                 .environmentObject(store)
         }
-        .confirmationDialog("이 모임을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+        .alert("이 모임을 삭제할까요?", isPresented: $showDeleteConfirm) {
             Button("삭제", role: .destructive) {
                 guard !deleteBusy else { return }
                 Haptics.warning()

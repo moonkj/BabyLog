@@ -51,7 +51,7 @@ struct CrewGroupDetail: View {
         .sheet(isPresented: $showLogin) {
             AppleLoginSheet(message: "그룹 가입·채팅은 로그인이 필요해요.") {}
         }
-        .confirmationDialog("이 크루를 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+        .alert("이 크루를 삭제할까요?", isPresented: $showDeleteConfirm) {
             Button("삭제", role: .destructive) { deleteGroup() }
             Button("취소", role: .cancel) {}
         } message: {

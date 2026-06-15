@@ -281,7 +281,7 @@ struct QuickRecordSheet: View {
                         .background(.black.opacity(0.45), in: Circle())
                 }
                 .accessibilityLabel("미디어 모두 지우기")
-                .confirmationDialog("사진을 모두 지울까요?", isPresented: $showClearMediaConfirm, titleVisibility: .visible) {
+                .alert("사진을 모두 지울까요?", isPresented: $showClearMediaConfirm) {
                     Button("지우기", role: .destructive) {
                         selectedImages = []; selectedVideoURL = nil; carouselIndex = 0; Haptics.warning()
                     }

@@ -120,7 +120,7 @@ struct SettingsScreen: View {
         } message: {
             Text("데이터를 준비하는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.")
         }
-        .confirmationDialog("계정을 삭제할까요?", isPresented: $showDeleteAccount, titleVisibility: .visible) {
+        .alert("계정을 삭제할까요?", isPresented: $showDeleteAccount) {
             Button("계정 삭제", role: .destructive) {
                 Task {
                     let ok = await auth.deleteAccount()
