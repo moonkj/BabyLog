@@ -10,6 +10,7 @@ struct RecordScreen: View {
     @State private var expandAssurance = false
     @State private var showShareCard = false
     @State private var showAddChild = false
+    @State private var showFamilyFeed = false   // 가족과 사진 공유
 
     var body: some View {
         ScrollView {
@@ -66,6 +67,17 @@ struct RecordScreen: View {
         .sheet(isPresented: $showAddChild) {
             AddChildSheet().environmentObject(store)
         }
+        .sheet(isPresented: $showFamilyFeed) {
+            NavigationStack {
+                FamilyFeedScreen()
+                    .environmentObject(store)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("닫기") { showFamilyFeed = false }
+                        }
+                    }
+            }
+        }
     }
 
     // MARK: 상단 헤더
@@ -75,20 +87,36 @@ struct RecordScreen: View {
             title: store.selectedChild?.name ?? "기록",
             eyebrow: store.selectedChild != nil ? "성장 기록" : "아이 성장 기록"
         ) {
-            // 아이 미등록 시 공유 버튼 숨김 — 시트 내용(selectedChild)이 없어 탭해도 빈 동작이 된다.
-            if store.selectedChild != nil {
+            HStack(spacing: 8) {
+                // 가족과 사진 공유(가족 보관함) — 항상 노출(로그인/가족 상태는 화면에서 안내)
                 Button {
-                    showShareCard = true
+                    showFamilyFeed = true
                 } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AppColors.ink2)
+                    Image(systemName: "heart.text.square.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.primary)
                         .frame(width: 44, height: 44)
                         .background(AppColors.surface, in: Circle())
                         .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
                 }
                 .buttonStyle(LiquidPressStyle())
-                .accessibilityLabel("기록 공유")
+                .accessibilityLabel("가족과 사진 공유")
+
+                // 아이 미등록 시 공유 버튼 숨김 — 시트 내용(selectedChild)이 없어 탭해도 빈 동작이 된다.
+                if store.selectedChild != nil {
+                    Button {
+                        showShareCard = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppColors.ink2)
+                            .frame(width: 44, height: 44)
+                            .background(AppColors.surface, in: Circle())
+                            .overlay { Circle().stroke(AppColors.line, lineWidth: 1) }
+                    }
+                    .buttonStyle(LiquidPressStyle())
+                    .accessibilityLabel("기록 공유")
+                }
             }
         }
     }

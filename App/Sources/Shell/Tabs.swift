@@ -256,10 +256,8 @@ struct HomeTab: View {
         VStack(spacing: 0) {
             // 헤더 + 아이 칩은 ScrollView 밖 고정 — 매초 갱신(생애시계)에 탭이 가로채이지 않게,
             // 그리고 아이 전환/추가가 항상 닿게.
-            VStack(alignment: .leading, spacing: Spacing.s3) {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
                 header
-                // 임신/육아 모드 전환 — 타이틀 아래 전용 칩(좌하단 플로팅에서 이동)
-                ModeToggleChip()
                 childChips
             }
             .padding(.horizontal, Spacing.s5)
@@ -334,8 +332,12 @@ struct HomeTab: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(greeting).font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
-                Text("베이비로그").font(.system(size: 28, weight: .heavy)).tracking(-0.4)
-                    .foregroundStyle(AppColors.ink)
+                HStack(spacing: 8) {
+                    Text("베이비로그").font(.system(size: 28, weight: .heavy)).tracking(-0.4)
+                        .foregroundStyle(AppColors.ink)
+                    // 임신/육아 모드 전환 — 제목 옆 칩
+                    ModeToggleChip()
+                }
             }
             Spacer()
             // 레이아웃 전환 메뉴

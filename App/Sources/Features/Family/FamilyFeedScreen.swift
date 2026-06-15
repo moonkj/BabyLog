@@ -32,7 +32,7 @@ struct FamilyFeedScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s5) {
-                BLScreenHeader(title: "가족 보관함", eyebrow: "Pro · 함께 보는 피드")
+                BLScreenHeader(title: "가족과 사진 공유", eyebrow: "함께 보는 가족 피드")
                 content
             }
             .padding(.horizontal, Spacing.s5).padding(.top, Spacing.s2).padding(.bottom, Spacing.s8)

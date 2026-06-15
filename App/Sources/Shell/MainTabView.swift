@@ -247,7 +247,7 @@ struct ModeToggleChip: View {
             HStack(spacing: 6) {
                 Image(systemName: mode == .baby ? "figure.and.child.holdinghands" : "figure.2.and.child.holdinghands")
                     .font(.system(size: 12, weight: .bold))
-                Text(mode == .baby ? "육아 모드" : "임신 모드")
+                Text(mode == .baby ? "육아" : "임신")
                     .font(.system(size: 13, weight: .bold))
                 Image(systemName: "arrow.left.arrow.right")
                     .font(.system(size: 10, weight: .bold))

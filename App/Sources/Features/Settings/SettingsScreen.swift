@@ -203,45 +203,23 @@ struct SettingsScreen: View {
     // MARK: - 가족 공유 섹션
 
     private var familyShareSection: some View {
-        settingsSection(eyebrow: "가족", title: "조부모님과 사진 공유") {
+        settingsSection(eyebrow: "가족", title: "가족과 사진 공유") {
             NavigationLink {
-                FamilyShareScreen()
+                FamilyFeedScreen()
             } label: {
-                settingsRow(icon: "person.2.fill",
-                            iconBg: Color(hex: 0xFBEAF0), iconFg: Color(hex: 0xB5478A),
+                settingsRow(icon: "heart.text.square.fill",
+                            iconBg: AppColors.primarySoft, iconFg: AppColors.primary,
                             showChevron: true) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("조부모님과 사진 공유")
+                        Text("가족과 사진 공유")
                             .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                        Text("내 iCloud로 무료 공유 — 조부모님이 아이폰·안드로이드 어느 쪽이어도 볼 수 있어요")
+                        Text("가족이 함께 보고 하트·댓글 — 부부는 무료, 조부모·친척은 Pro (아이폰·안드로이드 모두)")
                             .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             .buttonStyle(.plain)
-
-            // Pro 가족 보관함(클라우드 양방향 피드) — 피처플래그 ON 시에만 노출(개발/베타).
-            if AppFeatures.proFamilyFeed {
-                // 개발용 'Pro 모드' 토글은 운영자 모드로 이동(설정에 노출하지 않음).
-                Divider().overlay(AppColors.line).padding(.leading, 62)
-                NavigationLink {
-                    FamilyFeedScreen()
-                } label: {
-                    settingsRow(icon: "heart.text.square.fill",
-                                iconBg: AppColors.primarySoft, iconFg: AppColors.primary,
-                                showChevron: true) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("가족 보관함 (Pro)")
-                                .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                            Text("클라우드에서 가족이 함께 보고 하트·댓글 — 풀화질 백업까지")
-                                .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 
