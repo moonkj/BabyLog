@@ -32,6 +32,7 @@ struct FamilyFeedScreen: View {
     }
     @State private var members: [BLFamilyMember] = []  // 가족 관리(주인) 멤버 목록
     @State private var loadingMembers = false
+    @State private var heartsInFlight: Set<String> = []  // 하트 토글 진행 중인 post id — 연타 중복요청 방지
     @State private var pendingRemove: BLFamilyMember?  // 멤버 내보내기 확인
     @State private var pendingMembers: [BLFamilyMember] = []  // 승인 대기(주인) 목록
     @State private var myApproved: Bool? = nil          // 비주인 본인 승인 상태(nil=확인 전)
@@ -127,7 +128,7 @@ struct FamilyFeedScreen: View {
             } else {
                 inviteRow         // 승인된 멤버: 조부모 초대 링크만
             }
-            if let n = videoCount { videoCounterChip(n) }
+            if let n = videoCount, n > 0 { videoCounterChip(n) }   // 0개일 땐 '영상 0/N' 노이즈 숨김
             if posts.isEmpty {
                 BLEmptyState(icon: "photo.on.rectangle.angled", title: "기록하면 여기 모여요",
                              message: "기록 탭에서 사진을 올리면 가족 보관함에 자동으로 공유돼요. 가족이 하트·댓글로 함께해요.")
@@ -317,7 +318,7 @@ struct FamilyFeedScreen: View {
                 inviteRow   // 조부모(안드로이드/아이폰) 초대 링크
             }
         }
-        .task { await loadMembers() }
+        // 멤버 로드는 load()(주인 분기)가 appear·pull-refresh 모두에서 담당 — 중복 .task 제거.
     }
 
     /// 승인 대기 한 행 — 이름·역할 + [승인]·[거절]. 승인=approveMember, 거절=removeMember.
@@ -574,6 +575,10 @@ struct FamilyFeedScreen: View {
     }
 
     private func toggleHeart(_ post: BLFeedPost, to on: Bool) async {
+        // 연타 가드 — 같은 글에 토글이 진행 중이면 무시(중복 reaction·이중 피드조회 방지).
+        guard !heartsInFlight.contains(post.id) else { return }
+        heartsInFlight.insert(post.id)
+        defer { heartsInFlight.remove(post.id) }
         if await FamilyFeedBackend.setHeart(post: post, on: on), let f = family {
             posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
         }
