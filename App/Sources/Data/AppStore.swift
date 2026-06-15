@@ -813,6 +813,11 @@ final class AppStore: ObservableObject {
             .filter { $0.pregnancyId == pregnancy.id && $0.kind == .belly }
             .sorted { $0.value < $1.value }
         guard !bellies.isEmpty else { return }
+        // 자체 멱등성 — 이미 이 아이로 옮겨온 '태아 시절' 기록이 있으면 중복 생성하지 않는다.
+        // (호출부 상태가드에 더해, 향후 출산 되돌리기/재전환 등으로 재실행돼도 타임라인이 중복되지 않게.)
+        if diaryEntries.contains(where: { $0.childId == child.id && ($0.content?.hasSuffix("· 태아 시절") ?? false) }) {
+            return
+        }
         // 출생일 직전(하루 전 정오)을 상한선으로 둬 출생 기록보다 항상 앞서게 한다.
         let birthDay = cal.startOfDay(for: child.birthDate)
         let upperBound = cal.date(byAdding: .day, value: -1, to: birthDay)
