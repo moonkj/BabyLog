@@ -23,7 +23,7 @@ protocol VaccineScheduleProviding {
 
 // MARK: - Mock Implementation
 
-/// 질병관리청 예방접종 스케줄 Mock (BCG·B형간염·DTaP 등 8건)
+/// 질병관리청 예방접종 스케줄 Mock (출생~만6세 NIP 표준)
 /// ⚠️ 의료 상담을 대체하지 않습니다. 실제 접종 일정은 담당 의료진과 확인하세요.
 final class MockVaccineScheduleProvider: VaccineScheduleProviding {
 
@@ -57,8 +57,13 @@ final class MockVaccineScheduleProvider: VaccineScheduleProviding {
             ("MMR-1",    12),   // MMR 1차 — 12~15개월
             ("Varicella",12),   // 수두 — 12~15개월
             ("HepA-1",   12),   // A형간염 1차 — 12~23개월
-            ("JEV-1",    12),   // 일본뇌염 1차 — 12~23개월
+            ("JEV-1",    12),   // 일본뇌염 1차 — 12~23개월(횟수는 백신 종류별 상이 — 화면 면책 표기)
             ("DTaP-4",   15),   // DTaP 4차(추가) — 15~18개월
+            // ── 만2~6세 추가접종(NIP) ──
+            ("HepA-2",   18),   // A형간염 2차 — 1차 후 6~12개월
+            ("DTaP-5",   48),   // DTaP 5차(추가) — 만4~6세
+            ("IPV-4",    48),   // 폴리오 4차(추가) — 만4~6세
+            ("MMR-2",    48),   // MMR 2차 — 만4~6세
         ]
 
         return entries.map { entry in

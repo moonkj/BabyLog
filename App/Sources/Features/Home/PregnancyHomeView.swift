@@ -93,6 +93,13 @@ struct PregnancyHomeView: View {
 
     var body: some View {
         ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+            // 임신/육아 모드 전환 — 상단 전용 칩(임신 미등록·멈춤 상태에서도 육아 모드로 복귀 가능)
+            ModeToggleChip()
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, Spacing.s2)
+                .padding(.bottom, Spacing.s2)
+
             if activePregnancy == nil {
                 // 민감영역: 일시중단/상실 임신이 있으면 등록 권유 대신 따뜻한 안내
                 if pausedOrLossPregnancy != nil {
@@ -123,6 +130,7 @@ struct PregnancyHomeView: View {
                     .padding(.horizontal, Spacing.s5)
                     .padding(.bottom, Spacing.s7)
                 }
+            }
             }
         }
         .background(AppColors.canvas.ignoresSafeArea())

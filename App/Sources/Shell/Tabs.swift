@@ -256,8 +256,10 @@ struct HomeTab: View {
         VStack(spacing: 0) {
             // 헤더 + 아이 칩은 ScrollView 밖 고정 — 매초 갱신(생애시계)에 탭이 가로채이지 않게,
             // 그리고 아이 전환/추가가 항상 닿게.
-            VStack(alignment: .leading, spacing: Spacing.s4) {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
                 header
+                // 임신/육아 모드 전환 — 타이틀 아래 전용 칩(좌하단 플로팅에서 이동)
+                ModeToggleChip()
                 childChips
             }
             .padding(.horizontal, Spacing.s5)

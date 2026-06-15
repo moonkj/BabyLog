@@ -185,14 +185,7 @@ struct MainTabView: View {
                     .transition(.scale.combined(with: .opacity))
             }
         }
-        // 모드 전환 칩 (홈에서만, FAB 반대편) — iOS26 Liquid Glass
-        .overlay(alignment: fabOnLeft ? .bottomTrailing : .bottomLeading) {
-            if tab == .home {
-                modeToggle
-                    .padding(fabOnLeft ? .trailing : .leading, Spacing.s5)
-                    .padding(.bottom, 100)
-            }
-        }
+        // 모드 전환 칩은 각 홈(육아/임신) 상단 타이틀 아래 ModeToggleChip으로 이동.
         .sheet(isPresented: $showAddChild) {
             AddChildSheet().environmentObject(store).nightDimmable()
         }
@@ -239,23 +232,33 @@ struct MainTabView: View {
         }
     }
 
-    private var modeToggle: some View {
+}
+
+/// 임신/육아 모드 전환 칩 — 각 홈(육아·임신) 상단 타이틀 아래에 배치.
+/// `bl_app_mode`를 @AppStorage로 직접 공유하므로 MainTabView와 별도 주입 없이 동기화된다.
+struct ModeToggleChip: View {
+    @AppStorage("bl_app_mode") private var mode: AppMode = .baby
+
+    var body: some View {
         Button {
             Haptics.selection()
             withAnimation(.easeOut(duration: 0.25)) { mode = (mode == .baby ? .pregnancy : .baby) }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Image(systemName: mode == .baby ? "figure.and.child.holdinghands" : "figure.2.and.child.holdinghands")
                     .font(.system(size: 12, weight: .bold))
-                Text(mode == .baby ? "육아" : "임신")
-                    .font(.system(size: 12, weight: .bold))
+                Text(mode == .baby ? "육아 모드" : "임신 모드")
+                    .font(.system(size: 13, weight: .bold))
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .opacity(0.55)
             }
             .foregroundStyle(mode == .baby ? AppColors.primary : AppColors.pregnancyPink)
             .padding(.horizontal, 12).frame(height: 34)
             .liquidGlass(cornerRadius: Radius.pill)
             // 시각 캡슐은 34pt 유지하되 히트영역만 44pt로 확대(아이 안고 엄지 조작 오조작 방지).
             .contentShape(Rectangle())
-            .frame(minHeight: 44)
+            .frame(minHeight: 44, alignment: .leading)
         }
         .accessibilityLabel(mode == .baby ? "육아 모드, 탭하면 임신 모드로 전환" : "임신 모드, 탭하면 육아 모드로 전환")
     }

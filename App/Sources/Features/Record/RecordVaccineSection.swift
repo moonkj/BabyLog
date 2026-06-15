@@ -35,9 +35,11 @@ struct VaccineSection: View {
         case "DTaP-2": return "DTaP 2차"
         case "DTaP-3": return "DTaP 3차"
         case "DTaP-4": return "DTaP 4차"
+        case "DTaP-5": return "DTaP 5차"
         case "IPV-1":  return "폴리오(IPV) 1차"
         case "IPV-2":  return "폴리오(IPV) 2차"
         case "IPV-3":  return "폴리오(IPV) 3차"
+        case "IPV-4":  return "폴리오(IPV) 4차"
         case "Hib-1":  return "Hib 1차"
         case "Hib-2":  return "Hib 2차"
         case "Hib-3":  return "Hib 3차"
@@ -49,22 +51,28 @@ struct VaccineSection: View {
         case "RV-1":   return "로타바이러스 1차"
         case "RV-2":   return "로타바이러스 2차"
         case "MMR-1":  return "MMR 1차"
+        case "MMR-2":  return "MMR 2차"
         case "Varicella": return "수두"
         case "HepA-1": return "A형간염 1차"
+        case "HepA-2": return "A형간염 2차"
         case "JEV-1":  return "일본뇌염 1차"
         default:       return vaccineId
         }
+    }
+
+    /// 월령 → 가독 라벨. 24개월 이상은 '만 N세'로 표기(만2~6세 추가접종 가독성).
+    private func monthLabel(_ months: Int) -> String {
+        if months <= 0 { return "출생 시" }
+        if months < 24 { return "생후 \(months)개월" }
+        let years = months / 12, rem = months % 12
+        return rem == 0 ? "만 \(years)세" : "만 \(years)세 \(rem)개월"
     }
 
     // scheduledDate와 birthDate를 바탕으로 ageLabel 생성
     private func ageLabel(for record: VaccineRecord, birthDate: Date) -> String {
         guard let scheduled = record.scheduledDate else { return "–" }
         let months = AgeCalculator.childAgeMonths(birthDate: birthDate, asOf: scheduled).months
-        switch months {
-        case 0:  return "출생 시"
-        case 1:  return "생후 1개월"
-        default: return "생후 \(months)개월"
-        }
+        return monthLabel(months)
     }
 
     // D-day 계산: 미래 예정일만 표시 (완료 여부와 무관하게 날짜 기반)
@@ -184,7 +192,7 @@ struct VaccineSection: View {
                     upcomingBanner(for: next, birthDate: child.birthDate)
                 }
 
-                // 진행 요약 — 분모에 '0~18개월 표준' 범위를 명시(평생 일정으로 오인 방지)
+                // 진행 요약 — 분모에 '출생~만6세 표준' 범위를 명시(평생 일정으로 오인 방지)
                 progressSummary
 
                 // 진행 중인 접종 그룹(미완 회차가 남은 것)
@@ -234,14 +242,14 @@ struct VaccineSection: View {
                     }
                 }
 
-                // 의료 면책 + 범위 고지(상시 노출) — 0~18개월 외 접종이 '없는' 게 아니라 '범위 밖'임을 정직하게.
-                Text("⚠️ 질병관리청 표준 **0~18개월** 일정 참고용이에요. 만 4~6세 추가접종·매년 독감은 포함되지 않으니 담당 소아과 선생님과 확인하세요.")
+                // 의료 면책 + 범위 고지(상시 노출) — 종류별로 횟수가 다른 항목·매년 독감은 정직하게 '범위 밖' 안내.
+                Text("⚠️ 질병관리청 표준 **출생~만6세** 일정 참고용이에요. 일본뇌염 추가접종 횟수는 백신 종류(사백신/생백신)에 따라 다르고, 매년 독감은 포함되지 않으니 담당 소아과 선생님과 확인하세요.")
                     .font(AppFont.caption)
                     .foregroundStyle(AppColors.ink3)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                     .padding(.top, Spacing.s2)
-                    .accessibilityLabel("안내: 질병관리청 표준 0~18개월 일정 참고용이며, 만 4~6세 추가접종과 매년 독감은 포함되지 않습니다. 실제 접종은 소아과 의사와 확인하세요.")
+                    .accessibilityLabel("안내: 질병관리청 표준 출생부터 만 6세 일정 참고용이며, 일본뇌염 추가접종 횟수는 백신 종류에 따라 다르고 매년 독감은 포함되지 않습니다. 실제 접종은 소아과 의사와 확인하세요.")
             }
         }
     }
@@ -292,15 +300,15 @@ struct VaccineSection: View {
         g.doses.allSatisfy { isDone($0) }
     }
 
-    /// 그룹의 월령 요약(예: "생후 2·4·6·15개월" / 단회는 "생후 2개월").
+    /// 그룹의 월령 요약 — 회차가 여럿이면 '처음 ~ 마지막' 범위로(만2~6세까지 폭이 넓어 나열 대신 범위).
     private func groupAgeSummary(_ g: VaccineGroup, birthDate: Date) -> String {
         let months = g.doses.compactMap { r -> Int? in
             guard let d = r.scheduledDate else { return nil }
             return AgeCalculator.childAgeMonths(birthDate: birthDate, asOf: d).months
         }
         if months.isEmpty { return "" }
-        if months.count == 1 { return months[0] == 0 ? "출생 시" : "생후 \(months[0])개월" }
-        return "생후 " + months.map(String.init).joined(separator: "·") + "개월"
+        if months.count == 1 { return monthLabel(months[0]) }
+        return "\(monthLabel(months.first!)) ~ \(monthLabel(months.last!))"
     }
 
     // MARK: - 그룹 행 (접힘=회차 도트 요약 / 펼침=회차별 개별 행)
@@ -518,7 +526,7 @@ struct VaccineSection: View {
         )
     }
 
-    /// 진행 요약 — '0~18개월 표준 N건 중 M건 기록' + 비율 바(색+레이블).
+    /// 진행 요약 — '출생~만6세 표준 N건 중 M건 기록' + 비율 바(색+레이블).
     private var progressSummary: some View {
         let total = vaccines.count
         let done = vaccines.filter { isDone($0) }.count
@@ -526,7 +534,7 @@ struct VaccineSection: View {
         return BLCard(padding: Spacing.s4, flat: true) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("0~18개월 표준 일정")
+                    Text("출생~만6세 표준 일정")
                         .font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink2)
                     Spacer()
                     Text("\(done) / \(total) 기록")
@@ -544,7 +552,7 @@ struct VaccineSection: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("0~18개월 표준 일정 \(total)건 중 \(done)건 기록")
+        .accessibilityLabel("출생부터 만 6세 표준 일정 \(total)건 중 \(done)건 기록")
     }
 
     private var vaccineSkeletonView: some View {
