@@ -11,6 +11,18 @@ private struct IdentifiableImage: Identifiable {
     let image: UIImage
 }
 
+/// 한 뷰의 전체화면 미디어 — 사진/영상을 단일 .fullScreenCover(item:)로 표시(iOS17 다중 cover 드롭 방지).
+private enum FullMediaItem: Identifiable {
+    case photo(UIImage)
+    case video(URL)
+    var id: String {
+        switch self {
+        case .photo: return "photo"
+        case .video(let u): return "video-\(u.lastPathComponent)"
+        }
+    }
+}
+
 /// 로컬 영상 포스터(첫 프레임) + 재생 버튼. 인라인 AVPlayer 대신 사용 — 스크롤 목록에서
 /// 상태바가 가려지던 문제 방지 + 라이브 플레이어 다수로 인한 성능 저하 회피. 탭하면 전체화면 재생.
 private struct LocalVideoThumbView: View {
@@ -288,8 +300,7 @@ private struct DiaryTimelineCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var heartPop = false
     @State private var cardIndex = 0
-    @State private var fullPhoto: UIImage? = nil
-    @State private var fullVideo: PlayingVideo? = nil   // 전체화면 영상(인라인 플레이어 제거 — 상태바 가림 방지)
+    @State private var fullMedia: FullMediaItem? = nil   // 사진/영상 단일 전체화면(다중 cover 충돌 방지)
     // 가족 소셜(서버) — 부모가 넘긴 familyPost를 받아 로컬에서 하트·댓글 후 즉시 갱신.
     @State private var fpost: BLFeedPost? = nil
     @State private var commentDraft = ""
@@ -330,18 +341,18 @@ private struct DiaryTimelineCard: View {
                                 .frame(maxWidth: .infinity).frame(height: 360).clipped()
                                 .contentShape(Rectangle())
                                 .onTapGesture(count: 2) { likeWithPop() }
-                                .onTapGesture { fullPhoto = img }
+                                .onTapGesture { fullMedia = .photo(img) }
                                 .tag(idx)
                                 // VoiceOver: 침묵하던 사진에 라벨·동작 부여(좋아요는 액션바 버튼으로도 가능)
                                 .accessibilityElement()
                                 .accessibilityLabel("\(child.name) 사진 \(idx + 1)\(photos.count > 1 ? ", 전체 \(photos.count)장" : "")")
                                 .accessibilityAddTraits(.isImage)
                                 .accessibilityHint("두 번 탭하면 전체화면")
-                                .accessibilityAction { fullPhoto = img }
+                                .accessibilityAction { fullMedia = .photo(img) }
                         }
                         if let videoURL {
                             // 인라인 AVPlayer는 스크롤 목록에서 상태바를 가리는 문제(+성능) → 포스터+재생, 탭하면 전체화면.
-                            Button { fullVideo = PlayingVideo(url: videoURL) } label: {
+                            Button { fullMedia = .video(videoURL) } label: {
                                 LocalVideoThumbView(url: videoURL)
                                     .frame(maxWidth: .infinity).frame(height: 360).clipped()
                             }
@@ -392,14 +403,12 @@ private struct DiaryTimelineCard: View {
                 Label("기록 삭제", systemImage: "trash")
             }
         }
-        .fullScreenCover(item: Binding(
-            get: { fullPhoto.map { IdentifiableImage(image: $0) } },
-            set: { if $0 == nil { fullPhoto = nil } }
-        )) { wrapper in
-            FullScreenPhotoView(image: wrapper.image, onClose: { fullPhoto = nil })
-        }
-        .fullScreenCover(item: $fullVideo) { v in
-            FamilyVideoPlayer(url: v.url) { fullVideo = nil }
+        // 사진/영상 단일 전체화면 — 다중 .fullScreenCover 충돌(표시 드롭) 방지.
+        .fullScreenCover(item: $fullMedia) { media in
+            switch media {
+            case .photo(let img): FullScreenPhotoView(image: img, onClose: { fullMedia = nil })
+            case .video(let url): FamilyVideoPlayer(url: url, onClose: { fullMedia = nil })
+            }
         }
         .alert("가족과 공유", isPresented: Binding(get: { shareError != nil }, set: { if !$0 { shareError = nil } })) {
             Button("확인", role: .cancel) {}

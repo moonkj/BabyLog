@@ -96,21 +96,34 @@ final class CloudSyncService {
         let id = CKRecord.ID(recordName: recordName)
         let record = (try? await database.record(for: id))
             ?? CKRecord(recordType: recordType, recordID: id)
-        record["json"] = try Self.encoder.encode(state) as CKRecordValue
+        // 전체 상태를 CKAsset(파일)로 저장 — inline Data 필드는 레코드 1MB 한계라 활동 많은 가족은 영구 실패.
+        let data = try Self.encoder.encode(state)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bl-state-\(UUID().uuidString).json")
+        try data.write(to: tmp)
+        record["jsonAsset"] = CKAsset(fileURL: tmp)
+        record["json"] = nil          // 레거시 inline 필드 제거(1MB 한계에 합산되지 않게)
         record["updatedAt"] = Date() as CKRecordValue
         _ = try await database.save(record)
+        try? FileManager.default.removeItem(at: tmp)
         #else
         throw CloudSyncError.notEnabled
         #endif
     }
 
-    /// iCloud에서 상태를 가져온다 (없으면 nil).
+    /// iCloud에서 상태를 가져온다 (없으면 nil). CKAsset 우선, 레거시 inline json 폴백.
     func pull() async throws -> PersistableState? {
         #if BL_CLOUDKIT
         guard await accountAvailable() else { throw CloudSyncError.accountUnavailable }
         let id = CKRecord.ID(recordName: recordName)
-        guard let record = try? await database.record(for: id),
-              let data = record["json"] as? Data else { return nil }
+        guard let record = try? await database.record(for: id) else { return nil }
+        let data: Data?
+        if let asset = record["jsonAsset"] as? CKAsset, let url = asset.fileURL {
+            data = try? Data(contentsOf: url)
+        } else {
+            data = record["json"] as? Data   // 레거시(구버전 백업) inline 폴백
+        }
+        guard let data else { return nil }
         return try Self.decoder.decode(PersistableState.self, from: data)
         #else
         throw CloudSyncError.notEnabled
@@ -123,11 +136,35 @@ final class CloudSyncService {
 
     private static let photoRecordType = "BabyLogPhoto"
     private static let uploadedKey = "bl_ck_uploaded_photos"   // 이미 올린 파일명(증분)
+    private static let tombstoneKey = "bl_ck_deleted_photos"   // 로컬에서 지운 파일명 — CK에서도 지우고 복원 시 부활 차단
 
-    /// 새 사진 파일만 CloudKit에 업로드(증분). best-effort — 실패분은 다음 기회에 재시도.
+    /// 로컬 사진 삭제 시 호출(PhotoStore.delete) — 툼스톤 기록. 다음 백업에서 CK 레코드를 지우고
+    /// 복원(pullPhotos)이 되살리지 않게 한다(민감영역: 지운 사진이 부활하면 안 됨). CloudKit 미사용이어도 무해.
+    nonisolated static func tombstonePhoto(_ name: String?) {
+        guard let name, !name.isEmpty else { return }
+        var set = Set(UserDefaults.standard.stringArray(forKey: tombstoneKey) ?? [])
+        set.insert(name)
+        UserDefaults.standard.set(Array(set), forKey: tombstoneKey)
+    }
+
+    /// 새 사진 파일만 CloudKit에 업로드(증분) + 툼스톤(삭제된 사진) CK 레코드 제거. best-effort.
     func pushPhotos() async {
         #if BL_CLOUDKIT
         guard await accountAvailable() else { return }
+        // 0) 삭제 툼스톤 처리 — CK 레코드 삭제 + 업로드 원장/툼스톤에서 제거(부활 차단).
+        let tombstones = Set(UserDefaults.standard.stringArray(forKey: Self.tombstoneKey) ?? [])
+        if !tombstones.isEmpty {
+            var up = Set(UserDefaults.standard.stringArray(forKey: Self.uploadedKey) ?? [])
+            var remaining = tombstones
+            for batch in Array(tombstones).chunked(into: 40) {
+                let ids = batch.map { CKRecord.ID(recordName: "photo-\($0)") }
+                if (try? await database.modifyRecords(saving: [], deleting: ids, savePolicy: .allKeys)) != nil {
+                    for n in batch { up.remove(n); remaining.remove(n) }
+                }
+            }
+            UserDefaults.standard.set(Array(up), forKey: Self.uploadedKey)
+            UserDefaults.standard.set(Array(remaining), forKey: Self.tombstoneKey)
+        }
         var uploaded = Set(UserDefaults.standard.stringArray(forKey: Self.uploadedKey) ?? [])
         let pending = PhotoStore.allPhotoFileURLs().filter { !uploaded.contains($0.lastPathComponent) }
         guard !pending.isEmpty else { return }
@@ -154,6 +191,7 @@ final class CloudSyncService {
     func pullPhotos() async {
         #if BL_CLOUDKIT
         guard await accountAvailable() else { return }
+        let tombstones = Set(UserDefaults.standard.stringArray(forKey: Self.tombstoneKey) ?? [])
         let query = CKQuery(recordType: Self.photoRecordType, predicate: NSPredicate(value: true))
         var cursor: CKQueryOperation.Cursor?
         repeat {
@@ -167,6 +205,7 @@ final class CloudSyncService {
                 for (_, result) in page.matchResults {
                     guard let rec = try? result.get(),
                           let name = rec["name"] as? String,
+                          !tombstones.contains(name),   // 로컬에서 지운 사진은 복원하지 않음(부활 차단)
                           let asset = rec["asset"] as? CKAsset, let src = asset.fileURL,
                           let dest = PhotoStore.safeRestoreURL(for: name),
                           !FileManager.default.fileExists(atPath: dest.path) else { continue }

@@ -47,12 +47,21 @@ Deno.serve(async (req) => {
     //  비참가자가 메시지 1건 넣고 우회 가능했음. (참가는 개방형이나 푸시 증폭은 참가자로 한정)
     if (!sender) return new Response("missing sender", { status: 400 });
     {
-      const memTable = meetupId ? "crew_meetup_join" : "crew_group_member";
       const idCol = meetupId ? "meetup_id" : "group_id";
       const idVal = meetupId ?? groupId;
+      const memTable = meetupId ? "crew_meetup_join" : "crew_group_member";
+      const msgTable = meetupId ? "crew_meetup_message" : "crew_group_message";
+      // 참가자면 OK. 모임 채팅은 자동참가가 비동기라 join 행 커밋 전 첫 메시지가 나갈 수 있어,
+      // 발신자가 실제 메시지를 남겼으면(정당 발신, 행이 이미 저장됨) 함께 인정 — 첫 푸시 누락 방지.
       const { data: mem } = await supabase.from(memTable)
         .select("device_id").eq(idCol, idVal!).eq("device_id", sender).limit(1);
-      if (!mem?.length) return new Response(JSON.stringify({ sent: 0, reason: "not_participant" }), { status: 200 });
+      let ok = !!mem?.length;
+      if (!ok) {
+        const { data: msg } = await supabase.from(msgTable)
+          .select("id").eq(idCol, idVal!).eq("device_id", sender).limit(1);
+        ok = !!msg?.length;
+      }
+      if (!ok) return new Response(JSON.stringify({ sent: 0, reason: "not_participant" }), { status: 200 });
     }
 
     // 참여자 + 방 이름

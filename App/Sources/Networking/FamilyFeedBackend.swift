@@ -360,6 +360,15 @@ enum FamilyFeedBackend {
                                      caption: caption, childLabel: childLabel, videoURL: videoURL)
     }
 
+    /// 포스트에 미디어 행이 하나라도 있는지 — 409(이미 존재) 시 빈 카드 vs 완료 구분용.
+    private static func postHasMedia(_ postId: String) async -> Bool {
+        guard let req = await rest("/bl_post_media?post_id=eq.\(postId)&select=id&limit=1", method: "GET"),
+              let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [Any] else { return false }
+        return !arr.isEmpty
+    }
+
     /// 가족 영상 개수(카운터 표시용). 실패 시 0.
     static func familyVideoCount(familyId: String) async -> Int {
         guard let req = await rest("/bl_post_media?family_id=eq.\(familyId)&kind=eq.video&select=id", method: "GET"),
@@ -399,11 +408,15 @@ enum FamilyFeedBackend {
         preq.httpBody = try? JSONSerialization.data(withJSONObject: postBody)
         guard let (pdata, presp) = try? await URLSession.shared.data(for: preq),
               let phttp = presp as? HTTPURLResponse else { lastError = "포스트 생성: 네트워크 오류"; return false }
-        if phttp.statusCode == 409 { return true }   // 이미 공유된 기록 → 업로드 없이 성공(R2 고아 0)
-        guard (200...299).contains(phttp.statusCode) else {
-            lastError = "포스트 생성 실패 HTTP \(phttp.statusCode): \(String(data: pdata, encoding: .utf8)?.prefix(120) ?? "")"
-            return false
+        let alreadyExists = phttp.statusCode == 409   // 같은 id 포스트가 이미 존재(이미 공유됨 or 중단된 공유)
+        if !alreadyExists {
+            guard (200...299).contains(phttp.statusCode) else {
+                lastError = "포스트 생성 실패 HTTP \(phttp.statusCode): \(String(data: pdata, encoding: .utf8)?.prefix(120) ?? "")"
+                return false
+            }
         }
+        // 이미 미디어가 있으면 완료(중복 업로드 0). 미디어 0이면(앱이 공유 도중 죽은 빈 카드) 업로드를 이어서 진행 — 빈 카드 영구화 방지.
+        if alreadyExists, await postHasMedia(postId) { return true }
         // 2) 사진 압축(긴변 1280, jpeg 0.7) → R2 업로드. 실패분은 건너뜀.
         var keys: [String] = []
         for image in images.prefix(5) {

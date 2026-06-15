@@ -711,6 +711,8 @@ final class AppStore: ObservableObject {
             likedDiaryIds.remove(entryId.uuidString)
             diaryComments[entryId.uuidString] = nil
         }
+        // 가족 피드(서버 R2)에 공유된 기록도 함께 삭제 — 지운 아이 기록이 조부모/서버에 남는 것 방지(민감영역·프라이버시).
+        cleanupSharedFeedPosts(deletedEntryIds)
         UNUserNotificationCenter.current().removePendingNotificationRequests(
             withIdentifiers: deletedEntryIds.map { "memory-\($0.uuidString)" }
         )
@@ -1067,11 +1069,21 @@ final class AppStore: ObservableObject {
         diaryEntries.removeAll { $0.id == id }
         likedDiaryIds.remove(id.uuidString)
         diaryComments[id.uuidString] = nil
+        cleanupSharedFeedPosts([id])   // 가족 피드(서버)에 공유됐으면 함께 삭제
         // 삭제된 기록의 "N년 전 오늘" 추억 알림 취소 — 지운 기록이 알림으로
         // 되살아나면 안 된다(상실 등 민감 상황 포함).
         UNUserNotificationCenter.current().removePendingNotificationRequests(
             withIdentifiers: ["memory-\(id.uuidString)"]
         )
+    }
+
+    /// 삭제되는 기록 중 가족 피드(서버 R2)에 공유된 것을 함께 제거 — 지운 사진이 가족/서버에 남지 않게.
+    /// (postId = 기록 entry.id. 로컬 공유 표식이 있는 것만 시도 — deletePostFully는 작성자 본인만 삭제.)
+    private func cleanupSharedFeedPosts(_ ids: [UUID]) {
+        let shared = ids.map(\.uuidString).filter { sharedFeedEntryIds.contains($0) }
+        guard !shared.isEmpty else { return }
+        for pid in shared { unmarkFeedShared(pid) }
+        Task { for pid in shared { await FamilyFeedBackend.deletePostFully(postId: pid) } }
     }
 
     /// 다이어리 항목 수정 (캡션·이정표). 사진/영상은 유지.

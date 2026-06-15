@@ -58,6 +58,8 @@ enum PhotoStore {
     static func delete(_ name: String?) {
         guard let name, !name.isEmpty else { return }
         try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        // iCloud 백업에서도 지우고 복원 시 부활하지 않게 툼스톤 기록(민감영역: 지운 사진 부활 금지).
+        CloudSyncService.tombstonePhoto(name)
     }
 
     /// 동영상을 로컬로 복사하고 파일명을 반환. 서버 업로드 없음.
