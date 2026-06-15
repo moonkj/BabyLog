@@ -66,3 +66,21 @@ end;
 $$;
 
 grant execute on function public.bl_claim_invite(text, text) to anon, authenticated;
+
+-- 내 표시 이름 설정/교정 — 웹 조부모가 입력한 성함을 멤버 행에 반영(댓글 작성자명).
+-- RLS에 bl_family_member UPDATE 정책이 없어 직접 못 고치므로 security definer로 본인 행만 갱신.
+create or replace function public.bl_set_my_name(p_name text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(p_name, '') = '' then return; end if;
+  update public.bl_family_member
+     set display_name = left(p_name, 40)
+   where uid = public.bl_owner_id();
+end;
+$$;
+
+grant execute on function public.bl_set_my_name(text) to anon, authenticated;

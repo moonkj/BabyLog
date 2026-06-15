@@ -20,3 +20,4 @@ Secrets.plist
 
 # Supabase CLI temp
 supabase/.temp/
+web-dist/

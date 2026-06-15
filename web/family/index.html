@@ -62,7 +62,7 @@
   .crow input{ flex:1; font:inherit; font-size:.95rem; padding:11px 14px; border:1px solid var(--line);
                border-radius:999px; background:var(--canvas); }
   .crow button{ background:var(--sage); color:#fff; padding:0 18px; font-size:.92rem; }
-  .state{ text-align:center; color:var(--ink3); padding:64px 24px; font-size:1rem; }
+  .state{ text-align:center; color:var(--ink3); padding:64px 24px; font-size:1rem; white-space:pre-line; }
   /* 로그인 화면 */
   .login{ max-width:420px; margin:8vh auto; padding:0 22px; text-align:center; }
   .login h1{ font-size:1.5rem; font-weight:800; letter-spacing:-.5px; }
@@ -105,55 +105,49 @@ function notConfigured(){
   return SUPABASE_URL.includes("%%") || SUPABASE_ANON_KEY.includes("%%") || R2_PUBLIC_BASE.includes("%%");
 }
 
-// ───────── 로그인 ─────────
-function showLogin(sentTo){
-  if (sentTo){
-    app.innerHTML = `<div class="login"><h1>메일을 확인해 주세요 ✉️</h1>
-      <p><b>${esc(sentTo)}</b> 로 보낸<br>‘로그인’ 링크를 누르면 바로 들어와요.<br>(비밀번호 없어요)</p>
-      <p class="note">메일이 안 보이면 스팸함도 확인해 주세요.<br>같은 기기·브라우저에서 링크를 열어주세요.</p></div>`;
-    return;
-  }
+// ───────── 입장 (익명 — 성함만, 이메일·비밀번호 없음) ─────────
+function showLogin(){
+  const hasInvite = !!qs("invite");
   app.innerHTML = `<div class="login">
     <h1>우리 아이 소식 보기</h1>
-    <p>처음이시면 성함과 이메일을 적어주세요.<br>이메일로 온 링크 한 번이면 끝이에요.</p>
+    <p>성함만 적으면 바로 들어가요.<br>이메일도 비밀번호도 없어요.</p>
     <input id="name" placeholder="성함 (예: 외할머니)" autocomplete="name">
-    <input id="email" type="email" placeholder="이메일 주소" autocomplete="email" inputmode="email">
-    <button class="btn btn-go" id="go">로그인 링크 받기</button>
-    <p class="note">비밀번호가 없어요. 이메일로 받은 링크만 누르면 됩니다.</p>
+    <button class="btn btn-go" id="go">들어가기</button>
+    <p class="note">${hasInvite
+      ? "부모님이 보내준 초대 링크로 들어오셨어요.<br>성함을 적고 들어가면 사진을 보고 ❤️·댓글을 남길 수 있어요."
+      : "부모님께 받은 ‘가족 초대 링크’로 들어와 주세요."}</p>
   </div>`;
-  document.getElementById("go").onclick = sendLink;
-  document.getElementById("email").addEventListener("keydown", e=>{ if(e.key==="Enter") sendLink(); });
+  document.getElementById("go").onclick = enter;
+  document.getElementById("name").addEventListener("keydown", e=>{ if(e.key==="Enter") enter(); });
 }
 
-async function sendLink(){
-  const email = document.getElementById("email").value.trim();
-  const name  = document.getElementById("name").value.trim();
-  if (!email || !email.includes("@")){ toast("이메일 주소를 확인해 주세요"); return; }
-  if (name) localStorage.setItem("bl_name", name);
-  document.getElementById("go").textContent = "보내는 중…";
-  const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.href } });
-  if (error){ toast("전송 실패: " + error.message); showLogin(); return; }
-  showLogin(email);
+async function enter(){
+  const name = document.getElementById("name").value.trim();
+  if (!name){ toast("성함을 입력해 주세요"); return; }
+  localStorage.setItem("bl_name", name); myName = name;
+  document.getElementById("go").textContent = "들어가는 중…";
+  const { data, error } = await sb.auth.signInAnonymously();
+  if (error){ toast("입장 실패: " + (error.message || "익명 로그인이 꺼져 있어요")); showLogin(); return; }
+  me = data.user.id;
+  await start();
 }
 
 // ───────── 가족 확인(초대 합류 / 기존 멤버) ─────────
 async function resolveFamily(){
   const invite = qs("invite");
+  const nm = (myName && myName !== "가족") ? myName : null;
   if (invite){
-    const pname = localStorage.getItem("bl_name") || null;
-    const { data, error } = await sb.rpc("bl_claim_invite", { p_code: invite, p_name: pname });
+    const { data, error } = await sb.rpc("bl_claim_invite", { p_code: invite, p_name: nm });
     if (!error && data) familyId = data;
   }
   if (!familyId){
     const { data } = await sb.from("bl_family_member")
       .select("family_id, display_name").eq("uid", me)
       .order("joined_at", { ascending:true }).limit(1);
-    if (data && data[0]){ familyId = data[0].family_id; myName = data[0].display_name || myName; }
-  } else {
-    const { data } = await sb.from("bl_family_member")
-      .select("display_name").eq("uid", me).eq("family_id", familyId).limit(1);
-    if (data && data[0] && data[0].display_name) myName = data[0].display_name;
+    if (data && data[0]){ familyId = data[0].family_id; if (!nm) myName = data[0].display_name || myName; }
   }
+  // 입력한 성함을 내 멤버 행에 항상 반영(댓글 작성자명 · 기존 '가족' 교정)
+  if (familyId && nm) await sb.rpc("bl_set_my_name", { p_name: nm });
   return familyId;
 }
 
@@ -238,21 +232,25 @@ async function boot(){
   sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const { data:{ session } } = await sb.auth.getSession();
-  if (!session){ showLogin(); return; }
+  if (!session){ showLogin(); return; }     // 처음 → 성함 입력 화면
   me = session.user.id;
   myName = localStorage.getItem("bl_name") || myName;
+  await start();
+}
 
+// 세션이 있는 상태에서 가족 합류 + 피드 표시(boot·enter 공용)
+async function start(){
   setState("불러오는 중…");
   const fam = await resolveFamily();
   if (!fam){
-    setState("초대 링크로 들어와 주세요.\n부모님께 ‘가족 초대 링크’를 받아 다시 눌러주세요.");
+    app.innerHTML = `<div class="state">초대 링크로 들어와 주세요.\n부모님께 ‘가족 초대 링크’를 받아 그 링크로 다시 열어주세요.</div>`;
     return;
   }
-  // 헤더
+  document.querySelector("header")?.remove();
   document.body.insertAdjacentHTML("afterbegin",
     `<header><div class="t">베이비로그<small>우리 아이 가족 보기</small></div>
-       <button class="btn btn-ghost" id="logout">로그아웃</button></header>`);
-  document.getElementById("logout").onclick = async()=>{ await sb.auth.signOut(); location.href = location.pathname; };
+       <button class="btn btn-ghost" id="logout">나가기</button></header>`);
+  document.getElementById("logout").onclick = async()=>{ await sb.auth.signOut(); location.href = location.pathname + location.search; };
 
   await loadFeed();
   setInterval(()=>{ if(document.visibilityState==="visible") loadFeed(); }, 60000);
