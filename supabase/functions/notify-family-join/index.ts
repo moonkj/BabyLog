@@ -55,9 +55,12 @@ Deno.serve(async (req) => {
       try {
         const { data } = await supabase.auth.getUser(authToken);
         verifiedUid = data?.user?.id ?? null;   // anon key/만료 토큰이면 null → 헤더 폴백
-      } catch (_) { /* 검증 실패 시 헤더 폴백(푸시 무중단) */ }
+      } catch (_) { /* 검증 실패 → 아래에서 거부 */ }
     }
-    const sender = verifiedUid ?? req.headers.get("x-device-id");
+    // 헤더 폴백 제거 — 신청자는 앱(로그인) 또는 가족 웹(익명 세션)이라 항상 검증 uid를 가진다.
+    // x-device-id 위조로 타인 사칭 신청·푸시를 막기 위해 검증 uid가 없으면 거부.
+    const sender = verifiedUid;
+    if (!sender) return new Response(JSON.stringify({ sent: 0, reason: "unauthorized" }), { status: 401, headers: CORS });
 
     // 가족 주인
     const { data: fam } = await supabase.from("bl_family").select("owner_uid").eq("id", familyId).maybeSingle();

@@ -85,17 +85,30 @@ Deno.serve(async (req) => {
   });
   if (!res.ok) return json({ error: "apple_api", status: res.status }, 502);
 
-  // 응답에서 최신 거래의 만료일 추출(가장 가까운 그룹의 lastTransactions)
+  // 응답에서 '호출자 소유' 거래의 만료일만 추출.
+  //  ⚠️ 소유자 대조 필수 — appAccountToken(구매 시 앱이 심은 uid)이 호출자 uid와 일치하는
+  //     거래만 인정한다. 안 하면 임의 transactionId 하나로 결제 없이 Pro를 위조할 수 있다.
+  //  번들 ID도 대조해 타 앱 영수증 혼입을 막는다.
+  const bundleId = Deno.env.get("APP_BUNDLE_ID")!;
+  const uidNorm = uid.replace(/-/g, "").toLowerCase();
   const data = await res.json();
   let expiresMs = 0;
+  let matched = false;   // 호출자 소유 거래를 실제로 찾았는지
   for (const g of data.data ?? []) {
     for (const t of g.lastTransactions ?? []) {
       if (!t.signedTransactionInfo) continue;
       const info = decodeJWSPayload(t.signedTransactionInfo);
+      const tok = String(info.appAccountToken ?? "").replace(/-/g, "").toLowerCase();
+      if (tok !== uidNorm) continue;                       // 호출자 소유 아님 → 무시
+      if (String(info.bundleId ?? "") !== bundleId) continue; // 타 앱 영수증 방지
+      matched = true;
       const exp = Number(info.expiresDate ?? 0);
       if (exp > expiresMs) expiresMs = exp;
     }
   }
+  // 소유 거래를 못 찾으면(오라우팅·잘못된 txnId) is_pro를 건드리지 않는다 — 정상 구독자가
+  // 엉뚱한 호출로 false로 꺼지는 것 방지. 만료는 소유 거래가 '만료된 채' 잡히므로 정상 반영된다.
+  if (!matched) return json({ isPro: undefined, skipped: "no_owned_transaction" });
   const isPro = expiresMs > Date.now();
   const expiresAt = expiresMs > 0 ? new Date(expiresMs).toISOString() : null;
 

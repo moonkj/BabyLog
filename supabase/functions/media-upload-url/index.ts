@@ -64,8 +64,10 @@ Deno.serve(async (req) => {
   let ownerPro = false;
   if (fam?.owner_uid) {
     const { data: prof } = await admin.from("bl_profile")
-      .select("is_pro").eq("uid", fam.owner_uid).maybeSingle();
-    ownerPro = prof?.is_pro === true;
+      .select("is_pro, pro_expires_at").eq("uid", fam.owner_uid).maybeSingle();
+    // 만료 반영 — is_pro만 보면 해지/만료 후에도 업로드가 열린다.
+    ownerPro = prof?.is_pro === true &&
+      (!prof?.pro_expires_at || new Date(prof.pro_expires_at).getTime() > Date.now());
   }
   const isOwner = fam?.owner_uid === uid;
   if (!isOwner && !ownerPro && fam?.partner_uid !== uid) {

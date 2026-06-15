@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 struct BabyLogApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = AppStore(persistence: .appGroup())
+    @ObservedObject private var auth = AuthStore.shared
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("bl_onboarded") private var onboarded = false
 
@@ -34,6 +35,9 @@ struct BabyLogApp: App {
                 .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 .task {
                     store.enableAutoPersist()
+                    // StoreKit 구독 — 엔타이틀먼트를 클라 게이트(isPro)에 브리지하고 서버 등급도 동기화.
+                    StoreManager.shared.onEntitlementChange = { active in store.setSubscriptionActive(active) }
+                    StoreManager.shared.start()
                     store.refreshBadgeAwards()   // 첫 실행 시드 / 닫힌 새 획득 감지
                     await maybeAutoRestoreFromCloud()   // 재설치 직후 iCloud 백업 자동 복원(CloudKit 활성 시)
                     notifications.start()
@@ -58,7 +62,15 @@ struct BabyLogApp: App {
                         }
                         Task { await syncPhotoLibrary() }   // 닫을 때 새 사진을 사진 앱에 저장
                     }
-                    else if phase == .active { Task { await flushPendingReports() } }
+                    else if phase == .active {
+                        Task { await flushPendingReports() }
+                        Task { await StoreManager.shared.syncNow() }   // 외부 구독 변경 반영(+서버 동기화)
+                    }
+                }
+                // 로그아웃 시 운영자 로컬 Pro 강제(devProOverride)를 해제 — 다른 계정/로그아웃 후
+                // 캐시된 Pro UI가 남지 않게(서버는 어차피 실제 구독으로만 등급 부여).
+                .onChange(of: auth.isLoggedIn) { _, loggedIn in
+                    if !loggedIn { store.devProOverride = false }
                 }
         }
     }
@@ -78,6 +90,9 @@ struct BabyLogApp: App {
         guard await CloudSyncService.shared.accountAvailable() else { return }
         if let state = try? await CloudSyncService.shared.pull() {
             await CloudSyncService.shared.pullPhotos()
+            // pull은 네트워크라 수백 ms~수 초 걸린다. 그 사이 사용자가 첫 기록을 입력했으면
+            // 복원이 그 입력을 덮어쓰므로, restore 직전에 '여전히 비어있는지' 다시 확인한다.
+            guard store.isEffectivelyEmpty else { return }
             store.restore(state)
         }
     }

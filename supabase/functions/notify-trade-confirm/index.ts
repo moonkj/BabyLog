@@ -59,9 +59,12 @@ Deno.serve(async (req) => {
       try {
         const { data } = await supabase.auth.getUser(authToken);
         verifiedUid = data?.user?.id ?? null;   // anon key/만료 토큰이면 null → 헤더 폴백
-      } catch (_) { /* 검증 실패 시 헤더 폴백(푸시 무중단) */ }
+      } catch (_) { /* 검증 실패 → 아래에서 거부 */ }
     }
-    const caller = verifiedUid ?? req.headers.get("x-device-id");
+    // 헤더 폴백 제거 — x-device-id 위조로 판매자 사칭 '거래 확정' 푸시(사기 유도) 가능.
+    // 마켓은 로그인 필수라 정상 호출엔 항상 세션 JWT가 있다. 검증 uid가 없으면 거부.
+    const caller = verifiedUid;
+    if (!caller) return new Response(JSON.stringify({ skipped: true, reason: "unauthorized" }), { status: 401 });
 
     // 1) 매물 조회 — 구매자(sold_to)·판매자·상태 확인
     const { data: item } = await supabase

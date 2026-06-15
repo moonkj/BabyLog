@@ -717,8 +717,9 @@ struct SettingsScreen: View {
                 versionTaps += 1
                 if versionTaps >= 10 {
                     versionTaps = 0
-                    // 내 계정으로 로그인한 경우에만 진입(서버가 uid 화이트리스트로 최종 강제).
-                    if AuthStore.shared.isLoggedIn { showAdmin = true } else { showAdminLoginHint = true }
+                    // 운영자 계정(ADMIN_UIDS)으로 로그인한 경우에만 진입 — 일반 로그인 사용자에게
+                    // 운영자 UI(개발 탭·모드 토글) 자체를 노출하지 않는다. 데이터 권한은 서버가 최종 강제.
+                    if AdminGate.isAdmin { showAdmin = true } else { showAdminLoginHint = true }
                 }
             }
             .alert("운영자 모드", isPresented: $showAdminLoginHint) {

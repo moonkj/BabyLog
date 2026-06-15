@@ -49,14 +49,16 @@ Deno.serve(async (req) => {
       try {
         const { data } = await supabase.auth.getUser(authToken);
         verifiedUid = data?.user?.id ?? null;   // anon key/만료 토큰이면 null → 헤더 폴백
-      } catch (_) { /* 검증 실패 시 헤더 폴백(푸시 무중단) */ }
+      } catch (_) { /* 검증 실패 → 아래에서 거부 */ }
     }
-    const sender = verifiedUid ?? req.headers.get("x-device-id");
+    // 헤더 폴백 제거 — x-device-id는 위조 가능(공개 anon키 + 위조 헤더로 사칭). 크루는
+    // 로그인 필수라 정상 호출엔 항상 세션 JWT가 있다. 검증 uid가 없으면 거부.
+    const sender = verifiedUid;
 
     // 스팸 방지 — 발신자가 이 방의 '참가자'여야 푸시 발사(임의 호출로 전체 푸시 무차별 발사 차단).
     //  멤버십(crew_meetup_join/crew_group_member)으로 검증 — 메시지 존재만 보던 이전 방식은
     //  비참가자가 메시지 1건 넣고 우회 가능했음. (참가는 개방형이나 푸시 증폭은 참가자로 한정)
-    if (!sender) return new Response("missing sender", { status: 400 });
+    if (!sender) return new Response(JSON.stringify({ sent: 0, reason: "unauthorized" }), { status: 401 });
     {
       const idCol = meetupId ? "meetup_id" : "group_id";
       const idVal = meetupId ?? groupId;

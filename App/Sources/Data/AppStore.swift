@@ -26,11 +26,25 @@ final class AppStore: ObservableObject {
     @Published private(set) var likedDiaryIds: Set<String>
     /// 다이어리별 댓글 (key = uuid 문자열)
     @Published private(set) var diaryComments: [String: [String]]
-    /// Pro 구독 여부 — 가족 피드(좋아요·댓글·가족공유)의 단일 게이트.
-    /// 지금은 로컬 플래그(설정의 개발용 토글로 두 모드 검증). 출시 시 StoreKit 엔타이틀먼트로 대체.
-    @Published var isPro: Bool = UserDefaults.standard.bool(forKey: "bl_is_pro") {
+    /// Pro 여부 — 가족 피드·마켓 다중판매 등 클라 게이트의 단일 소스.
+    /// StoreKit 실제 구독 엔타이틀먼트(subscriptionActive) 또는 개발/운영자 강제(devProOverride)로 결정.
+    /// 마지막 값을 캐시해 앱 시작 직후(엔타이틀먼트 로드 전) Pro 사용자가 잠깐 무료로 보이지 않게 한다.
+    @Published private(set) var isPro: Bool = UserDefaults.standard.bool(forKey: "bl_is_pro") {
         didSet { UserDefaults.standard.set(isPro, forKey: "bl_is_pro") }
     }
+    /// StoreKit 실제 구독 엔타이틀먼트(StoreManager가 갱신). 서버 등급과 별개의 클라 신뢰 소스.
+    @Published private(set) var subscriptionActive = false
+    /// 개발/운영자 로컬 Pro 강제(클라 UI 검증용). 서버 등급은 StoreKit 구독으로만 부여된다.
+    @Published var devProOverride: Bool = UserDefaults.standard.bool(forKey: "bl_dev_pro") {
+        didSet { UserDefaults.standard.set(devProOverride, forKey: "bl_dev_pro"); recomputePro() }
+    }
+    /// StoreManager가 엔타이틀먼트 변화 시 호출 — 실제 구독 상태를 반영.
+    func setSubscriptionActive(_ active: Bool) {
+        guard subscriptionActive != active else { return }
+        subscriptionActive = active
+        recomputePro()
+    }
+    private func recomputePro() { isPro = subscriptionActive || devProOverride }
     /// 가족 피드 변경 신호(공유 완료 등). 증가 시 타임라인이 가족 반응을 다시 읽는다(메모리 전용).
     @Published var familyFeedVersion = 0
     /// 저장 실패 안내(메모리 전용) — 디스크 실패 시 '저장됨' 위장 금지(정직·데이터손실 방지). UI가 알럿으로 노출.
@@ -389,6 +403,8 @@ final class AppStore: ObservableObject {
     func toggleJoinGroup(_ id: String) {
         if joinedCrewGroupIds.contains(id) { joinedCrewGroupIds.remove(id) }
         else { joinedCrewGroupIds.insert(id) }
+        // 그룹 합류도 early_member('초기 멤버') 조건이므로 즉시 축하 갱신(모임 합류와 동일).
+        refreshBadgeAwards()
     }
     func isCrewPostLiked(_ id: String) -> Bool { likedCrewPostIds.contains(id) }
     func toggleCrewPostLike(_ id: String) {
@@ -676,6 +692,9 @@ final class AppStore: ObservableObject {
         // 자동저장을 되살린 뒤 즉시 디스크에 기록한다. 안 하면 복원이 메모리에만 남아
         // 다음 실행에서 다시 손상 파일을 읽어 "복원했는데 또 사라짐"이 된다.
         loadDidFail = false
+        // 복원에 성공했으므로 이전(손상 로드) 안내를 해제 — 정상 복원 후에도 "이전 기록을
+        // 불러오지 못했어요" 알림이 남아 사용자를 혼란시키던 문제 방지.
+        loadFailedNotice = nil
         enableAutoPersist()
         persistNow()
     }
@@ -803,11 +822,20 @@ final class AppStore: ObservableObject {
         pregnancies[idx].nickname = nickname?.trimmingCharacters(in: .whitespacesAndNewlines)
         pregnancies[idx].lmpDate = lmp
         pregnancies[idx].eddDate = edd
+        // 예정일/LMP가 바뀌면 켜져 있던 검진 알림을 새 기준으로 재예약 — 안 하면 옛 날짜 알림이 그대로 발송.
+        if checkupRemindersOn, pregnancies[idx].status == .active {
+            CheckupReminderService.cancel(pregnancyId: id)
+            let ref = CheckupReminderService.referenceLMP(lmpDate: lmp, eddDate: edd)
+            Task { @MainActor in _ = await CheckupReminderService.enable(pregnancyId: id, lmp: ref) }
+        }
     }
 
     /// 임신 기록 삭제 (관련 로그·배 사진·검진 키 정리).
     /// 민감영역: 상실 후 삭제하는 사용자는 배 사진도 기기에서 지워졌다고 기대한다.
     func deletePregnancy(id: UUID) {
+        // 민감영역 — 예약된 산전검진 알림을 즉시 취소한다. 상실 후 기록을 통째로 삭제하는
+        // 사용자에게 며칠~몇 주 뒤 검진 권유 알림이 발송되는 일을 막는다(기록 멈춤 원칙).
+        CheckupReminderService.cancel(pregnancyId: id)
         for log in pregnancyLogs where log.pregnancyId == id {
             if let ref = log.photoRef { PhotoStore.delete(ref) }
         }
@@ -815,6 +843,10 @@ final class AppStore: ObservableObject {
         checkupDoneKeys = checkupDoneKeys.filter { !$0.hasPrefix(prefix) }
         pregnancyLogs.removeAll { $0.pregnancyId == id }
         pregnancies.removeAll { $0.id == id }
+        // 남은 활성 임신이 없으면 검진 알림 토글도 끈다(거짓 '켜짐' 표시 방지).
+        if checkupRemindersOn && !pregnancies.contains(where: { $0.status == .active }) {
+            checkupRemindersOn = false
+        }
     }
 
     // MARK: - Atomic Birth Transition

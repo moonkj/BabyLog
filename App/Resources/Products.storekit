@@ -1,0 +1,68 @@
+{
+  "identifier" : "BABYLOG-PRO-STOREKIT",
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_applicationInternalID" : "0",
+    "_developerTeamID" : "QN975MTM7H",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "ko_KR",
+    "_storefront" : "KOR",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21520001",
+      "localizations" : [],
+      "name" : "BabyLog Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "990",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "21520010",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "가족과 사진 공유 · 조부모 초대",
+              "displayName" : "BabyLog Pro 월간",
+              "locale" : "ko_KR"
+            }
+          ],
+          "productID" : "com.vibelab.babylog.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Pro Monthly",
+          "subscriptionGroupID" : "21520001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "9900",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "21520011",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "가족과 사진 공유 · 조부모 초대 (2개월 무료)",
+              "displayName" : "BabyLog Pro 연간",
+              "locale" : "ko_KR"
+            }
+          ],
+          "productID" : "com.vibelab.babylog.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Pro Yearly",
+          "subscriptionGroupID" : "21520001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

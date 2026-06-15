@@ -49,9 +49,12 @@ Deno.serve(async (req) => {
       try {
         const { data } = await supabase.auth.getUser(authToken);
         verifiedUid = data?.user?.id ?? null;   // anon key/만료 토큰이면 null → 헤더 폴백
-      } catch (_) { /* 검증 실패 시 헤더 폴백(푸시 무중단) */ }
+      } catch (_) { /* 검증 실패 → 아래에서 거부 */ }
     }
-    const caller = verifiedUid ?? req.headers.get("x-device-id");
+    // 헤더 폴백 제거 — x-device-id 위조로 상대편 푸시 오라우팅·사칭 가능. 마켓은 로그인
+    // 필수라 정상 호출엔 항상 세션 JWT가 있다. 검증 uid가 없으면 거부.
+    const caller = verifiedUid;
+    if (!caller) return new Response(JSON.stringify({ sent: 0, reason: "unauthorized" }), { status: 401 });
 
     const { data: item } = await supabase.from("market_item").select("title, seller").eq("id", itemId).maybeSingle();
     if (!item) return new Response("no item", { status: 404 });

@@ -85,6 +85,9 @@ schemes:
         BabyLogTests: [test]
     run:
       config: Debug
+      # 로컬 StoreKit 테스트 — App Store Connect 상품 등록 전에도 구독 구매 흐름을 시뮬레이션.
+      # (출시/실결제는 ASC 자동구독 상품으로 동작. 이 설정은 Debug 실행 전용.)
+      storeKitConfiguration: App/Resources/Products.storekit
     test:
       config: Debug
       targets:

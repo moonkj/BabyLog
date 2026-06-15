@@ -484,10 +484,10 @@ struct AdminReportsScreen: View {
                 .tint(AppColors.primary)
             }
             Section("개발 / 검증") {
-                Toggle(isOn: $store.isPro) {
+                Toggle(isOn: $store.devProOverride) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Pro 모드(로컬)").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                        Text("클라 UI만 Pro로 전환(로컬 검증용). 서버 등급은 StoreKit 구독으로만 부여 — 이 토글은 서버에 반영되지 않음.")
+                        Text("클라 UI만 Pro로 전환(로컬 검증용). 실제 구독(StoreKit)이 있으면 그것이 우선이며, 서버 등급은 구독으로만 부여 — 이 토글은 서버에 반영되지 않음.")
                             .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
                     }
                 }

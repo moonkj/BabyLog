@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import StoreKit
 
 // MARK: - ProfileScreen
 
@@ -12,15 +13,28 @@ struct ProfileScreen: View {
 
     // MARK: Mock State (실제 구현 시 ViewModel / Environment 주입)
     @State private var selectedBadgeCategory: BadgeCatalogItem.BadgeCategory? = nil
-    // 공유 시트는 item 기반 — isPresented+exportURL 분리 방식은 첫 탭에 콘텐츠가
-    // URL 전파 전 빌드돼 흰 화면만 뜨던 버그가 있었다(두 번째 탭에야 정상).
-    @State private var shareExport: ShareExport? = nil
-    @State private var showSettings = false
+    // 단일 시트 라우팅 — 한 뷰에 .sheet를 여러 개 붙이면 iOS에서 하나만 떠서 누락된다.
+    // 설정·구독·매물상세·데이터내보내기를 한 enum item 시트로 통합.
+    // (export는 URL을 item으로 둬야 첫 탭에 흰 화면이 안 뜬다 — 과거 isPresented 분리 버그 방지.)
+    @State private var profileSheet: ProfileSheet?
+    @State private var showManageSubscription = false   // Pro 사용자 구독 관리(StoreKit 전용 모달)
+    private enum ProfileSheet: Identifiable {
+        case settings, pro
+        case item(MarketItem)
+        case export(URL)
+        var id: String {
+            switch self {
+            case .settings: return "settings"
+            case .pro:      return "pro"
+            case .item(let m): return "item-\(m.id)"
+            case .export(let u): return "export-\(u.absoluteString)"
+            }
+        }
+    }
     @State private var infoAlert: String? = nil
     // 내 거래·동네 활동
     @State private var myItems: [MarketItem] = []
     @State private var myMeetups: [CrewMeetup] = []
-    @State private var detailItem: MarketItem? = nil
 
     // 성별 중립 닉네임 (설정에서 변경 — 맘/파파/양육자)
     @AppStorage("bl_nickname") private var nickname = "양육자님"
@@ -43,12 +57,11 @@ struct ProfileScreen: View {
         return store.selectedChild == nil ? caregiverTitle : "\(caregiverTitle) · \(childAgeText)"
     }
 
-    // 거래·크루 수는 뱃지 엔진과 동일 소스(로컬 기준)로 산정 — 티어 카드와 뱃지 불일치 방지.
-    // 인증 거래수 — 양쪽 확인(판매완료 + 구매자 확인)된 것만 집계(서버 myItems). 로딩 전엔 0.
-    private var tradeCount: Int { myItems.filter { $0.status == .sold && $0.buyerConfirmed }.count }
+    // 거래수 — 뱃지 엔진(AppStore.currentEarnedBadgeIds)과 동일 소스(로컬 판매완료)로 산정해
+    // 티어 카드 진행도와 거래 뱃지가 어긋나지 않게 한다. (서버 confirmed 기준으로 섞으면 불일치.)
+    private var tradeCount: Int { store.marketItems.filter { $0.mine && $0.status == .sold }.count }
     private let avgRating    = 0.0
     private let joinedMonths = 0
-    private var crewCount: Int { store.joinedCrewIds.count }
 
     // MARK: 실 로컬 활동치 (기록 기반)
     /// 전체 기록 수 (다이어리 + 성장)
@@ -128,7 +141,7 @@ struct ProfileScreen: View {
         ScrollView {
             VStack(spacing: 0) {
                 BLScreenHeader(title: "내 정보") {
-                    Button { showSettings = true } label: {
+                    Button { profileSheet = .settings } label: {
                         Image(systemName: "gearshape.fill")
                             .font(.system(size: 17, weight: .medium))
                             .foregroundStyle(AppColors.ink2)
@@ -140,6 +153,7 @@ struct ProfileScreen: View {
                 }
                 VStack(spacing: Spacing.s4) {
                     profileCard
+                    subscriptionCard
                     tierProgressCard
                     myActivitySection
                     badgeCollectionSection
@@ -151,9 +165,6 @@ struct ProfileScreen: View {
         }
         .background(AppColors.canvas.ignoresSafeArea())
         .task { await loadMyActivity() }
-        .sheet(item: $detailItem) { it in
-            NavigationStack { MarketItemDetail(item: it).environmentObject(store) }
-        }
         .overlay {
             if let badge = detailBadge {
                 BadgeDetailOverlay(
@@ -176,23 +187,89 @@ struct ProfileScreen: View {
         } message: {
             Text(infoAlert ?? "")
         }
-        .sheet(item: $shareExport) { item in
-            ShareSheet(activityItems: [item.url])
-        }
-        // 설정 화면 — NavigationStack 외부일 경우를 대비해 .sheet 사용
-        .sheet(isPresented: $showSettings) {
-            NavigationStack {
-                SettingsScreen()
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("닫기") { showSettings = false }
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(AppColors.ink2)
+        // 설정·구독·매물상세·내보내기 — 단일 item 시트로 라우팅(NavigationStack 외부 대비 .sheet 사용).
+        .sheet(item: $profileSheet) { sheet in
+            switch sheet {
+            case .settings:
+                NavigationStack {
+                    SettingsScreen()
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("닫기") { profileSheet = nil }
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(AppColors.ink2)
+                            }
                         }
-                    }
+                }
+                .environmentObject(store)
+            case .pro:
+                ProUpsellSheet().environmentObject(store)
+            case .item(let it):
+                NavigationStack { MarketItemDetail(item: it).environmentObject(store) }
+            case .export(let url):
+                ShareSheet(activityItems: [url])
             }
-            .environmentObject(store)
         }
+        .manageSubscriptionsSheet(isPresented: $showManageSubscription)
+    }
+
+    // MARK: - 구독 카드 (내 플랜)
+    @ViewBuilder
+    private var subscriptionCard: some View {
+        let pro = store.isPro
+        Button {
+            if pro { showManageSubscription = true } else { profileSheet = .pro }
+        } label: {
+            HStack(spacing: Spacing.s3) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(pro ? AppColors.gold : AppColors.primary)
+                    Image(systemName: pro ? "crown.fill" : "heart.text.square.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 40, height: 40)
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pro ? "BabyLog Pro" : "BabyLog Pro 구독")
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                    Text(pro
+                         ? "가족 보관함·조부모 초대 이용 중 · 구독 관리"
+                         : "가족과 사진 공유, 조부모님 초대 — 월 990원부터")
+                        .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: Spacing.s2)
+                if pro {
+                    Text("Pro").font(.system(size: 12, weight: .heavy)).foregroundStyle(AppColors.gold)
+                        .padding(.horizontal, 10).frame(height: 26)
+                        .background(AppColors.goldTint, in: Capsule())
+                } else {
+                    Text("구독하기").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).frame(height: 34)
+                        .background(AppColors.primary, in: Capsule())
+                }
+            }
+            .padding(Spacing.s4)
+            // 은은하게 도드라지는 틴트 — 무료는 프라이머리(초록), Pro는 골드. 앱 팔레트 유지.
+            .background(
+                LinearGradient(
+                    colors: pro
+                        ? [AppColors.goldTint, AppColors.surface]
+                        : [AppColors.primarySoft, AppColors.surface],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                    .stroke((pro ? AppColors.gold : AppColors.primary).opacity(0.35), lineWidth: 1.5)
+            }
+            .blShadow(.chip)
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.99))
+        .accessibilityLabel(pro ? "BabyLog Pro 구독 중. 탭하면 구독 관리" : "BabyLog Pro 구독하기. 월 990원부터")
     }
 
     // MARK: - Profile Card
@@ -219,7 +296,7 @@ struct ProfileScreen: View {
                     }
                     Spacer()
                     Button {
-                        showSettings = true
+                        profileSheet = .settings
                     } label: {
                         Image(systemName: "pencil")
                             .font(.system(size: 17, weight: .medium))
@@ -462,7 +539,7 @@ struct ProfileScreen: View {
                         activityEmpty("아직 올린 물품이 없어요")
                     } else {
                         ForEach(myItems.prefix(6)) { it in
-                            Button { detailItem = it } label: { myItemRow(it) }.buttonStyle(.plain)
+                            Button { profileSheet = .item(it) } label: { myItemRow(it) }.buttonStyle(.plain)
                         }
                     }
                 }
@@ -571,7 +648,7 @@ struct ProfileScreen: View {
                             let state = store.snapshot()
                             do {
                                 // item 기반 — URL이 준비된 시점에 시트를 띄워 첫 탭 흰 화면 방지.
-                                shareExport = ShareExport(url: try DataExporter.exportToTemporaryFile(state))
+                                profileSheet = .export(try DataExporter.exportToTemporaryFile(state))
                             } catch {
                                 infoAlert = "데이터를 내보내지 못했어요. 잠시 후 다시 시도해 주세요."
                             }
@@ -833,15 +910,6 @@ enum ProfileStreak {
         }
         return streak
     }
-}
-
-// MARK: - ShareExport
-
-/// 내보내기 공유 시트 item — URL을 Identifiable로 감싸 .sheet(item:)로 띄운다.
-/// (isPresented 방식은 첫 탭에 URL 전파 전 콘텐츠가 빌드돼 흰 화면이 떴다.)
-private struct ShareExport: Identifiable {
-    let id = UUID()
-    let url: URL
 }
 
 // MARK: - ShareSheet
