@@ -111,6 +111,10 @@ struct PersistableState: Codable, Equatable {
     var claimedSubsidyIds: Set<String>
     /// 현재 선택된 아이 — 다자녀 가정이 매 실행 첫 아이로 리셋되지 않도록 영속.
     var selectedChildId: UUID?
+    /// UserDefaults 기반 사용자 설정 백업(닉네임·검진알림·내동네·본 뱃지 등).
+    /// 백업/복원(iCloud·익스포트)에서 누락되지 않도록 문자열 사전으로 직렬화해 담는다.
+    /// 키 규약은 AppStore.snapshot()/restore() 참조. isPro(권한)는 사용자 데이터가 아니므로 제외.
+    var prefs: [String: String]?
 
     init(
         pregnancies: [Pregnancy] = [],
@@ -140,7 +144,8 @@ struct PersistableState: Codable, Equatable {
         crewPostSeeded: Bool = false,
         tradeReports: [TradeReport] = [],
         claimedSubsidyIds: Set<String> = [],
-        selectedChildId: UUID? = nil
+        selectedChildId: UUID? = nil,
+        prefs: [String: String]? = nil
     ) {
         self.pregnancies = pregnancies
         self.children = children
@@ -170,6 +175,7 @@ struct PersistableState: Codable, Equatable {
         self.tradeReports = tradeReports
         self.claimedSubsidyIds = claimedSubsidyIds
         self.selectedChildId = selectedChildId
+        self.prefs = prefs
     }
 
     // MARK: - Codable (하위 호환 디코딩)
@@ -184,6 +190,7 @@ struct PersistableState: Codable, Equatable {
         case vaccineHospitals, checkupDoneKeys
         case crewPosts, crewPostComments, crewChats, crewPostSeeded
         case tradeReports, claimedSubsidyIds, selectedChildId
+        case prefs
     }
 
     init(from decoder: Decoder) throws {
@@ -218,6 +225,7 @@ struct PersistableState: Codable, Equatable {
         tradeReports       = try container.decodeIfPresent([TradeReport].self, forKey: .tradeReports) ?? []
         claimedSubsidyIds  = try container.decodeIfPresent(Set<String>.self, forKey: .claimedSubsidyIds) ?? []
         selectedChildId    = try container.decodeIfPresent(UUID.self, forKey: .selectedChildId)
+        prefs              = try container.decodeIfPresent([String: String].self, forKey: .prefs)
     }
 }
 

@@ -59,8 +59,18 @@ struct BudgetScreen: View {
     @State private var isLoadingSubsidies = true
     @State private var subsidyChildId: UUID? = nil   // 지원금 조회 대상 아이(다자녀: 선택, 기본=활성 아이)
     @State private var period: BudgetPeriod = .month
-    @State private var showAddExpense = false
-    @State private var editingExpense: Expense? = nil   // 지출 행 탭 → 편집
+    // 단일 시트 라우팅 — 한 뷰에 .sheet 둘 이상이면 iOS에서 하나만 떠서 누락된다.
+    @State private var expenseSheet: ExpenseSheet?
+    private enum ExpenseSheet: Identifiable {
+        case add                 // 새 지출
+        case edit(Expense)       // 지출 행 탭 → 편집
+        var id: String {
+            switch self {
+            case .add:           return "add"
+            case .edit(let e):   return "edit-\(e.id)"
+            }
+        }
+    }
     @State private var showAllExpenses = false
     /// '1년' 모드에서 보는 연도(연도별 탐색). 기본 = 올해.
     @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
@@ -216,12 +226,12 @@ struct BudgetScreen: View {
                 await loadSubsidies()
             }
         }
-        .appFAB { Haptics.light(); showAddExpense = true }
-        .sheet(isPresented: $showAddExpense) {
-            AddExpenseSheet().environmentObject(store)
-        }
-        .sheet(item: $editingExpense) { exp in
-            AddExpenseSheet(editing: exp).environmentObject(store)
+        .appFAB { Haptics.light(); expenseSheet = .add }
+        .sheet(item: $expenseSheet) { sheet in
+            switch sheet {
+            case .add:            AddExpenseSheet().environmentObject(store)
+            case .edit(let exp):  AddExpenseSheet(editing: exp).environmentObject(store)
+            }
         }
     }
 
@@ -543,9 +553,9 @@ struct BudgetScreen: View {
 
                         ExpenseRow(expense: expense)
                             .contentShape(Rectangle())
-                            .onTapGesture { Haptics.light(); editingExpense = expense }
+                            .onTapGesture { Haptics.light(); expenseSheet = .edit(expense) }
                             .contextMenu {
-                                Button { editingExpense = expense } label: {
+                                Button { expenseSheet = .edit(expense) } label: {
                                     Label("수정", systemImage: "pencil")
                                 }
                                 Button(role: .destructive) {

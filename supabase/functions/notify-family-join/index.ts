@@ -43,10 +43,21 @@ Deno.serve(async (req) => {
     const payload = await req.json().catch(() => ({}));
     const familyId: string | undefined = payload?.familyId;
     const who = (payload?.name ?? "가족").toString().slice(0, 40);
-    const sender = req.headers.get("x-device-id");
     if (!familyId) return new Response("missing familyId", { status: 400, headers: CORS });
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // 신원은 검증된 세션 JWT(uid) 우선 — x-device-id 헤더는 위조 가능. 신청자는 앱(로그인) 또는
+    //  가족 웹(익명 세션)이라 정상 호출엔 항상 세션 JWT가 있고 uid == ownerID. 세션 없을 때만 헤더 폴백.
+    const authToken = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    let verifiedUid: string | null = null;
+    if (authToken) {
+      try {
+        const { data } = await supabase.auth.getUser(authToken);
+        verifiedUid = data?.user?.id ?? null;   // anon key/만료 토큰이면 null → 헤더 폴백
+      } catch (_) { /* 검증 실패 시 헤더 폴백(푸시 무중단) */ }
+    }
+    const sender = verifiedUid ?? req.headers.get("x-device-id");
 
     // 가족 주인
     const { data: fam } = await supabase.from("bl_family").select("owner_uid").eq("id", familyId).maybeSingle();

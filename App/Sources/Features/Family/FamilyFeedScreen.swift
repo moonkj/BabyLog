@@ -18,8 +18,18 @@ struct FamilyFeedScreen: View {
     @State private var errorMsg: String?
     @State private var pendingDelete: BLFeedPost?   // 본인 사진 삭제 확인
     @State private var creatingInvite = false
-    @State private var inviteSheet: InviteInfo?     // 초대 링크 공유 시트
-    @State private var showJoinSheet = false        // 초대코드+비번 참여 시트
+    // 단일 시트 라우팅 — 한 뷰에 .sheet를 둘 이상 붙이면 iOS에서 하나만 떠서 누락된다.
+    @State private var activeSheet: ActiveSheet?
+    private enum ActiveSheet: Identifiable {
+        case invite(InviteInfo)   // 초대 링크 공유
+        case join                 // 초대코드+비번 참여
+        var id: String {
+            switch self {
+            case .invite(let i): return "invite-\(i.id)"
+            case .join:          return "join"
+            }
+        }
+    }
     @State private var members: [BLFamilyMember] = []  // 가족 관리(주인) 멤버 목록
     @State private var loadingMembers = false
     @State private var pendingRemove: BLFamilyMember?  // 멤버 내보내기 확인
@@ -57,16 +67,20 @@ struct FamilyFeedScreen: View {
         } message: { _ in
             Text("가족 모두의 보관함에서 사라지고 하트·댓글도 함께 삭제돼요. 되돌릴 수 없어요.")
         }
-        .sheet(item: $inviteSheet) { info in InviteShareSheet(info: info) }
-        .sheet(isPresented: $showJoinSheet) {
-            JoinFamilySheet { code, pass in
-                let name = UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님"
-                if await FamilyFeedBackend.joinFamily(code: code, name: name, pass: pass) != nil {
-                    await load()
-                    return true
-                } else {
-                    errorMsg = FamilyFeedBackend.lastError ?? "참여하지 못했어요. 잠시 후 다시 시도해 주세요."
-                    return false
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .invite(let info):
+                InviteShareSheet(info: info)
+            case .join:
+                JoinFamilySheet { code, pass in
+                    let name = UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님"
+                    if await FamilyFeedBackend.joinFamily(code: code, name: name, pass: pass) != nil {
+                        await load()
+                        return true
+                    } else {
+                        errorMsg = FamilyFeedBackend.lastError ?? "참여하지 못했어요. 잠시 후 다시 시도해 주세요."
+                        return false
+                    }
                 }
             }
         }
@@ -131,7 +145,7 @@ struct FamilyFeedScreen: View {
                 creatingInvite = true
                 if let code = await FamilyFeedBackend.createInvite(familyId: f.id),
                    let url = URL(string: Self.inviteLink(code: code)) {
-                    inviteSheet = InviteInfo(url: url, code: code, familyId: f.id, defaultPass: Self.genPin())
+                    activeSheet = .invite(InviteInfo(url: url, code: code, familyId: f.id, defaultPass: Self.genPin()))
                 } else {
                     errorMsg = FamilyFeedBackend.lastError ?? "초대 링크를 만들지 못했어요. 잠시 후 다시 시도해 주세요."
                 }
@@ -249,7 +263,7 @@ struct FamilyFeedScreen: View {
                 Text("이미 만든 가족에 참여하기").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
                 Text("가족이 알려준 초대 코드와 비밀번호로 들어오세요.")
                     .font(.system(size: 13)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
-                Button { showJoinSheet = true } label: {
+                Button { activeSheet = .join } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "person.2.badge.key")
                         Text("가족 참여하기")

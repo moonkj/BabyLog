@@ -37,10 +37,21 @@ Deno.serve(async (req) => {
     const meetupId: string | undefined = payload?.meetup_id;
     const groupId: string | undefined = payload?.group_id;
     const msg: string = (payload?.body ?? "").toString().slice(0, 120);
-    const sender = req.headers.get("x-device-id");
     if (!meetupId && !groupId) return new Response("missing id", { status: 400 });
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // 신원은 검증된 세션 JWT(uid)를 우선 — x-device-id 헤더는 위조 가능(타인 사칭/발신자 제외 우회).
+    //  크루는 로그인 필수라 정상 호출엔 항상 세션 JWT가 있고 uid == ownerID. 세션이 없을 때만 헤더 폴백.
+    const authToken = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    let verifiedUid: string | null = null;
+    if (authToken) {
+      try {
+        const { data } = await supabase.auth.getUser(authToken);
+        verifiedUid = data?.user?.id ?? null;   // anon key/만료 토큰이면 null → 헤더 폴백
+      } catch (_) { /* 검증 실패 시 헤더 폴백(푸시 무중단) */ }
+    }
+    const sender = verifiedUid ?? req.headers.get("x-device-id");
 
     // 스팸 방지 — 발신자가 이 방의 '참가자'여야 푸시 발사(임의 호출로 전체 푸시 무차별 발사 차단).
     //  멤버십(crew_meetup_join/crew_group_member)으로 검증 — 메시지 존재만 보던 이전 방식은

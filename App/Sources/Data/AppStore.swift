@@ -567,7 +567,19 @@ final class AppStore: ObservableObject {
 
     /// 현재 인메모리 상태를 스냅샷으로 반환한다.
     func snapshot() -> PersistableState {
-        PersistableState(
+        // UserDefaults에만 살던 사용자 설정을 함께 백업(닉네임·검진알림·내동네·본 뱃지).
+        // 백업/익스포트(iCloud·파일)에서 누락되면 신규 기기 복원 시 동네 인증·닉네임이 사라진다.
+        var prefs: [String: String] = [:]
+        let ud = UserDefaults.standard
+        if let nick = ud.string(forKey: "bl_nickname"), !nick.isEmpty { prefs["nickname"] = nick }
+        prefs["checkupRemindersOn"] = checkupRemindersOn ? "1" : "0"
+        prefs["selectedHoodIndex"]  = String(selectedHoodIndex)
+        if let hoods = ud.data(forKey: "bl_my_hoods_v2") { prefs["myHoods"] = hoods.base64EncodedString() }
+        let badges = ud.stringArray(forKey: "bl_seen_badges") ?? []
+        if !badges.isEmpty, let d = try? JSONEncoder().encode(badges),
+           let s = String(data: d, encoding: .utf8) { prefs["seenBadges"] = s }
+
+        return PersistableState(
             pregnancies:   pregnancies,
             children:      children,
             growthRecords: growthRecords,
@@ -595,7 +607,8 @@ final class AppStore: ObservableObject {
             crewPostSeeded: crewPostSeeded,
             tradeReports: tradeReports,
             claimedSubsidyIds: claimedSubsidyIds,
-            selectedChildId: selectedChildId
+            selectedChildId: selectedChildId,
+            prefs: prefs.isEmpty ? nil : prefs
         )
     }
 
@@ -630,6 +643,29 @@ final class AppStore: ObservableObject {
         claimedSubsidyIds  = state.claimedSubsidyIds
         // 저장된 선택 아이가 아직 존재하면 복원, 아니면 첫 아이로 폴백.
         selectedChildId    = state.selectedChildId.flatMap { id in children.contains(where: { $0.id == id }) ? id : nil }
+        // UserDefaults 설정 복원 — restore()는 매 실행마다 호출되므로, 해당 키가 '없을 때만' 적용한다.
+        // (키가 있으면 라이브 값이 최신이라 신뢰; 무조건 덮으면 닉네임 등이 옛 스냅샷으로 회귀.)
+        // → 사실상 신규 기기·백업 복구 시나리오에서만 동작.
+        if let prefs = state.prefs {
+            let ud = UserDefaults.standard
+            if ud.string(forKey: "bl_nickname") == nil, let nick = prefs["nickname"], !nick.isEmpty {
+                ud.set(nick, forKey: "bl_nickname")
+            }
+            if ud.object(forKey: "bl_checkup_reminders") == nil, let c = prefs["checkupRemindersOn"] {
+                checkupRemindersOn = (c == "1")
+            }
+            if ud.object(forKey: "bl_selected_hood") == nil, let s = prefs["selectedHoodIndex"], let i = Int(s) {
+                selectedHoodIndex = i
+            }
+            if ud.data(forKey: "bl_my_hoods_v2") == nil, let b64 = prefs["myHoods"],
+               let d = Data(base64Encoded: b64), let arr = try? JSONDecoder().decode([MyHood].self, from: d) {
+                myHoods = arr
+            }
+            if ud.object(forKey: "bl_seen_badges") == nil, let s = prefs["seenBadges"],
+               let d = s.data(using: .utf8), let arr = try? JSONDecoder().decode([String].self, from: d) {
+                ud.set(arr, forKey: "bl_seen_badges")
+            }
+        }
         seedMarketIfNeeded()
         seedCrewIfNeeded()
         seedCrewPostsIfNeeded()

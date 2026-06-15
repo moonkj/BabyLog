@@ -12,8 +12,9 @@ struct ProfileScreen: View {
 
     // MARK: Mock State (실제 구현 시 ViewModel / Environment 주입)
     @State private var selectedBadgeCategory: BadgeCatalogItem.BadgeCategory? = nil
-    @State private var exportURL: URL? = nil
-    @State private var showShareSheet = false
+    // 공유 시트는 item 기반 — isPresented+exportURL 분리 방식은 첫 탭에 콘텐츠가
+    // URL 전파 전 빌드돼 흰 화면만 뜨던 버그가 있었다(두 번째 탭에야 정상).
+    @State private var shareExport: ShareExport? = nil
     @State private var showSettings = false
     @State private var infoAlert: String? = nil
     // 내 거래·동네 활동
@@ -175,10 +176,8 @@ struct ProfileScreen: View {
         } message: {
             Text(infoAlert ?? "")
         }
-        .sheet(isPresented: $showShareSheet) {
-            if let url = exportURL {
-                ShareSheet(activityItems: [url])
-            }
+        .sheet(item: $shareExport) { item in
+            ShareSheet(activityItems: [item.url])
         }
         // 설정 화면 — NavigationStack 외부일 경우를 대비해 .sheet 사용
         .sheet(isPresented: $showSettings) {
@@ -567,25 +566,16 @@ struct ProfileScreen: View {
                         iconFg: Color(hex: 0x5B53B0),
                         title: "내 데이터 내보내기",
                         subtitle: "표준 포맷으로 언제든",
-                        showDivider: true,
+                        showDivider: false,
                         onTap: {
                             let state = store.snapshot()
                             do {
-                                exportURL = try DataExporter.exportToTemporaryFile(state)
-                                showShareSheet = true
+                                // item 기반 — URL이 준비된 시점에 시트를 띄워 첫 탭 흰 화면 방지.
+                                shareExport = ShareExport(url: try DataExporter.exportToTemporaryFile(state))
                             } catch {
                                 infoAlert = "데이터를 내보내지 못했어요. 잠시 후 다시 시도해 주세요."
                             }
                         }
-                    )
-                    privacyRow(
-                        icon: "heart.fill",
-                        iconBg: Color(hex: 0xFBEAF0),
-                        iconFg: Color(hex: 0xB5478A),
-                        title: "양육자 역할 설정",
-                        subtitle: "맘 · 파파 · 양육자 중립 — 선택",
-                        showDivider: false,
-                        onTap: { showSettings = true }
                     )
                 }
             }
@@ -843,6 +833,15 @@ enum ProfileStreak {
         }
         return streak
     }
+}
+
+// MARK: - ShareExport
+
+/// 내보내기 공유 시트 item — URL을 Identifiable로 감싸 .sheet(item:)로 띄운다.
+/// (isPresented 방식은 첫 탭에 URL 전파 전 콘텐츠가 빌드돼 흰 화면이 떴다.)
+private struct ShareExport: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 // MARK: - ShareSheet

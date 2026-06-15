@@ -686,7 +686,7 @@ struct NearbyScreen: View {
             HStack(spacing: Spacing.s2) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.s2) {
-                        ForEach(PlaceCategory.allCases.filter { $0 != .playground }, id: \.self) { cat in
+                        ForEach(PlaceCategory.allCases.filter { $0 != .playground && $0 != .kidsCafe }, id: \.self) { cat in
                             BLChip(text: cat.rawValue, on: selectedCategory == cat) {
                                 // activeFilters 제거 — 필터 상태 갱신 불필요(재조회는 onChange가 담당).
                                 selectedCategory = cat
