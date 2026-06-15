@@ -325,22 +325,24 @@ struct MkSellFlowSheet: View {
     private func registerToServer() {
         submitting = true
         Task {
-            // 무료 한도 확인 (무료 회원 1매물). 네트워크로 개수를 확인 못 하면(nil) '한도 초과'로
-            // 단정하지 않고 재시도를 안내한다 — 0개인데도 "1개까지" 오안내가 뜨던 문제 방지.
-            let activeCount = await MarketBackend.myActiveListingCount()
-            if activeCount == nil {
-                await MainActor.run {
-                    submitting = false
-                    alertMessage = "지금은 연결 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요."
+            // 무료 한도 확인 (무료 1매물). Pro는 다중판매 — 한도 검사 건너뜀.
+            // 네트워크로 개수를 확인 못 하면(nil) '한도 초과'로 단정하지 않고 재시도 안내(0개인데 오안내 방지).
+            if !store.isPro {
+                let activeCount = await MarketBackend.myActiveListingCount()
+                if activeCount == nil {
+                    await MainActor.run {
+                        submitting = false
+                        alertMessage = "지금은 연결 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요."
+                    }
+                    return
                 }
-                return
-            }
-            if let c = activeCount, c >= MarketBackend.freeListingLimit {
-                await MainActor.run {
-                    submitting = false
-                    alertMessage = "무료 회원은 매물을 1개까지 올릴 수 있어요. 기존 매물을 판매완료하거나 삭제한 뒤 다시 등록해 주세요."
+                if let c = activeCount, c >= MarketBackend.freeListingLimit {
+                    await MainActor.run {
+                        submitting = false
+                        alertMessage = "무료는 매물을 1개까지 올릴 수 있어요. Pro로 업그레이드하면 여러 개를 올릴 수 있어요(기존 매물을 판매완료·삭제해도 됩니다)."
+                    }
+                    return
                 }
-                return
             }
 
             // 판매자 동(표시) + 시(노출 범위). 내 동네 우선, 미설정 시 현재 GPS.

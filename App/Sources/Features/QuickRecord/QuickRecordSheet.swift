@@ -90,6 +90,21 @@ struct QuickRecordSheet: View {
     }
 
     // MARK: - Body
+    /// 시트 입력 상태 초기화 — 재사용되는 시트라 이전 입력(특히 형제 선택)이 남아 다음 저장이
+    /// 엉뚱한 아이에게 가는 것을 막는다(데이터 정합성). shareToFamily(@AppStorage)는 의도적으로 유지.
+    private func resetInputs() {
+        selectedImages = []
+        selectedVideoURL = nil
+        memo = ""
+        selectedMilestones = []
+        customMilestones = []
+        selectedExtraChildIds = []
+        heightText = ""
+        weightText = ""
+        showDetail = false
+        carouselIndex = 0
+    }
+
     var body: some View {
         ZStack {
             mainContent
@@ -103,6 +118,8 @@ struct QuickRecordSheet: View {
         }
         // 애니메이션: 완료 오버레이 진입
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: savedOverlay)
+        // 시트가 열릴 때마다 입력 초기화 — 재사용 시트의 이전 입력(형제 선택 등) 잔존으로 인한 오저장 방지.
+        .onAppear { resetInputs() }
         // 가족 공유 시트 — 저장 직후 '공유 앨범에 추가'. 닫히면 기록 시트도 닫는다.
         .sheet(isPresented: $showFamilyShare, onDismiss: { onSave(); onClose() }) {
             QuickFamilyShareSheet(activityItems: pendingShareURLs)

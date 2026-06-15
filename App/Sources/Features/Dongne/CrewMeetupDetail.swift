@@ -325,7 +325,8 @@ struct CrewMeetupDetail: View {
             guard LoginGate.ready() else { showLogin = true; return }   // 로그인 필수(신상 특정)
             // 누구나 채팅 가능(참석 희망자·이웃 코디네이션). 미참가 상태면 채팅 입장과 함께 자동 참가
             // 처리해 알림 대상에 포함시킨다(crew_meetup_join). 호스트는 이미 참가 상태.
-            if !isJoined && !joinBusy {
+            // ⚠️ 정원 마감(isFull)이면 자동 참가하지 않는다 — 채팅은 열되 정원 초과 참가/상태 꼬임 방지.
+            if !isJoined && !joinBusy && !isFull {
                 store.toggleJoinCrew(meetup.id)            // 낙관 참가
                 joinBusy = true
                 Task { @MainActor in

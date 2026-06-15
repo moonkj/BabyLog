@@ -51,6 +51,8 @@ begin
   if not exists (select 1 from public.bl_family f where f.id = fam and f.owner_uid = public.bl_owner_id()) then
     raise exception 'not owner';
   end if;
+  -- 가족 단위 직렬화 — 동시 승인 read-then-write 레이스로 무료2/Pro8 캡을 넘기는 것 방지.
+  perform pg_advisory_xact_lock(hashtext(fam::text));
   select coalesce(p.is_pro, false) into owner_pro
     from public.bl_family f left join public.bl_profile p on p.uid = f.owner_uid where f.id = fam;
   select count(*) into approved_cnt

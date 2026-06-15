@@ -388,11 +388,15 @@ private struct DiaryTimelineCard: View {
             }
         }
         .onAppear { if fpost == nil { fpost = familyPost } }
-        .onChange(of: familyPost) { _, new in if new != nil { fpost = new } }
-        // 배치(familyPosts)가 아직 못 잡은 기록은 카드가 자기 id로 직접 확인 — 자동공유 직후 반영 보장.
-        // 공유 완료 시 store.familyFeedVersion이 증가 → 이 task 재실행 → 새 포스트를 잡아 버튼→하트로 전환.
+        // 새 포스트면 반영. 배치에서 사라졌고(삭제) 공유표식도 없으면 fpost 정리 → 삭제된 글의 '유령 하트/댓글' 제거.
+        .onChange(of: familyPost) { _, new in
+            if let new { fpost = new } else if !sharedIntent { fpost = nil }
+        }
+        // 배치(familyPosts, TimelineSection이 전체 일괄 로드)가 우선. 방금 공유했는데(sharedIntent)
+        // 배치가 아직 못 잡은 카드만 개별 확인 — 모든 카드가 매번 fetch하던 네트워크 폭주 제거.
+        // (삭제로 인한 fpost 정리는 위 onChange가 담당.)
         .task(id: store.familyFeedVersion) {
-            guard AuthStore.shared.isLoggedIn, hasMedia, familyPost == nil else { return }
+            guard AuthStore.shared.isLoggedIn, hasMedia, familyPost == nil, sharedIntent else { return }
             if let p = await FamilyFeedBackend.fetchPost(postId: entry.id.uuidString) { fpost = p }
         }
         .contextMenu {
