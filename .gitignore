@@ -21,3 +21,6 @@ Secrets.plist
 # Supabase CLI temp
 supabase/.temp/
 web-dist/
+
+# wrangler 로컬 캐시(웹 배포 시 생성)
+.wrangler/

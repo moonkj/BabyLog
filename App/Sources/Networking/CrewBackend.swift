@@ -447,7 +447,19 @@ enum CrewBackend {
         return false
     }
 
-    /// 동네 그룹 생성(+개설자 자동 가입). 새 그룹 id 반환(실패 시 nil).
+    /// 내가 이미 만든 크루(그룹)가 있는지 — 1인당 생성 1개 제한 검사용(참여는 무제한).
+    static func hasCreatedGroup() async -> Bool {
+        guard SupabaseConfig.isConfigured else { return false }
+        let me = await SupabaseConfig.ownerID()
+        guard let enc = me.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let req = await request("/rest/v1/crew_group?creator=eq.\(enc)&select=id&limit=1", method: "GET"),
+              let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [Any] else { return false }
+        return !arr.isEmpty
+    }
+
+    /// 동네 그룹 생성(+개설자 자동 가입). 새 그룹 id 반환(실패 시 nil). 1인 1개 제한은 서버 트리거+사전 체크.
     @discardableResult
     static func createGroup(hood: String, name: String, ageRange: String,
                             interestTags: [String], creatorName: String) async -> String? {

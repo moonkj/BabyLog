@@ -9,6 +9,7 @@
 
 **모델 변경 요약(초기 설계 대비):**
 - 가족 사진 공유는 v1에서 **무료에도 개방**(부부 2명). 즉 무료 2인 가족 피드도 R2를 쓴다 → 절대원칙 "무료는 사진 서버 비전송"을 **가족 공유 범위에서 의식적으로 완화**(2026-06 결정, CLAUDE.md 갱신). **아동 기록 원본(성장·일기·접종·가계부)은 여전히 서버에 안 올린다.**
+- **영상도 v1에서 무료 포함**(사진과 동일 경로). 비용 통제: **영상 개수 상한 등급별 — 무료 100 / Pro 300**(주인 `is_pro` 기준, 서버 `media-upload-url`이 강제, 초과 시 `video_cap`+`cap` 403), 클라이언트 **720p·60초** 압축 + 포스터 프레임. 앱 가족 피드 상단에 **"영상 N/cap" 카운터** 노출(상한 근접 시 빨강). 비주인 멤버용 캡 조회는 RPC `bl_video_cap`(SECURITY DEFINER). 시청은 R2(egress 무료)라 무제한 반복 시청해도 추가 비용 0 — 저장량만 상한으로 묶음.
 - 옛 iCloud 공유앨범 방식(`FamilyShareScreen`)은 **제거**(코드 삭제). 진입점은 가족 피드 하나로 일원화.
 
 **등급 (서버 강제):**
@@ -22,7 +23,7 @@
 - **승인제**: 합류는 곧바로 "승인 대기"(아무것도 못 봄) → 주인이 앱 "가족 관리"에서 승인해야 열람. 합류 시 **주인에게 APNs 푸시**(`notify-family-join`).
 - **구독 만료**: 부부(2명)는 유지, 조부모·친척은 차단(웹에 "지금은 볼 수 없어요" 안내, 재구독 시 자동 복구). 기존 데이터는 보존(인질극 금지) — 차단은 '보기 권한'만.
 
-**관련 서버 객체:** `schema_family_feed.sql`(테이블·RLS), `schema_family_invite.sql`(`bl_claim_invite` 3-arg·`bl_set_family_pass`·`bl_set_my_name`·멤버 삭제 정책), `schema_family_approval.sql`(`approved` 컬럼·`bl_is_family_member` 구독 게이팅·`bl_approve_member`). Edge: `media-upload-url`(R2 presign, is_pro 게이트 제거 — 멤버십만), `media-delete`, `notify-family-join`(합류 푸시). 웹: `web/family/index.html`(Cloudflare Pages), 배포본 `web-dist/`(gitignore).
+**관련 서버 객체:** `schema_family_feed.sql`(테이블·RLS), `schema_family_invite.sql`(`bl_claim_invite` 3-arg·`bl_set_family_pass`·`bl_set_my_name`·멤버 삭제 정책), `schema_family_approval.sql`(`approved` 컬럼·`bl_is_family_member` 구독 게이팅·`bl_approve_member`). Edge: `media-upload-url`(R2 presign, is_pro 게이트 제거 — 멤버십만 + 영상 상한 `video_cap` 무료100/Pro300), `media-delete`, `notify-family-join`(합류 푸시). SQL: `schema_video_cap.sql`(`bl_video_cap` RPC — 카운터 분모). 웹: `web/family/index.html`(Cloudflare Pages), 배포본 `web-dist/`(gitignore).
 
 **v2 (미구현):** 부부 **앱 전체 데이터(성장·일기·접종·가계부) 공유** = CloudKit **CKShare**(개인 iCloud, 우리 서버 X). 2번째 애플ID 필요. B1(개인 iCloud 백업·`BL_CLOUDKIT`·`iCloud.com.vibelab.babylog`)은 라이브.
 
@@ -39,7 +40,7 @@
 - 아동 안전: 가족 피드는 **초대된 가족만** 접근(공개 아님). 미디어 URL은 추측 불가 키 + 가족 토큰 게이트.
 - 데이터 비매각 / 무광고. 무료 데이터 영구 보존(무료는 서버에 없음 — 로컬/iCloud).
 - "사진은 서버에 안 올림"은 **무료** 약속. **Pro는 명시적 서버 백업 동의** 위에서만 업로드(원칙과 일치 — "서버 백업은 Pro 혜택").
-- 영상은 **Pro 전용**. 무료엔 서버 영상 없음.
+- ~~영상은 Pro 전용~~ → **v1에서 영상도 무료 포함**(위 "구현 현황" 참조). 개수 상한 무료 100 / Pro 300·720p·60초로 비용 통제.
 
 ## 3. 아키텍처 개요
 

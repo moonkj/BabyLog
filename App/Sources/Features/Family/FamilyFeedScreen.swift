@@ -5,6 +5,7 @@
 
 import SwiftUI
 import UIKit
+import AVKit
 
 struct FamilyFeedScreen: View {
     @ObservedObject private var auth = AuthStore.shared
@@ -24,6 +25,10 @@ struct FamilyFeedScreen: View {
     @State private var pendingRemove: BLFamilyMember?  // 멤버 내보내기 확인
     @State private var pendingMembers: [BLFamilyMember] = []  // 승인 대기(주인) 목록
     @State private var myApproved: Bool? = nil          // 비주인 본인 승인 상태(nil=확인 전)
+    @State private var blockedByExpiry = false          // 승인됐지만 구독 만료로 지금은 볼 수 없음
+    @State private var videoCount: Int? = nil           // 가족 영상 개수(사용자 안내)
+    @State private var videoCap: Int = FamilyFeedBackend.videoCap  // 등급별 상한(무료 100 / Pro 300)
+    @State private var fullVideo: PlayingVideo? = nil   // 전체화면 재생 중인 영상
 
     private var myUid: String? { auth.userId }
     /// R2 공개 베이스(앱이 키로 이미지 URL 구성). 미설정이면 플레이스홀더.
@@ -73,6 +78,9 @@ struct FamilyFeedScreen: View {
         } message: { member in
             Text("‘\(member.displayName)’님이 가족 보관함에서 나가게 돼요. 다시 들어오려면 초대가 필요해요.")
         }
+        .fullScreenCover(item: $fullVideo) { v in
+            FamilyVideoPlayer(url: v.url) { fullVideo = nil }
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -96,12 +104,16 @@ struct FamilyFeedScreen: View {
         } else if family?.ownerUid != myUid && myApproved == false {
             // 비주인 + 미승인(대기) — 피드를 숨기고 승인 대기 안내만 표시.
             waitingApprovalCard
+        } else if family?.ownerUid != myUid && blockedByExpiry {
+            // 비주인 + 승인됐지만 구독 만료 — 빈 피드 대신 '구독해야 볼 수 있어요' 안내.
+            expiredCard
         } else {
             if family?.ownerUid == myUid {
                 manageCard        // 주인: 가족 관리(승인 대기·멤버 목록·내보내기·초대)
             } else {
                 inviteRow         // 승인된 멤버: 조부모 초대 링크만
             }
+            if let n = videoCount { videoCounterChip(n) }
             if posts.isEmpty {
                 BLEmptyState(icon: "photo.on.rectangle.angled", title: "기록하면 여기 모여요",
                              message: "기록 탭에서 사진을 올리면 가족 보관함에 자동으로 공유돼요. 가족이 하트·댓글로 함께해요.")
@@ -141,6 +153,25 @@ struct FamilyFeedScreen: View {
         .accessibilityLabel("조부모님 초대 링크 만들기")
     }
 
+    /// 영상 사용량 표시 — 등급별 상한(무료 100 / Pro 300). 상한 근접/도달 시 강조.
+    private func videoCounterChip(_ n: Int) -> some View {
+        let cap = videoCap
+        let near = n >= cap - 5
+        return HStack(spacing: 8) {
+            Image(systemName: near ? "exclamationmark.triangle.fill" : "video.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(near ? AppColors.danger : AppColors.ink3)
+            Text("영상 \(n)/\(cap)" + (n >= cap ? " · 가득 찼어요" : ""))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(near ? AppColors.danger : AppColors.ink3)
+            Spacer()
+        }
+        .padding(.horizontal, Spacing.s3).frame(height: 34)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        .accessibilityLabel("가족 영상 \(n)개, 최대 \(cap)개")
+    }
+
     /// 승인 대기 안내(비주인·미승인) — 피드 대신 표시. 당겨서 새로고침으로 재확인.
     private var waitingApprovalCard: some View {
         BLCard {
@@ -153,9 +184,30 @@ struct FamilyFeedScreen: View {
                     Text("승인 대기 중이에요")
                         .font(.system(size: 16, weight: .bold)).foregroundStyle(AppColors.ink)
                 }
-                Text("가족 주인이 승인하면 사진을 볼 수 있어요. 주인에게 승인을 부탁해 주세요.")
+                Text("아이의 부모님이 승인하면 사진을 볼 수 있어요. 부모님께 승인을 부탁해 주세요.")
                     .font(.system(size: 13)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
                 Text("당겨서 새로고침하면 다시 확인해요.")
+                    .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+            }
+        }
+    }
+
+    /// 구독 만료 안내(비주인·승인됨·차단) — 빈 피드 대신 '구독해야 볼 수 있어요'.
+    /// 데이터는 보존(인질극 금지) — 차단되는 건 '보기 권한'뿐, 재구독 시 자동 복구.
+    private var expiredCard: some View {
+        BLCard {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                HStack(spacing: Spacing.s2) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 20, weight: .semibold)).foregroundStyle(AppColors.gold)
+                        .frame(width: 40, height: 40)
+                        .background(AppColors.goldTint, in: Circle())
+                    Text("지금은 볼 수 없어요")
+                        .font(.system(size: 16, weight: .bold)).foregroundStyle(AppColors.ink)
+                }
+                Text("가족 구독이 끝나서 사진을 볼 수 없어요. 아이의 부모님이 다시 구독하면 바로 다시 볼 수 있어요.")
+                    .font(.system(size: 13)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
+                Text("그동안의 사진·댓글은 안전하게 보관돼 있어요.")
                     .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
             }
         }
@@ -237,6 +289,16 @@ struct FamilyFeedScreen: View {
                             memberRow(m)
                         }
                     }
+                    // 무료 배우자(별) 설명 — 비주인 멤버가 있을 때만.
+                    if members.contains(where: { $0.uid != family?.ownerUid }) {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "star.fill").font(.system(size: 11)).foregroundStyle(AppColors.gold)
+                                .padding(.top, 2)
+                            Text("‘무료 배우자’는 구독이 끝나도 계속 볼 수 있는 1명이에요. 별을 눌러 바꿀 수 있어요(보통 배우자).")
+                                .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 inviteRow   // 조부모(안드로이드/아이폰) 초대 링크
             }
@@ -269,33 +331,66 @@ struct FamilyFeedScreen: View {
         .padding(.vertical, Spacing.s2)
     }
 
-    /// 멤버 한 행 — 이름·역할 + (주인 본인·자기 자신 제외) 내보내기.
+    /// 무료 배우자(구독 만료 시 유지될 1명) uid — 명시 지정 우선, 없으면 첫 승인 비주인 폴백.
+    private var effectivePartnerUid: String? {
+        if let p = family?.partnerUid, members.contains(where: { $0.uid == p }) { return p }
+        return members.first(where: { $0.uid != nil && $0.uid != family?.ownerUid })?.uid
+    }
+
+    /// 멤버 한 행 — 이름·역할 + 무료 배우자 배지/지정(별) + (주인·본인 제외) 내보내기.
     private func memberRow(_ m: BLFamilyMember) -> some View {
         let isOwner = m.uid != nil && m.uid == family?.ownerUid
         let isMe = m.uid != nil && m.uid == myUid
+        let isPartner = m.uid != nil && m.uid == effectivePartnerUid
         return HStack(spacing: Spacing.s2) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(m.displayName).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink)
                     if isOwner {
-                        Text("주인").font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.primary)
+                        Text("대표").font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.primary)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppColors.primarySoft, in: Capsule())
+                    } else if isPartner {
+                        Text("무료 배우자").font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.gold)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(AppColors.goldTint, in: Capsule())
                     }
                 }
                 Text(roleLabel(m.role)).font(.system(size: 12)).foregroundStyle(AppColors.ink3)
             }
             Spacer()
-            if !isOwner && !isMe {
-                Button { pendingRemove = m } label: {
-                    Text("내보내기").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.danger)
-                        .padding(.horizontal, Spacing.s3).frame(height: 34)
-                        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                }.buttonStyle(LiquidPressStyle(scale: 0.97))
-                .accessibilityLabel("\(m.displayName) 내보내기")
+            if !isOwner {
+                // 무료 배우자 지정(별) — 구독 만료 시 이 1명만 계속 볼 수 있음.
+                Button { if !isPartner { Task { await designatePartner(m) } } } label: {
+                    Image(systemName: isPartner ? "star.fill" : "star")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(isPartner ? AppColors.gold : AppColors.ink3)
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(LiquidPressStyle(scale: 0.92))
+                .disabled(busy || isPartner)
+                .accessibilityLabel(isPartner ? "\(m.displayName): 무료 배우자(지정됨)" : "\(m.displayName)을 무료 배우자로 지정")
+                if !isMe {
+                    Button { pendingRemove = m } label: {
+                        Text("내보내기").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.danger)
+                            .padding(.horizontal, Spacing.s3).frame(height: 34)
+                            .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    }.buttonStyle(LiquidPressStyle(scale: 0.97))
+                    .accessibilityLabel("\(m.displayName) 내보내기")
+                }
             }
         }
         .padding(.vertical, Spacing.s2)
+    }
+
+    /// 무료 배우자 재지정 — 주인이 별을 눌러 만료 시 유지될 1명을 바꾼다.
+    private func designatePartner(_ m: BLFamilyMember) async {
+        busy = true; defer { busy = false }
+        if await FamilyFeedBackend.setPartner(memberId: m.id) {
+            family = await FamilyFeedBackend.myFamily()   // partner_uid 갱신 반영
+        } else {
+            errorMsg = FamilyFeedBackend.lastError ?? "배우자 지정에 실패했어요."
+        }
     }
 
     private func roleLabel(_ role: String) -> String {
@@ -309,10 +404,38 @@ struct FamilyFeedScreen: View {
     private func postCard(_ post: BLFeedPost) -> some View {
         let liked = myUid != nil && post.reactions.contains { $0.uid == myUid }
         return BLCard(padding: 0) {
+            let videoMedia = post.media.first { $0.kind == "video" }
             VStack(alignment: .leading, spacing: 0) {
-                // 사진 — 자연 비율로 전체 표시(잘림 방지). 세로/가로 사진 모두 통째로 보임.
-                if let key = post.media.first?.r2Key, let base = publicBase,
+                if let v = videoMedia, let base = publicBase,
+                   let videoURL = URL(string: "\(base)/\(v.r2Key)") {
+                    // 영상 — 포스터(썸네일) 위에 재생 버튼. 탭하면 전체화면 재생.
+                    let posterKey = v.thumbKey ?? post.media.first(where: { $0.kind == "photo" })?.r2Key
+                    Button { fullVideo = PlayingVideo(url: videoURL) } label: {
+                        ZStack {
+                            if let pk = posterKey, let purl = URL(string: "\(base)/\(pk)") {
+                                AsyncImage(url: purl) { phase in
+                                    if case .success(let img) = phase {
+                                        img.resizable().scaledToFit().frame(maxWidth: .infinity)
+                                    } else {
+                                        Rectangle().fill(AppColors.surface2).frame(height: 280)
+                                    }
+                                }
+                            } else {
+                                Rectangle().fill(AppColors.surface2).frame(height: 280)
+                            }
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 56))
+                                .foregroundStyle(.white.opacity(0.92))
+                                .shadow(radius: 6)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .background(AppColors.surface2)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("영상 재생")
+                } else if let key = post.media.first?.r2Key, let base = publicBase,
                    let url = URL(string: "\(base)/\(key)") {
+                    // 사진 — 자연 비율로 전체 표시(잘림 방지). 세로/가로 사진 모두 통째로 보임.
                     AsyncImage(url: url) { phase in
                         switch phase {
                         case .success(let img):
@@ -391,11 +514,19 @@ struct FamilyFeedScreen: View {
                 await loadMembers()
                 posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
             } else {
-                // 비주인: 내 승인 상태 먼저 확인. 승인된 경우만 피드 로드.
+                // 비주인: 내 승인 상태 먼저 확인. 승인됐어도 구독 만료로 차단될 수 있음(canViewFeed).
                 let approved = (await FamilyFeedBackend.myMembership(familyId: f.id))?.approved ?? false
                 myApproved = approved
-                posts = approved ? await FamilyFeedBackend.fetchFeed(familyId: f.id) : []
+                if approved {
+                    blockedByExpiry = !(await FamilyFeedBackend.canViewFeed(familyId: f.id))
+                    posts = blockedByExpiry ? [] : await FamilyFeedBackend.fetchFeed(familyId: f.id)
+                } else {
+                    blockedByExpiry = false
+                    posts = []
+                }
             }
+            videoCount = await FamilyFeedBackend.familyVideoCount(familyId: f.id)
+            videoCap = await FamilyFeedBackend.familyVideoCap(familyId: f.id)
         }
         loading = false
     }
@@ -628,5 +759,40 @@ private struct CommentField: View {
             } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 26)).foregroundStyle(AppColors.primary) }
         }
         .padding(.top, 2)
+    }
+}
+
+/// 전체화면 재생 대상(fullScreenCover item). URL을 Identifiable로 감싼다.
+struct PlayingVideo: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// 가족 영상 전체화면 플레이어 — R2/CDN URL을 AVPlayer로 스트리밍 재생.
+struct FamilyVideoPlayer: View {
+    let url: URL
+    let onClose: () -> Void
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            VideoPlayer(player: player)
+                .ignoresSafeArea()
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .shadow(radius: 4)
+                    .padding(.top, Spacing.s4).padding(.trailing, Spacing.s4)
+            }
+            .accessibilityLabel("닫기")
+        }
+        .onAppear {
+            let p = AVPlayer(url: url)
+            player = p
+            p.play()
+        }
+        .onDisappear { player?.pause() }
     }
 }

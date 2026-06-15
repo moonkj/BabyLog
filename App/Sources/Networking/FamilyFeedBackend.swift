@@ -5,8 +5,13 @@
 
 import Foundation
 import UIKit
+import AVFoundation
 
 enum FamilyFeedBackend {
+
+    /// 가족당 영상 개수 상한 기본값(무료). 실제 캡은 등급별(무료 100 / Pro 300) — `familyVideoCap`.
+    /// 저장 비용 통제용(시청은 R2라 무료). 서버(media-upload-url)에서도 동일 로직으로 강제.
+    static let videoCap = 100
 
     /// 마지막 실패 상세(진단용 — UI 알럿에 노출). 성공 시 nil.
     nonisolated(unsafe) static var lastError: String?
@@ -235,6 +240,28 @@ enum FamilyFeedBackend {
         return true
     }
 
+    /// 무료 '배우자' 명시 지정(주인) — 구독 만료 시 유지될 1명. 승인된 멤버만.
+    static func setPartner(memberId: String) async -> Bool {
+        lastError = nil
+        guard var req = await rest("/rpc/bl_set_partner", method: "POST") else { lastError = "서버 미구성"; return false }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_member": memberId])
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            lastError = "배우자 지정 실패"; return false
+        }
+        return true
+    }
+
+    /// 지금 이 가족 피드를 볼 수 있는지(구독 게이팅 반영) — 승인됐어도 만료로 차단될 수 있음.
+    /// 차단(false)이면 빈 피드 대신 '구독해야 볼 수 있어요' 안내를 띄운다.
+    static func canViewFeed(familyId: String) async -> Bool {
+        guard var req = await rest("/rpc/bl_is_family_member", method: "POST") else { return false }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_family": familyId])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return (String(data: data, encoding: .utf8) ?? "").contains("true")
+    }
+
     /// 내 멤버 행 조회(내 승인 상태 확인용) — 대기 멤버도 본인 행은 RLS로 항상 보임. 없으면 nil.
     static func myMembership(familyId: String) async -> BLFamilyMember? {
         guard let uid = await AuthStore.shared.userId else { return nil }
@@ -327,15 +354,38 @@ enum FamilyFeedBackend {
     }
 
     @discardableResult
-    static func shareRecordToFamily(postId: String?, images: [UIImage], caption: String?, childLabel: String?) async -> Bool {
+    static func shareRecordToFamily(postId: String?, images: [UIImage], caption: String?, childLabel: String?,
+                                    videoURL: URL? = nil) async -> Bool {
         lastError = nil
-        guard !images.isEmpty else { lastError = "사진이 없어요"; return false }
+        guard !images.isEmpty || videoURL != nil else { lastError = "사진·영상이 없어요"; return false }
         guard let uid = await AuthStore.shared.userId else { lastError = "로그인이 필요해요"; return false }
         var fam = await myFamily()
         if fam == nil { fam = await createFamily(name: "우리 가족") }
         guard let f = fam else { lastError = lastError ?? "가족 보관함 생성 실패"; return false }
         await ensureMembership(familyId: f.id, uid: uid)   // Edge not_member 403 방지
-        return await createPhotoPost(familyId: f.id, postId: postId, images: images, caption: caption, childLabel: childLabel)
+        return await createPhotoPost(familyId: f.id, postId: postId, images: images,
+                                     caption: caption, childLabel: childLabel, videoURL: videoURL)
+    }
+
+    /// 가족 영상 개수(카운터 표시용). 실패 시 0.
+    static func familyVideoCount(familyId: String) async -> Int {
+        guard let req = await rest("/bl_post_media?family_id=eq.\(familyId)&kind=eq.video&select=id", method: "GET"),
+              let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [Any] else { return 0 }
+        return arr.count
+    }
+
+    /// 가족 영상 상한(카운터 분모) — 등급별(무료 100 / Pro 300, 주인 is_pro 기준).
+    /// RPC `bl_video_cap`(SECURITY DEFINER)로 비주인 멤버도 정확한 캡을 본다. 실패 시 기본 100.
+    static func familyVideoCap(familyId: String) async -> Int {
+        guard var req = await rest("/rpc/bl_video_cap", method: "POST") else { return videoCap }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_family": familyId])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let n = Int(String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+        else { return videoCap }
+        return n
     }
 
     /// 사진 포스트 작성: (사진들) 압축 → R2 업로드(Edge presigned) → bl_feed_post 1개 + bl_post_media N개.
@@ -343,8 +393,8 @@ enum FamilyFeedBackend {
     /// postId를 주면 그 id로 포스트 생성(기록 entry.id와 동일 → 타임라인이 가족 반응을 매칭).
     @discardableResult
     static func createPhotoPost(familyId: String, postId: String? = nil, images: [UIImage],
-                                caption: String?, childLabel: String?) async -> Bool {
-        guard let uid = await AuthStore.shared.userId, !images.isEmpty else { return false }
+                                caption: String?, childLabel: String?, videoURL: URL? = nil) async -> Bool {
+        guard let uid = await AuthStore.shared.userId, !images.isEmpty || videoURL != nil else { return false }
         // 1) 모든 사진 압축(긴변 1280, jpeg 0.7) → R2 업로드. 실패분은 건너뜀.
         //    포스트보다 먼저 업로드해 R2 실패(비Pro/네트워크) 시 고아 포스트가 안 생기게 한다.
         var keys: [String] = []
@@ -354,7 +404,20 @@ enum FamilyFeedBackend {
                                              ext: "jpg", contentType: "image/jpeg") else { continue }
             keys.append(key)
         }
-        guard !keys.isEmpty else { lastError = lastError ?? "사진 업로드 실패"; return false }
+        // 1-1) 영상: 720p·60초 압축 → R2 업로드 + 포스터. 개수 상한은 서버(Edge)가 강제(video_cap).
+        var videoMedia: (key: String, thumb: String?, durationS: Int, bytes: Int)? = nil
+        if let vurl = videoURL, let v = await compressVideo(vurl) {
+            if let vdata = try? Data(contentsOf: v.url),
+               let vkey = await uploadToR2(familyId: familyId, data: vdata, ext: "mp4", contentType: "video/mp4", kind: "video") {
+                var thumbKey: String? = nil
+                if let poster = v.poster {
+                    thumbKey = await uploadToR2(familyId: familyId, data: poster, ext: "jpg", contentType: "image/jpeg")
+                }
+                videoMedia = (vkey, thumbKey, v.durationS, vdata.count)
+            }
+            try? FileManager.default.removeItem(at: v.url)
+        }
+        guard !keys.isEmpty || videoMedia != nil else { lastError = lastError ?? "업로드 실패"; return false }
         // 2) 포스트 행 생성 — id를 클라에서 생성(return=representation 금지: 되읽기 RLS 42501 회피)
         let postId = postId ?? UUID().uuidString
         guard var preq = await rest("/bl_feed_post", method: "POST") else { lastError = "서버 미구성"; return false }
@@ -382,7 +445,46 @@ enum FamilyFeedBackend {
             if let (_, mresp) = try? await URLSession.shared.data(for: mreq),
                let mhttp = mresp as? HTTPURLResponse, (200...299).contains(mhttp.statusCode) { anyMedia = true }
         }
+        // 3-1) 영상 미디어 행(포스터·길이·바이트 포함 — 카운터/쿼터·피드 포스터용)
+        if let v = videoMedia, var mreq = await rest("/bl_post_media", method: "POST") {
+            mreq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+            var body: [String: Any] = ["post_id": postId, "family_id": familyId, "kind": "video",
+                                       "r2_key": v.key, "duration_s": v.durationS, "bytes": v.bytes]
+            if let t = v.thumb { body["thumb_key"] = t }
+            mreq.httpBody = try? JSONSerialization.data(withJSONObject: body)
+            if let (_, mresp) = try? await URLSession.shared.data(for: mreq),
+               let mhttp = mresp as? HTTPURLResponse, (200...299).contains(mhttp.statusCode) { anyMedia = true }
+        }
         return anyMedia
+    }
+
+    /// 영상 압축(720p·60초 캡) + 포스터 프레임. 반환: (압축 mp4 임시URL, 포스터jpeg, 길이초, 바이트?).
+    /// 비용 통제 핵심 — per-file 크기를 720p/60초로 묶는다(시청은 R2라 무료).
+    private static func compressVideo(_ src: URL) async -> (url: URL, poster: Data?, durationS: Int)? {
+        let asset = AVURLAsset(url: src)
+        let durSec = (try? await asset.load(.duration).seconds) ?? 0
+        guard durSec > 0 else { return nil }
+        let capped = min(durSec, 60.0)
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("fam-\(UUID().uuidString).mp4")
+        try? FileManager.default.removeItem(at: out)
+        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1280x720) else { return nil }
+        export.outputURL = out
+        export.outputFileType = .mp4
+        export.timeRange = CMTimeRange(start: .zero, duration: CMTime(seconds: capped, preferredTimescale: 600))
+        export.shouldOptimizeForNetworkUse = true
+        let ok = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            export.exportAsynchronously { cont.resume(returning: export.status == .completed) }
+        }
+        guard ok, FileManager.default.fileExists(atPath: out.path) else { return nil }
+        // 포스터 프레임(0.5초 지점, 긴변 720)
+        var poster: Data? = nil
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        gen.maximumSize = CGSize(width: 720, height: 720)
+        if let cg = try? await gen.image(at: CMTime(seconds: min(0.5, capped / 2), preferredTimescale: 600)).image {
+            poster = UIImage(cgImage: cg).jpegData(compressionQuality: 0.7)
+        }
+        return (out, poster, Int(capped))
     }
 
     /// 포스트 삭제(DB만) — 기록 삭제 시 가족 피드에서도 제거(미디어·반응·댓글은 FK cascade).
@@ -461,22 +563,28 @@ enum FamilyFeedBackend {
 
     // MARK: - R2 업로드 (Edge presigned → 직접 PUT)
 
-    private static func uploadToR2(familyId: String, data: Data, ext: String, contentType: String) async -> String? {
+    private static func uploadToR2(familyId: String, data: Data, ext: String, contentType: String,
+                                   kind: String = "photo") async -> String? {
         guard let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let url = URL(string: "\(base)/functions/v1/media-upload-url") else { lastError = "서버 미구성"; return nil }
-        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 15
+        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 60
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "familyId": familyId, "kind": "photo", "ext": ext, "contentType": contentType,
+            "familyId": familyId, "kind": kind, "ext": ext, "contentType": contentType,
         ])
         guard let (rdata, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse else { lastError = "업로드 URL: 네트워크 오류"; return nil }
         guard (200...299).contains(http.statusCode) else {
             let body = String(data: rdata, encoding: .utf8) ?? ""
-            lastError = "업로드 권한 거부 HTTP \(http.statusCode): \(body.prefix(140))"
+            if body.contains("video_cap") {
+                let cap = (try? JSONSerialization.jsonObject(with: rdata) as? [String: Any])?["cap"] as? Int ?? videoCap
+                lastError = "영상은 가족당 \(cap)개까지예요. 오래된 영상을 지우고 올려주세요."
+            } else {
+                lastError = "업로드 권한 거부 HTTP \(http.statusCode): \(body.prefix(140))"
+            }
             return nil
         }
         guard let obj = try? JSONSerialization.jsonObject(with: rdata) as? [String: Any],

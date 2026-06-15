@@ -196,9 +196,12 @@ async function loadFeed(){
 function cardEl(p){
   const media = (p.bl_post_media||[]).map(m=>{
     const url = `${R2_PUBLIC_BASE}/${m.r2_key}`;
-    return m.kind === "video"
-      ? `<video controls playsinline src="${url}"></video>`
-      : `<img loading="lazy" src="${url}" alt="가족 사진">`;
+    if (m.kind === "video") {
+      // 포스터(썸네일)로 즉시 미리보기 + 메타데이터만 선로딩(조부모 데이터 절약, R2 egress는 무료지만 체감 빠르게).
+      const poster = m.thumb_key ? ` poster="${R2_PUBLIC_BASE}/${m.thumb_key}"` : "";
+      return `<video controls playsinline preload="metadata"${poster} src="${url}"></video>`;
+    }
+    return `<img loading="lazy" src="${url}" alt="가족 사진">`;
   }).join("");
   const reactions = p.bl_reaction || [];
   const liked = reactions.some(r => r.uid === me && (r.kind||"heart")==="heart");
@@ -333,7 +336,7 @@ function showFeedHeader(){
 // 승인 대기 화면 + 20초 폴링/visibilitychange 재확인 → 승인되면 자동 전환
 function showPending(){
   document.querySelector("header")?.remove();
-  setState("✋ 승인 대기 중이에요\n\n가족 주인이 승인하면 우리 아이 사진을 볼 수 있어요.\n부모님께 승인을 부탁해 주세요.");
+  setState("✋ 승인 대기 중이에요\n\n아이의 부모님이 승인하면 우리 아이 사진을 볼 수 있어요.\n부모님께 승인을 부탁해 주세요.");
   const recheck = async()=>{
     if (await isApproved()){
       if (approvalPoll){ clearInterval(approvalPoll); approvalPoll = null; }

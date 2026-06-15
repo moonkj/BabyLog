@@ -79,6 +79,12 @@ final class AuthStore: ObservableObject {
         //    닉네임은 사용자가 설정에서 직접 정하는 값. fullName은 인증에만 쓰고 보관하지 않음.
         _ = fullName
         await claimDevice()
+        // 로그인 후 푸시 토큰을 새 계정 uid로 재키잉 — 가족 합류/마켓/채팅 푸시는 상대 신원
+        // (owner_uid = auth uid)으로 crew_push_token을 찾는다. 로그인 전 기기ID로 저장된 토큰이
+        // 그대로면 owner_uid로 못 찾아(no_token) 알림이 안 온다 → auth uid 키로 다시 올린다.
+        if let tok = UserDefaults.standard.string(forKey: "bl_apns_token"), !tok.isEmpty {
+            await CrewBackend.uploadPushToken(tok, hood: nil)
+        }
         return true
     }
 

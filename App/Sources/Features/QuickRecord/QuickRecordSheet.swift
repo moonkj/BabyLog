@@ -723,6 +723,7 @@ struct QuickRecordSheet: View {
         var feedCaption: String? = nil
         var feedChild: String? = nil
         var feedPostId: String? = nil   // 기록 entry.id == 피드 post id (양쪽 연결)
+        var feedVideoURL: URL? = nil    // 영상도 가족 피드로(720p·60초 압축은 백엔드)
 
         if mode == .pregnancy {
             // 임신 모드: 배 사진 + 산모 체중을 활성 임신 기록에 저장
@@ -742,6 +743,7 @@ struct QuickRecordSheet: View {
                 let targetIds = [childId] + selectedExtraChildIds.filter { $0 != childId }
                 var shareURLs: [URL] = []
                 var firstEntryId: UUID? = nil   // 가족 피드 포스트 id로 연결(기록↔피드 동일 id)
+                var firstVideoFile: String? = nil   // 가족 피드 업로드용 영상 파일(첫 사본 1개)
                 for tid in targetIds {
                     let refs = selectedImages.compactMap { PhotoStore.save($0) }
                     let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
@@ -761,15 +763,16 @@ struct QuickRecordSheet: View {
                         photoRefs: refs,
                         videoRef:  videoFile
                     )
-                    if firstEntryId == nil { firstEntryId = newId }
+                    if firstEntryId == nil { firstEntryId = newId; firstVideoFile = videoFile }
                     didSave = true
                 }
                 pendingShareURLs = (shareToFamily && hasMedia) ? shareURLs : []
                 // 로그인 + 사진 공유 ON → 이 기록의 사진을 가족 피드(서버)로 자동 게시할 준비.
                 // 피드 포스트 id = 기록 entry.id → 타임라인 카드가 같은 id로 가족 하트·댓글을 불러옴.
-                if shareToFamily, !selectedImages.isEmpty,
+                if shareToFamily, hasMedia,
                    AuthStore.shared.isLoggedIn, let linkId = firstEntryId {
                     feedImages = selectedImages
+                    feedVideoURL = PhotoStore.videoURL(firstVideoFile)
                     feedChild = store.selectedChild?.name
                     feedPostId = linkId.uuidString
                     store.markFeedShared(linkId.uuidString)   // 즉시 '공유 중' 표시(업로드 완료 전)
@@ -831,10 +834,10 @@ struct QuickRecordSheet: View {
         //  · Pro(로그인): 이 기록 사진을 가족 피드(서버)로 백그라운드 자동 게시 → 바로 닫기.
         //  · 무료: 기존 iCloud 공유 앨범 시트.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            if !feedImages.isEmpty {
-                let imgs = feedImages, cap = feedCaption, child = feedChild, pid = feedPostId
+            if !feedImages.isEmpty || feedVideoURL != nil {
+                let imgs = feedImages, cap = feedCaption, child = feedChild, pid = feedPostId, vurl = feedVideoURL
                 Task {
-                    let ok = await FamilyFeedBackend.shareRecordToFamily(postId: pid, images: imgs, caption: cap, childLabel: child)
+                    let ok = await FamilyFeedBackend.shareRecordToFamily(postId: pid, images: imgs, caption: cap, childLabel: child, videoURL: vurl)
                     await MainActor.run {
                         if ok { store.familyFeedVersion += 1 }                 // 타임라인 가족 반응 재로드
                         else if let pid { store.unmarkFeedShared(pid) }        // 실패 시 '공유 중' 해제 → 버튼 복귀

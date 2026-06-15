@@ -53,10 +53,28 @@ Deno.serve(async (req) => {
   if (kind !== "photo" && kind !== "video") return json({ error: "bad_kind" }, 400);
 
   // 3) 가족 멤버십 확인 (서버 권위 — 클라이언트 우회 차단)
-  // 무료 2인 가족도 업로드 허용 — 등급은 bl_claim_invite(합류)에서 강제.
+  // 무료 2인 가족도 업로드 허용(사진·영상 모두) — 등급은 bl_claim_invite(합류)에서 강제.
   const { data: member } = await admin
     .from("bl_family_member").select("id").eq("family_id", familyId).eq("uid", uid).maybeSingle();
   if (!member) return json({ error: "not_member" }, 403);
+
+  // 3-1) 영상 개수 상한 — 저장 비용 통제(전송은 R2라 무료, 시청 무제한 무관).
+  //      등급별: 무료 100 / Pro 300 (주인 is_pro 기준).
+  if (kind === "video") {
+    const { data: fam } = await admin.from("bl_family")
+      .select("owner_uid").eq("id", familyId).maybeSingle();
+    let ownerPro = false;
+    if (fam?.owner_uid) {
+      const { data: prof } = await admin.from("bl_profile")
+        .select("is_pro").eq("uid", fam.owner_uid).maybeSingle();
+      ownerPro = prof?.is_pro === true;
+    }
+    const cap = ownerPro ? 300 : 100;
+    const { count } = await admin.from("bl_post_media")
+      .select("id", { count: "exact", head: true })
+      .eq("family_id", familyId).eq("kind", "video");
+    if ((count ?? 0) >= cap) return json({ error: "video_cap", cap }, 403);
+  }
 
   // 4) R2 presigned PUT URL (10분)
   const accountId = Deno.env.get("R2_ACCOUNT_ID")!;

@@ -13,10 +13,12 @@ struct CrewGroupCreateSheet: View {
     @State private var tagsText = ""
     @State private var saving = false
     @State private var alertMessage: String?
+    @State private var alreadyHasGroup = false   // 이미 만든 크루가 있으면 추가 생성 차단(1인 1개)
 
     private let ageSuggestions = ["0–6개월", "6–12개월", "12–24개월", "24–36개월", "전체"]
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
-    private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && !saving }
+    private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && !saving && !alreadyHasGroup }
+    private let limitMessage = "크루는 한 사람당 하나만 만들 수 있어요. 참여는 여러 곳에 할 수 있어요. 새로 만들려면 기존 크루를 먼저 삭제해 주세요."
 
     private var parsedTags: [String] {
         tagsText.split(whereSeparator: { $0 == "," || $0 == "#" || $0 == " " })
@@ -28,6 +30,19 @@ struct CrewGroupCreateSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
+                    if alreadyHasGroup {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .font(.system(size: 16, weight: .semibold)).foregroundStyle(AppColors.danger)
+                            Text(limitMessage)
+                                .font(.system(size: 13, weight: .medium)).foregroundStyle(AppColors.ink2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(Spacing.s3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColors.dangerTint, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    }
+
                     Text("같은 또래 양육자와 이어지는 우리 동네 그룹이에요. 이름만 적어도 만들 수 있어요.")
                         .font(AppFont.caption)
                         .foregroundStyle(AppColors.ink3)
@@ -87,6 +102,7 @@ struct CrewGroupCreateSheet: View {
                 .padding(Spacing.s4)
             }
             .background(AppColors.canvas.ignoresSafeArea())
+            .task { alreadyHasGroup = await CrewBackend.hasCreatedGroup() }
             .navigationTitle("또래 그룹 만들기")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } } }
@@ -102,6 +118,8 @@ struct CrewGroupCreateSheet: View {
     }
 
     private func save() {
+        // 추가 생성 시도 — 이미 만든 크루가 있으면 알림 후 중단(1인 1개).
+        if alreadyHasGroup { alertMessage = limitMessage; return }
         guard canSave else { return }
         let nm = name.trimmingCharacters(in: .whitespaces)
         let age = ageRange.isEmpty ? "전체" : ageRange
@@ -123,7 +141,13 @@ struct CrewGroupCreateSheet: View {
                 dismiss()
             } else {
                 saving = false
-                alertMessage = "그룹을 만들지 못했어요. 잠시 후 다시 시도해 주세요."
+                // 서버 트리거(crew_create_limit)로 막혔는지 재확인 → 정확한 안내.
+                if await CrewBackend.hasCreatedGroup() {
+                    alreadyHasGroup = true
+                    alertMessage = limitMessage
+                } else {
+                    alertMessage = "그룹을 만들지 못했어요. 잠시 후 다시 시도해 주세요."
+                }
             }
         }
     }

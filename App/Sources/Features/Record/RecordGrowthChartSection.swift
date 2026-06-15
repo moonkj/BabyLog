@@ -406,20 +406,12 @@ struct GrowthChartSection: View {
 
     // MARK: Swift Charts 본체
 
-    /// X축 상한(개월) — 아이 데이터 범위에 맞춰 동적. 어린 아기는 ~18개월로 확대,
-    /// 큰 아이는 측정 월령+6(최대 60)까지. 밴드(0~60)가 항상 60까지라 축이 눌리는 것 방지.
-    private var chartMaxMonth: Int {
-        let maxData = chartPoints.map(\.month).max() ?? 0
-        return min(60, max(18, maxData + 6))
-    }
+    /// X축 상한(개월) — 항상 5세(60개월)까지 고정 표시. 데이터가 적어도 전체 WHO 곡선(0~60)에서
+    /// 우리 아이 위치를 볼 수 있게(사용자 요청). WHO 표준이 60개월까지라 그 이상은 그리지 않는다.
+    private var chartMaxMonth: Int { 60 }
 
-    /// X축 눈금 — 상한에 맞춰 간격 조정.
-    private var chartXTicks: [Int] {
-        let m = chartMaxMonth
-        if m <= 18 { return [0, 4, 8, 12, 16] }
-        if m <= 36 { return [0, 6, 12, 18, 24, 30, 36].filter { $0 <= m } }
-        return [0, 12, 24, 36, 48, 60].filter { $0 <= m }
-    }
+    /// X축 눈금 — 0~60개월 고정 표시에 맞춘 간격.
+    private var chartXTicks: [Int] { [0, 12, 24, 36, 48, 60] }
 
     private var growthChart: some View {
         let xMax = chartMaxMonth

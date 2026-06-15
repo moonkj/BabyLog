@@ -8,7 +8,20 @@ struct BLFamily: Identifiable, Codable, Equatable {
     let id: String
     let ownerUid: String
     var name: String
-    enum CodingKeys: String, CodingKey { case id, ownerUid = "owner_uid", name }
+    var partnerUid: String?   // 무료 '배우자'(구독 만료 시 유지될 1명). 미지정이면 첫 승인자 폴백.
+    enum CodingKeys: String, CodingKey { case id, ownerUid = "owner_uid", name, partnerUid = "partner_uid" }
+
+    init(id: String, ownerUid: String, name: String, partnerUid: String? = nil) {
+        self.id = id; self.ownerUid = ownerUid; self.name = name; self.partnerUid = partnerUid
+    }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id         = try c.decode(String.self, forKey: .id)
+        ownerUid   = try c.decode(String.self, forKey: .ownerUid)
+        name       = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? "우리 가족"
+        partnerUid = try? c.decodeIfPresent(String.self, forKey: .partnerUid)
+    }
 }
 
 struct BLFamilyMember: Identifiable, Codable, Equatable {

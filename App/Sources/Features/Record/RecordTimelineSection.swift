@@ -271,12 +271,16 @@ private struct DiaryTimelineCard: View {
     private var liked: Bool { store.isDiaryLiked(entry.id) }
     private var commentCount: Int { store.comments(for: entry.id).count }
     private var hasPhoto: Bool { !entry.photoRefList.isEmpty }
+    /// 영상 첨부 여부 — 가족 공유는 사진뿐 아니라 영상만 있어도 가능.
+    private var hasVideo: Bool { PhotoStore.videoURL(entry.videoRef) != nil }
+    /// 가족에 공유 가능한 미디어(사진 또는 영상)가 있는지.
+    private var hasMedia: Bool { hasPhoto || hasVideo }
     /// 이 기록을 가족에 공유했거나(서버) 공유 진행 중(낙관적 표시).
     private var sharedIntent: Bool { store.sharedFeedEntryIds.contains(entry.id.uuidString) }
     /// 이 기록이 가족에 공유됨 → 가족 하트·댓글 표시.
     private var showsFamilySocial: Bool { fpost != nil }
     /// 카드 하단에 가족 UI(하트·댓글/공유중/공유하기)가 보이는지 — 패딩 조절용.
-    private var showsAnyFamilyUI: Bool { fpost != nil || hasPhoto }
+    private var showsAnyFamilyUI: Bool { fpost != nil || hasMedia }
 
     var body: some View {
         let photos = entry.photoRefList.compactMap { PhotoStore.image($0) }
@@ -341,7 +345,7 @@ private struct DiaryTimelineCard: View {
         // 배치(familyPosts)가 아직 못 잡은 기록은 카드가 자기 id로 직접 확인 — 자동공유 직후 반영 보장.
         // 공유 완료 시 store.familyFeedVersion이 증가 → 이 task 재실행 → 새 포스트를 잡아 버튼→하트로 전환.
         .task(id: store.familyFeedVersion) {
-            guard AuthStore.shared.isLoggedIn, hasPhoto, familyPost == nil else { return }
+            guard AuthStore.shared.isLoggedIn, hasMedia, familyPost == nil else { return }
             if let p = await FamilyFeedBackend.fetchPost(postId: entry.id.uuidString) { fpost = p }
         }
         .contextMenu {
@@ -471,6 +475,16 @@ private struct DiaryTimelineCard: View {
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel("공유")
+            } else if let vurl = PhotoStore.videoURL(entry.videoRef) {
+                // 영상만 있는 기록도 외부 공유 가능(사진과 패리티) — 원본 영상 파일 공유.
+                ShareLink(item: vurl, preview: SharePreview("\(child.name) 기록")) {
+                    Image(systemName: "paperplane")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(AppColors.ink)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("영상 공유")
             }
             Spacer()
         }
@@ -503,15 +517,15 @@ private struct DiaryTimelineCard: View {
         .padding(.bottom, showsAnyFamilyUI ? 6 : 14)
     }
 
-    // 가족 소셜 — 공유됨이면 하트·댓글, 사진 있는데 미공유면 '가족과 공유하기'. 미로그인엔 미표시.
+    // 가족 소셜 — 공유됨이면 하트·댓글, 사진·영상 있는데 미공유면 '가족과 공유하기'. 미로그인엔 미표시.
     @ViewBuilder
     private var familySocialBlock: some View {
         if AuthStore.shared.isLoggedIn {
             if fpost != nil {
                 sharedSocialView
-            } else if sharedIntent, hasPhoto {
+            } else if sharedIntent, hasMedia {
                 sharingPlaceholder           // 공유 직후 업로드 중 — 즉시 '공유 중' 표시
-            } else if hasPhoto {
+            } else if hasMedia {
                 shareToFamilyBar
             }
         }
@@ -644,11 +658,12 @@ private struct DiaryTimelineCard: View {
     /// 이 기록을 가족 피드에 공유(연결 id = entry.id) — 공유 후 하트·댓글 UI가 열린다.
     private func shareThisRecord() async {
         let imgs = entry.photoRefList.compactMap { PhotoStore.image($0) }
-        guard !imgs.isEmpty else { return }
+        let videoURL = PhotoStore.videoURL(entry.videoRef)   // 영상도 가족 피드로(720p·60초 압축은 백엔드)
+        guard !imgs.isEmpty || videoURL != nil else { return }
         sharing = true; defer { sharing = false }
         let ok = await FamilyFeedBackend.shareRecordToFamily(
             postId: entry.id.uuidString, images: imgs,
-            caption: entry.content, childLabel: child.name)
+            caption: entry.content, childLabel: child.name, videoURL: videoURL)
         if ok {
             Haptics.success()
             fpost = await FamilyFeedBackend.fetchPost(postId: entry.id.uuidString)

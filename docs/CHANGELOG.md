@@ -47,6 +47,12 @@
 - **구독 만료 게이팅**: 부부 유지, 조부모·친척 차단(웹 안내+재구독 자동복구). 기존 데이터 보존.
 - **멤버 관리**: 주인이 승인/거절·내보내기, 앱 내 "가족 참여하기"(배우자 연결).
 - 앱: 무료도 피드 사용 개방(isPro→로그인 게이트), media-upload-url Edge is_pro 게이트 제거(멤버십만, 등급은 합류서 강제). 닉네임 변경 시 가족 표시이름 동기화.
+- **영상 공유(무료 포함)**: 기록의 영상도 가족 피드로 업로드(클라 720p·60초 압축+포스터). 피드 카드 = 포스터+재생→전체화면 `AVPlayer`. **영상 개수 상한 등급별(무료 100 / Pro 300, 주인 is_pro 기준)** — Edge `media-upload-url`가 강제, 카운터 분모는 RPC `bl_video_cap`(`schema_video_cap.sql`) + 앱 상단 "영상 N/cap" 카운터(근접 시 빨강). 두 공유 경로(기록 카드 "가족과 공유하기" + 빠른기록 자동공유) 모두 영상 전달·영상 단독 기록도 공유되도록 수정.
+- **영상-only 기록 공유 UI 누락 수정**: 기록 카드의 가족 공유 게이팅이 `hasPhoto`라 영상만 있는 기록엔 "가족과 공유하기"/"공유 중"이 안 떴음 → `hasMedia(사진∨영상)`로 통일. 외부 공유(paperplane)도 영상-only에서 영상 파일 ShareLink로 노출(사진과 패리티). 웹은 영상 `poster`(썸네일)+`preload=metadata` 보강.
+- **무료 '배우자' 명시 지정**: Pro로 여러 명 승인 후 만료 시 '가장 먼저 승인된 사람'이 아니라 *지정된 배우자*가 유지되도록. `bl_family.partner_uid`(첫 승인 자동 지정 + 주인이 별로 재지정, `bl_set_partner`), `bl_is_family_member`가 partner_uid 우선·폴백. 가족 관리에 ⭐'무료 배우자' 배지/지정 버튼·설명.
+- **구독 만료 멤버 안내**: 승인됐지만 만료로 차단된 멤버에게 빈 '사진 없음' 대신 '지금은 볼 수 없어요 — 부모님이 다시 구독하면…' 안내(앱 `expiredCard`, `canViewFeed`=bl_is_family_member). 웹은 기존 `showExpired` 유지.
+- **용어 순화**: '주인' → 멤버·웹엔 '아이의 부모님', 관리 배지는 '대표'.
+- **크루 1인 1개 생성 제한**: 동네 그룹 만들기는 1인당 1개(참여는 무제한). 서버 트리거 `crew_group_one_per_creator`(INSERT만 — 위임 UPDATE 무관) + 생성 시트 사전 체크/배너 + 추가 시도 시 알림. SQL: `schema_family_partner.sql`, `schema_crew_create_limit.sql`.
 - SQL: `schema_family_invite.sql`·`schema_family_approval.sql`(approved·bl_is_family_member 구독 게이팅·bl_approve_member·bl_claim_invite 3-arg·bl_set_family_pass·bl_set_my_name).
 
 **UX:**
