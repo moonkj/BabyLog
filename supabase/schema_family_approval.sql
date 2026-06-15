@@ -42,6 +42,8 @@ begin
   return my_row = free_partner;
 end;
 $$;
+-- 웹/앱에서 '지금 이 가족 피드를 볼 수 있는지' 확인용(만료 안내문구 분기). 호출 허용.
+grant execute on function public.bl_is_family_member(uuid) to anon, authenticated;
 
 -- ③ 멤버 조회 정책 — 본인 행은 항상 보임(대기 상태 확인용), 승인 멤버/주인은 가족 전체 조회.
 drop policy if exists bl_member_select on public.bl_family_member;

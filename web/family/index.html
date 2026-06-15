@@ -285,10 +285,34 @@ async function start(){
   const approved = await isApproved();
   if (!approved){ showPending(); return; }
 
+  // 구독 만료 등으로 지금 볼 수 있는지(주인·배우자는 항상, 조부모·친척은 구독 중에만)
+  if (!await canViewFeed()){ showExpired(); return; }
+
   showFeedHeader();
   await loadFeed();
   setInterval(()=>{ if(document.visibilityState==="visible") loadFeed(); }, 60000);
   document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") loadFeed(); });
+}
+
+// 지금 가족 피드를 볼 권한이 있는지(구독 게이팅 반영). 오류 시 기본 허용(최종 차단은 RLS).
+async function canViewFeed(){
+  const { data, error } = await sb.rpc("bl_is_family_member", { p_family: familyId });
+  return error ? true : data === true;
+}
+
+// 구독 만료로 보기가 막힌 화면 + 30초 폴링(재구독 시 자동 복구)
+function showExpired(){
+  document.querySelector("header")?.remove();
+  setState("⏳ 지금은 볼 수 없어요\n\n가족 구독(Pro)이 끝나 조부모·친척 보기가 잠시 멈췄어요.\n부모님이 다시 구독하면 곧 다시 보여요.");
+  const recheck = async()=>{
+    if (await canViewFeed()){
+      if (approvalPoll){ clearInterval(approvalPoll); approvalPoll = null; }
+      showFeedHeader(); await loadFeed();
+    }
+  };
+  if (approvalPoll){ clearInterval(approvalPoll); approvalPoll = null; }
+  approvalPoll = setInterval(recheck, 30000);
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") recheck(); });
 }
 
 // 내 멤버 행의 승인 상태 조회(미승인이어도 본인 행은 RLS상 조회 가능)
