@@ -272,10 +272,13 @@ struct AdminReportsScreen: View {
                     if let cid = r.context_id, !cid.isEmpty { detailField("콘텐츠 id", cid) }
                     if let note = r.note, !note.isEmpty { detailField("메모", note) }
 
-                    // 대화 증거(신고 시점 스냅샷)
-                    if let t = r.transcript, !t.isEmpty {
-                        VStack(alignment: .leading, spacing: Spacing.s2) {
-                            Text("대화 증거").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink2)
+                    // 신고 시점 저장본(스냅샷) — 원본 삭제와 무관하게 보존되는 증거. 항상 표시.
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text("신고 시점 저장본").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink2)
+                        Text("원본(채팅·글)이 삭제돼도 이 스냅샷은 남아요. 삭제 전 내용은 여기서 확인하세요.")
+                            .font(.system(size: 11)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let t = r.transcript, !t.isEmpty {
                             VStack(alignment: .leading, spacing: Spacing.s2) {
                                 ForEach(t) { line in
                                     VStack(alignment: .leading, spacing: 2) {
@@ -287,6 +290,12 @@ struct AdminReportsScreen: View {
                                     .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 }
                             }
+                        } else {
+                            Text("저장된 대화 스냅샷이 없는 신고예요(콘텐츠 자체 신고 등).")
+                                .font(.system(size: 13)).foregroundStyle(AppColors.ink3)
+                                .padding(Spacing.s2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
                     }
 
@@ -298,7 +307,7 @@ struct AdminReportsScreen: View {
                                 tab = .content
                                 scrollTarget = cid
                             } label: {
-                                Label("신고 대상 콘텐츠로 이동", systemImage: "arrow.right.circle.fill")
+                                Label("원본 콘텐츠 열기 (삭제됐을 수 있어요)", systemImage: "arrow.right.circle.fill")
                                     .font(.system(size: 15, weight: .bold)).frame(maxWidth: .infinity).frame(height: 48)
                                     .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                                     .foregroundStyle(.white)
@@ -349,6 +358,21 @@ struct AdminReportsScreen: View {
         } else if meetups.isEmpty && groups.isEmpty && items.isEmpty && posts.isEmpty {
             BLEmptyState(icon: "tray", title: "콘텐츠가 없어요", message: "등록된 모임·크루·매물이 없습니다.")
         } else {
+          VStack(spacing: 0) {
+            // 이동했는데 원본이 삭제/미수록이면 안내 — 저장본으로 유도(빈 화면 혼란 방지).
+            if let t = scrollTarget, !contentContains(t) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.danger)
+                    Text("이미 삭제됐거나 최근 목록에 없는 콘텐츠예요. 신고 상세의 ‘신고 시점 저장본’으로 확인하세요.")
+                        .font(.system(size: 12, weight: .medium)).foregroundStyle(AppColors.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(Spacing.s3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.dangerTint)
+            }
             ScrollViewReader { proxy in
                 List {
                     contentSection(title: "모임 (같이가요)", kind: "crew_meetup", rows: meetups) { r in
@@ -383,7 +407,13 @@ struct AdminReportsScreen: View {
                     }
                 }
             }
+          }
         }
+    }
+
+    private func contentContains(_ id: String) -> Bool {
+        meetups.contains { $0.id == id } || groups.contains { $0.id == id }
+            || items.contains { $0.id == id } || posts.contains { $0.id == id }
     }
 
     @ViewBuilder
