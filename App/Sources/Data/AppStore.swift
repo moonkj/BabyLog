@@ -35,6 +35,8 @@ final class AppStore: ObservableObject {
     @Published var familyFeedVersion = 0
     /// 저장 실패 안내(메모리 전용) — 디스크 실패 시 '저장됨' 위장 금지(정직·데이터손실 방지). UI가 알럿으로 노출.
     @Published var lastPersistError: String? = nil
+    /// 불러오기 실패(파일 손상) 안내 — 원본은 .corrupt-* 로 보존됨. 사용자가 빈 화면을 데이터 소실로 오인하지 않게 1회 안내.
+    @Published var loadFailedNotice: String? = nil
     /// 임신 홈에서 '검진 일정 보기' 탭 시 기록 화면을 검진 세그먼트로 여는 딥링크 신호(메모리 전용).
     @Published var openPregnancyCheckup = false
     /// 홈 '접종 확인하기' 탭 시 기록 화면을 예방접종 세그먼트로 여는 딥링크 신호(메모리 전용).
@@ -276,6 +278,11 @@ final class AppStore: ObservableObject {
                 // 보존 실패 시에만 차단 유지(원본 덮어쓰기 = 복구 여지 소멸).
                 let preserved = persistence.backupCorrupt()
                 self.loadDidFail = !preserved
+                // 빈 화면을 '데이터 소실'로 오인하지 않게 안내(원본은 백업으로 보존). 손상은 같은 디코더로
+                // 자동 복구가 불가하므로 알림만 — 자동저장이 원본을 덮어쓰기 전 사용자가 인지하게 한다.
+                if preserved {
+                    self.loadFailedNotice = "이전 기록을 불러오지 못했어요. 안전을 위해 백업해 두었어요. 새 기록은 계속 저장되며, 복구가 필요하면 문의해 주세요."
+                }
             }
         }
         seedMarketIfNeeded()
@@ -537,7 +544,10 @@ final class AppStore: ObservableObject {
             try persistence.save(snapshot())
             if lastPersistError != nil { lastPersistError = nil }
         } catch {
-            lastPersistError = "기록 저장에 실패했어요. 저장 공간을 확인하고 다시 시도해 주세요."
+            // @Published는 대입마다 objectWillChange를 쏘므로, 같은 값 재대입은 자동저장 sink를
+            // 다시 트리거해 디스크풀 상태에서 0.5s마다 무한 재시도 루프가 된다 → 변경 시에만 대입.
+            let msg = "기록 저장에 실패했어요. 저장 공간을 확인하고 다시 시도해 주세요."
+            if lastPersistError != msg { lastPersistError = msg }
             #if DEBUG
             print("[AppStore] persist save 실패: \(error)")
             #endif

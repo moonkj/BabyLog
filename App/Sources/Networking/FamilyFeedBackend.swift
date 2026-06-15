@@ -388,8 +388,23 @@ enum FamilyFeedBackend {
     static func createPhotoPost(familyId: String, postId: String? = nil, images: [UIImage],
                                 caption: String?, childLabel: String?, videoURL: URL? = nil) async -> Bool {
         guard let uid = await AuthStore.shared.userId, !images.isEmpty || videoURL != nil else { return false }
-        // 1) 모든 사진 압축(긴변 1280, jpeg 0.7) → R2 업로드. 실패분은 건너뜀.
-        //    포스트보다 먼저 업로드해 R2 실패(비Pro/네트워크) 시 고아 포스트가 안 생기게 한다.
+        let postId = postId ?? UUID().uuidString
+        // 1) 포스트 행을 먼저 생성 — 409(이미 공유)·실패를 업로드 *이전*에 감지해 중복 R2 업로드(고아)를
+        //    원천 차단(전엔 업로드 후 409라 재공유마다 미디어 한 세트가 R2에 고아로 남았음).
+        guard var preq = await rest("/bl_feed_post", method: "POST") else { lastError = "서버 미구성"; return false }
+        preq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        var postBody: [String: Any] = ["id": postId, "family_id": familyId, "author_uid": uid]
+        if let c = caption, !c.isEmpty { postBody["caption"] = String(c.prefix(2000)) }
+        if let cl = childLabel, !cl.isEmpty { postBody["child_label"] = String(cl.prefix(40)) }
+        preq.httpBody = try? JSONSerialization.data(withJSONObject: postBody)
+        guard let (pdata, presp) = try? await URLSession.shared.data(for: preq),
+              let phttp = presp as? HTTPURLResponse else { lastError = "포스트 생성: 네트워크 오류"; return false }
+        if phttp.statusCode == 409 { return true }   // 이미 공유된 기록 → 업로드 없이 성공(R2 고아 0)
+        guard (200...299).contains(phttp.statusCode) else {
+            lastError = "포스트 생성 실패 HTTP \(phttp.statusCode): \(String(data: pdata, encoding: .utf8)?.prefix(120) ?? "")"
+            return false
+        }
+        // 2) 사진 압축(긴변 1280, jpeg 0.7) → R2 업로드. 실패분은 건너뜀.
         var keys: [String] = []
         for image in images.prefix(5) {
             guard let data = compressedJPEG(image, maxDimension: 1280, quality: 0.7),
@@ -397,7 +412,7 @@ enum FamilyFeedBackend {
                                              ext: "jpg", contentType: "image/jpeg") else { continue }
             keys.append(key)
         }
-        // 1-1) 영상: 720p·60초 압축 → R2 업로드 + 포스터. 개수 상한은 서버(Edge)가 강제(video_cap).
+        // 2-1) 영상: 720p·60초 압축 → R2 업로드 + 포스터. 개수 상한은 서버(Edge)가 강제(video_cap).
         var videoMedia: (key: String, thumb: String?, durationS: Int, bytes: Int)? = nil
         if let vurl = videoURL, let v = await compressVideo(vurl) {
             if let vdata = try? Data(contentsOf: v.url),
@@ -409,23 +424,6 @@ enum FamilyFeedBackend {
                 videoMedia = (vkey, thumbKey, v.durationS, vdata.count)
             }
             try? FileManager.default.removeItem(at: v.url)
-        }
-        guard !keys.isEmpty || videoMedia != nil else { lastError = lastError ?? "업로드 실패"; return false }
-        // 2) 포스트 행 생성 — id를 클라에서 생성(return=representation 금지: 되읽기 RLS 42501 회피)
-        let postId = postId ?? UUID().uuidString
-        guard var preq = await rest("/bl_feed_post", method: "POST") else { lastError = "서버 미구성"; return false }
-        preq.setValue("return=minimal", forHTTPHeaderField: "Prefer")
-        var postBody: [String: Any] = ["id": postId, "family_id": familyId, "author_uid": uid]
-        if let c = caption, !c.isEmpty { postBody["caption"] = String(c.prefix(2000)) }
-        if let cl = childLabel, !cl.isEmpty { postBody["child_label"] = String(cl.prefix(40)) }
-        preq.httpBody = try? JSONSerialization.data(withJSONObject: postBody)
-        guard let (pdata, presp) = try? await URLSession.shared.data(for: preq),
-              let phttp = presp as? HTTPURLResponse else { lastError = "포스트 생성: 네트워크 오류"; return false }
-        // 409 = 같은 id 포스트가 이미 존재 = 이미 공유된 기록 → 성공으로 간주(미디어 재삽입 생략).
-        if phttp.statusCode == 409 { return true }
-        guard (200...299).contains(phttp.statusCode) else {
-            lastError = "포스트 생성 실패 HTTP \(phttp.statusCode): \(String(data: pdata, encoding: .utf8)?.prefix(120) ?? "")"
-            return false
         }
         // 3) 미디어 행 기록(키만)
         var anyMedia = false
@@ -447,6 +445,12 @@ enum FamilyFeedBackend {
             mreq.httpBody = try? JSONSerialization.data(withJSONObject: body)
             if let (_, mresp) = try? await URLSession.shared.data(for: mreq),
                let mhttp = mresp as? HTTPURLResponse, (200...299).contains(mhttp.statusCode) { anyMedia = true }
+        }
+        // 4) 미디어가 하나도 안 들어갔으면(업로드 전부 실패·영상 캡 등) 빈 포스트 행 삭제 — 빈 카드 방지.
+        if !anyMedia {
+            await deletePost(postId: postId)
+            lastError = lastError ?? "업로드 실패"
+            return false
         }
         return anyMedia
     }
@@ -575,6 +579,10 @@ enum FamilyFeedBackend {
             if body.contains("video_cap") {
                 let cap = (try? JSONSerialization.jsonObject(with: rdata) as? [String: Any])?["cap"] as? Int ?? videoCap
                 lastError = "영상은 가족당 \(cap)개까지예요. 오래된 영상을 지우고 올려주세요."
+            } else if body.contains("not_approved") {
+                lastError = "아직 승인 대기 중이에요. 가족 주인이 승인하면 올릴 수 있어요."
+            } else if body.contains("view_blocked") {
+                lastError = "지금은 올릴 수 없어요. 가족 구독이 만료됐어요(부부는 계속 가능)."
             } else {
                 lastError = "업로드 권한 거부 HTTP \(http.statusCode): \(body.prefix(140))"
             }

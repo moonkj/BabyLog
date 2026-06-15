@@ -93,6 +93,12 @@ struct MainTabView: View {
         )) {
             Button("확인", role: .cancel) { store.lastPersistError = nil }
         } message: { Text(store.lastPersistError ?? "") }
+        .alert("기록 불러오기", isPresented: Binding(
+            get: { store.loadFailedNotice != nil },
+            set: { if !$0 { store.loadFailedNotice = nil } }
+        )) {
+            Button("확인", role: .cancel) { store.loadFailedNotice = nil }
+        } message: { Text(store.loadFailedNotice ?? "") }
     }
 
     /// pendingBadgeAward 변화에 맞춰 윈도우 카드를 띄우거나 내린다.

@@ -52,23 +52,28 @@ Deno.serve(async (req) => {
   if (!familyId || !kind || !ext) return json({ error: "missing_fields" }, 400);
   if (kind !== "photo" && kind !== "video") return json({ error: "bad_kind" }, 400);
 
-  // 3) 가족 멤버십 확인 (서버 권위 — 클라이언트 우회 차단)
-  // 무료 2인 가족도 업로드 허용(사진·영상 모두) — 등급은 bl_claim_invite(합류)에서 강제.
+  // 3) 가족 쓰기 권한 (서버 권위 — 읽기 게이트 bl_is_family_member와 동일 기준):
+  //    ① 승인된 멤버여야 함(approved) — 승인 대기자 업로드 차단.
+  //    ② 주인은 항상, 그 외는 (주인 is_pro) 또는 (무료 배우자 partner_uid)일 때만 — 만료된 조부모 차단.
   const { data: member } = await admin
-    .from("bl_family_member").select("id").eq("family_id", familyId).eq("uid", uid).maybeSingle();
-  if (!member) return json({ error: "not_member" }, 403);
+    .from("bl_family_member").select("id, approved").eq("family_id", familyId).eq("uid", uid).maybeSingle();
+  if (!member || member.approved !== true) return json({ error: "not_approved" }, 403);
 
-  // 3-1) 영상 개수 상한 — 저장 비용 통제(전송은 R2라 무료, 시청 무제한 무관).
-  //      등급별: 무료 100 / Pro 300 (주인 is_pro 기준).
+  const { data: fam } = await admin.from("bl_family")
+    .select("owner_uid, partner_uid").eq("id", familyId).maybeSingle();
+  let ownerPro = false;
+  if (fam?.owner_uid) {
+    const { data: prof } = await admin.from("bl_profile")
+      .select("is_pro").eq("uid", fam.owner_uid).maybeSingle();
+    ownerPro = prof?.is_pro === true;
+  }
+  const isOwner = fam?.owner_uid === uid;
+  if (!isOwner && !ownerPro && fam?.partner_uid !== uid) {
+    return json({ error: "view_blocked" }, 403);   // 무료 등급 + 배우자 아님(만료 조부모 등) → 업로드 불가
+  }
+
+  // 3-1) 영상 개수 상한 — 등급별 무료 100 / Pro 300(주인 is_pro 기준). 저장 비용 통제.
   if (kind === "video") {
-    const { data: fam } = await admin.from("bl_family")
-      .select("owner_uid").eq("id", familyId).maybeSingle();
-    let ownerPro = false;
-    if (fam?.owner_uid) {
-      const { data: prof } = await admin.from("bl_profile")
-        .select("is_pro").eq("uid", fam.owner_uid).maybeSingle();
-      ownerPro = prof?.is_pro === true;
-    }
     const cap = ownerPro ? 300 : 100;
     const { count } = await admin.from("bl_post_media")
       .select("id", { count: "exact", head: true })

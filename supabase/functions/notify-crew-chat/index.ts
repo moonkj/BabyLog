@@ -42,17 +42,17 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // 스팸 방지 — 발신자가 실제로 이 방에 메시지를 남겼는지 확인(임의 호출로 푸시 무차별 발사 차단).
-    //  멤버십 비동기 우려를 메시지 존재로 대체: 정당 발신은 항상 메시지 행이 먼저 저장된다.
+    // 스팸 방지 — 발신자가 이 방의 '참가자'여야 푸시 발사(임의 호출로 전체 푸시 무차별 발사 차단).
+    //  멤버십(crew_meetup_join/crew_group_member)으로 검증 — 메시지 존재만 보던 이전 방식은
+    //  비참가자가 메시지 1건 넣고 우회 가능했음. (참가는 개방형이나 푸시 증폭은 참가자로 한정)
     if (!sender) return new Response("missing sender", { status: 400 });
     {
-      const msgTable = meetupId ? "crew_meetup_message" : "crew_group_message";
+      const memTable = meetupId ? "crew_meetup_join" : "crew_group_member";
       const idCol = meetupId ? "meetup_id" : "group_id";
       const idVal = meetupId ?? groupId;
-      const { data: mine } = await supabase.from(msgTable)
-        .select("id").eq(idCol, idVal!).eq("device_id", sender)
-        .order("created_at", { ascending: false }).limit(1);
-      if (!mine?.length) return new Response(JSON.stringify({ sent: 0, reason: "not_participant" }), { status: 200 });
+      const { data: mem } = await supabase.from(memTable)
+        .select("device_id").eq(idCol, idVal!).eq("device_id", sender).limit(1);
+      if (!mem?.length) return new Response(JSON.stringify({ sent: 0, reason: "not_participant" }), { status: 200 });
     }
 
     // 참여자 + 방 이름
