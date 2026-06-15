@@ -304,23 +304,6 @@ enum FamilyFeedBackend {
         return posts.first
     }
 
-    /// 기록→가족 자동 공유: 가족이 없으면 만들고, 한 기록의 사진들을 한 포스트로 올린다.
-    /// (기록 탭에서 사진을 저장하면 Pro 사용자는 이 경로로 가족 피드에 자동 게시)
-    /// ⚠️ DEV ONLY — 로컬 Pro 검증용으로 서버 bl_profile.is_pro=true를 설정한다.
-    /// (미디어 업로드 Edge가 서버 is_pro를 검사하므로, 개발 토글만으론 업로드가 403난다.)
-    /// 출시 시 제거 — 실제 is_pro는 StoreKit 영수증 검증(verify-subscription)이 service_role로 설정.
-    /// 서버에 `bl_dev_set_pro(boolean)` SECURITY DEFINER 함수가 있어야 동작(없으면 무시).
-    static func ensureProForDev() async {
-        guard await AuthStore.shared.userId != nil,
-              var req = await rest("/rpc/bl_dev_set_pro", method: "POST") else { return }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_on": true])
-        guard let (d, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse else { lastError = "is_pro 설정: 네트워크 오류"; return }
-        if !(200...299).contains(http.statusCode) {
-            lastError = "is_pro 설정 실패 HTTP \(http.statusCode): \(String(data: d, encoding: .utf8)?.prefix(100) ?? "") — SQL(bl_dev_set_pro) 실행했나요?"
-        }
-    }
-
     /// 소유자 멤버 행 보장 — Edge(media-upload-url)는 bl_family_member 행을 요구하므로(소유자여도
     /// 멤버 행 없으면 not_member 403), 없으면 본인 parent 멤버를 1회 삽입한다(중복 방지 위해 선조회).
     private static func ensureMembership(familyId: String, uid: String) async {

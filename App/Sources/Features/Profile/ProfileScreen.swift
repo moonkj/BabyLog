@@ -15,7 +15,6 @@ struct ProfileScreen: View {
     @State private var exportURL: URL? = nil
     @State private var showShareSheet = false
     @State private var showSettings = false
-    @State private var showFamilyShare = false
     @State private var infoAlert: String? = nil
     // 내 거래·동네 활동
     @State private var myItems: [MarketItem] = []
@@ -188,20 +187,6 @@ struct ProfileScreen: View {
                     .toolbar {
                         ToolbarItem(placement: .navigationBarTrailing) {
                             Button("닫기") { showSettings = false }
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(AppColors.ink2)
-                        }
-                    }
-            }
-            .environmentObject(store)
-        }
-        // 가족 공유 — 실제 동작하는 화면(내 iCloud 공유 앨범)으로 연결
-        .sheet(isPresented: $showFamilyShare) {
-            NavigationStack {
-                FamilyShareScreen()
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("닫기") { showFamilyShare = false }
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppColors.ink2)
                         }
@@ -565,18 +550,6 @@ struct ProfileScreen: View {
 
             BLCard(padding: 0) {
                 VStack(spacing: 0) {
-                    // 옛 'iCloud 가족 공유' 진입점은 숨김(가족 피드 R2로 대체). FamilyShareScreen은 보존.
-                    if false {
-                        privacyRow(
-                            icon: "person.3.fill",
-                            iconBg: Color(hex: 0xE6F1FB),
-                            iconFg: Color(hex: 0x3B6FA8),
-                            title: "가족 공유",
-                            subtitle: "조부모님과 사진 공유 (아이폰·안드로이드)",
-                            showDivider: true,
-                            onTap: { showFamilyShare = true }
-                        )
-                    }
                     privacyRow(
                         icon: "shield.fill",
                         iconBg: AppColors.primarySoft,

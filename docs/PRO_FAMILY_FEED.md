@@ -1,7 +1,32 @@
-# Pro 가족 피드 — 설계 (클라우드 가족 보관함)
+# 가족과 사진 공유 (클라우드 가족 피드)
 
-> 상태: **설계 단계(미구축)**. 인프라(Cloudflare R2, App Store Connect 구독 상품) 셋업이 선행돼야 구현 착수.
-> 값 사다리 확정본은 `SPEC.md` > "값 사다리 — 무료 vs Pro" 참조. 결정 맥락은 메모리 `family-photo-sharing`.
+> 상태: **v1 라이브(2026-06-15)**. 앱·웹·서버 end-to-end 구현·배포 완료. 아래 "구현 현황(v1)"이 실제 동작이며, 그 아래 11~12절은 초기 설계 맥락(일부 변경됨)이다.
+> 결정 맥락은 메모리 `pro-family-feed-infra`·`family-photo-sharing`.
+
+---
+
+## 구현 현황 (v1, 2026-06-15) — 실제 동작
+
+**모델 변경 요약(초기 설계 대비):**
+- 가족 사진 공유는 v1에서 **무료에도 개방**(부부 2명). 즉 무료 2인 가족 피드도 R2를 쓴다 → 절대원칙 "무료는 사진 서버 비전송"을 **가족 공유 범위에서 의식적으로 완화**(2026-06 결정, CLAUDE.md 갱신). **아동 기록 원본(성장·일기·접종·가계부)은 여전히 서버에 안 올린다.**
+- 옛 iCloud 공유앨범 방식(`FamilyShareScreen`)은 **제거**(코드 삭제). 진입점은 가족 피드 하나로 일원화.
+
+**등급 (서버 강제):**
+- **무료** = 주인 + 1명(배우자) = **2명**. 플랫폼 무관(아이폰/안드로이드).
+- **Pro** = 조부모·친척·크로스플랫폼까지 **최대 8명**. 월 **₩990** / 연 **₩9,900**(2개월 무료).
+- 인원·등급은 **`bl_approve_member`**(승인 시 무료 2/Pro 8 검사), 열람 권한은 **`bl_is_family_member`**(주인+무료 파트너 1명은 항상, 그 외는 주인 `is_pro`일 때만)에서 강제.
+
+**합류/보안 흐름:**
+- 부모가 "조부모님 및 가족 초대하기" → 초대코드 링크 + **숫자 비밀번호(4~10자리)**. 링크는 메신저, 비번은 따로(전화 등).
+- 받은 사람: 배우자(아이폰)는 앱 "가족 참여하기"(코드+비번), 조부모/안드로이드는 **웹**(`https://babylog-family.pages.dev/family/?invite=CODE`)에서 **익명 로그인 + 성함 + 비번**으로 합류. 익명 세션 = 기기 바인딩(폰 바꾸면 재신청).
+- **승인제**: 합류는 곧바로 "승인 대기"(아무것도 못 봄) → 주인이 앱 "가족 관리"에서 승인해야 열람. 합류 시 **주인에게 APNs 푸시**(`notify-family-join`).
+- **구독 만료**: 부부(2명)는 유지, 조부모·친척은 차단(웹에 "지금은 볼 수 없어요" 안내, 재구독 시 자동 복구). 기존 데이터는 보존(인질극 금지) — 차단은 '보기 권한'만.
+
+**관련 서버 객체:** `schema_family_feed.sql`(테이블·RLS), `schema_family_invite.sql`(`bl_claim_invite` 3-arg·`bl_set_family_pass`·`bl_set_my_name`·멤버 삭제 정책), `schema_family_approval.sql`(`approved` 컬럼·`bl_is_family_member` 구독 게이팅·`bl_approve_member`). Edge: `media-upload-url`(R2 presign, is_pro 게이트 제거 — 멤버십만), `media-delete`, `notify-family-join`(합류 푸시). 웹: `web/family/index.html`(Cloudflare Pages), 배포본 `web-dist/`(gitignore).
+
+**v2 (미구현):** 부부 **앱 전체 데이터(성장·일기·접종·가계부) 공유** = CloudKit **CKShare**(개인 iCloud, 우리 서버 X). 2번째 애플ID 필요. B1(개인 iCloud 백업·`BL_CLOUDKIT`·`iCloud.com.vibelab.babylog`)은 라이브.
+
+---
 
 ## 1. 한 줄 요약
 
@@ -56,7 +81,7 @@ RLS: 모든 테이블 `family_member`에 속한 uid만 read/write. owner는 fami
 - **서빙**: Cloudflare CDN 경유. 가족 전용이므로 (a) 추측 불가 키(UUID) + (b) 짧은 수명 signed GET URL 또는 가족 토큰 검증. CDN 캐시로 재시청 폭주에도 R2 read·egress 0 수렴.
 - **키 스킴**: `r2://{family_id}/{post_id}/{media_id}.{ext}`, 썸네일 `..._thumb.jpg`.
 
-## 6. 비용 가드 (월 3,900원 유지, 마진 ~90%)
+## 6. 비용 가드 (저가 구독·마진 유지)
 
 - 미디어 = **R2 + Cloudflare CDN(egress 무료)**. ⚠️ Supabase Storage/S3로 영상 서빙 금지.
 - 720p·길이캡·월 업로드 합리적 상한.
@@ -65,7 +90,7 @@ RLS: 모든 테이블 `family_member`에 속한 uid만 read/write. owner는 fami
 
 ## 7. 구독 (StoreKit 2)
 
-- 상품: `com.vibelab.babylog.pro.monthly`(₩3,900), `...pro.yearly`(₩29,000). App Store Connect 등록 필요.
+- 상품: `com.vibelab.babylog.pro.monthly`(₩990), `...pro.yearly`(₩9,900). App Store Connect 등록 필요.
 - 클라이언트: `Transaction.currentEntitlements`로 Pro 활성 확인 → `isPro` 게이트(가족 생성·업로드 노출).
 - 서버: Edge Function `verify-subscription`이 App Store Server API(JWS)로 검증 → `profile.is_pro` 갱신. **업로드/가족 생성 Edge에서 is_pro 재확인**(클라이언트 우회 방지).
 - 정직 결제(CLAUDE.md): 자동결제 사전 고지, 해지 쉽고 존중 톤. 다크패턴 금지.
@@ -77,7 +102,7 @@ RLS: 모든 테이블 `family_member`에 속한 uid만 read/write. owner는 fami
 
 ## 9. 무료 ↔ Pro 경계
 
-- 무료: 기존 로컬 기록 + 즐겨찾기(⭐). 가족 공유는 iCloud 수동 일방향(`FamilyShareScreen`)만.
+- 무료: 가족 피드 부부 2명까지(R2). 옛 iCloud 공유앨범(FamilyShareScreen)은 제거됨.
 - Pro 전환 시: 기존 로컬 사진을 가족 피드로 **선택 업로드**(자동 일괄 아님 — 사용자 동의·용량 인지). 해지 시 데이터 영구 보존(콜드 유지), 새 업로드만 중단.
 
 ## 10. 구현 단계 (phased)
@@ -93,7 +118,7 @@ RLS: 모든 테이블 `family_member`에 속한 uid만 read/write. owner는 fami
 
 - [ ] Cloudflare R2 버킷 + S3 호환 API 토큰 (Secrets로 주입, 코드/깃 노출 금지)
 - [ ] Cloudflare CDN(커스텀 도메인 권장) — R2 공개/서명 서빙
-- [ ] App Store Connect: 구독 그룹 + 월/연 상품 등록, 가격 ₩3,900/₩29,000
+- [ ] App Store Connect: 구독 그룹 + 월/연 상품 등록, 가격 ₩990/₩9,900
 - [ ] App Store Server API 키(영수증 검증용, service_role급 비밀 — Edge에만)
 
 ## 12. 미해결 / 결정 필요

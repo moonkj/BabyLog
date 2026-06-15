@@ -1,6 +1,6 @@
 # BabyLog 변경 이력 (CHANGELOG)
 
-> 마지막 갱신: 2026-06-10  
+> 마지막 갱신: 2026-06-15  
 > 입력 기준: `process.md` 실행 로그 + `Tasklist.md` 라운드 보드  
 > git log 미참조 — process.md 단일 소스 기준
 
@@ -35,6 +35,28 @@
 - **App Group 위젯 실데이터** — WidgetKit 타깃과 앱 간 App Group 컨테이너 공유 실영속화
 - **SPM 모듈화** — BLCore·BLData·BLGrowth 등 패키지 분리
 - **다크 모드 재정비** — 인디고·골드 팔레트 기반 다크 토큰 전면 재조정
+
+---
+
+## 세션 — 가족과 사진 공유(클라우드 피드) v1 + 정리 (완료 · 2026-06-15)
+
+**가족 피드 end-to-end 구축 (앱·웹·서버):**
+- 안드로이드/PC 조부모 **웹 클라이언트**(`web/family/`, Cloudflare Pages `babylog-family.pages.dev`): 익명 로그인 + 성함 + 비번 → 합류 → R2 사진 보기·❤️·댓글.
+- **등급제(서버 강제)**: 무료 부부 2명(플랫폼 무관) / Pro 8명. Pro **월 ₩990·연 ₩9,900**(업셀 반영).
+- **합류 승인제**: 링크+비번 들어와도 주인 승인해야 열람. 합류 시 주인에게 **APNs 푸시**(`notify-family-join`).
+- **구독 만료 게이팅**: 부부 유지, 조부모·친척 차단(웹 안내+재구독 자동복구). 기존 데이터 보존.
+- **멤버 관리**: 주인이 승인/거절·내보내기, 앱 내 "가족 참여하기"(배우자 연결).
+- 앱: 무료도 피드 사용 개방(isPro→로그인 게이트), media-upload-url Edge is_pro 게이트 제거(멤버십만, 등급은 합류서 강제). 닉네임 변경 시 가족 표시이름 동기화.
+- SQL: `schema_family_invite.sql`·`schema_family_approval.sql`(approved·bl_is_family_member 구독 게이팅·bl_approve_member·bl_claim_invite 3-arg·bl_set_family_pass·bl_set_my_name).
+
+**UX:**
+- 임신/육아 모드 칩을 홈 **제목 옆**으로(육아·임신 홈 둘 다). 기록 탭 우측 상단 "가족과 사진 공유" 버튼 추가.
+- 모든 삭제 확인을 **중앙 알럿**으로 통일(아이폰에서 위치 어긋나던 문제). 설정 가족 섹션·피드 화면명 "가족과 사진 공유"로 통일.
+- 성장차트 catmullRom→monotone(겹쳐보임 수정). 예방접종 **출생~만6세** 확장 + 그룹 상태 배지. 앱 **아이폰 전용**(TARGETED_DEVICE_FAMILY=1).
+
+**B1(개인 iCloud 백업):** `BL_CLOUDKIT` + iCloud 컨테이너(`iCloud.com.vibelab.babylog`) 활성. B2(부부 전체데이터 CKShare)는 보류(2번째 애플ID 필요).
+
+**데드코드 정리:** `FamilyShareScreen.swift`(옛 iCloud 공유앨범, UI 제거됨) 삭제, `ensureProForDev()`·`AppFeatures.proFamilyFeed`(미사용) 제거 — 참조 0 검증 후.
 
 ---
 
