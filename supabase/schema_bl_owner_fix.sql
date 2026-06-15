@@ -5,8 +5,11 @@
 --       (크루/마켓은 같은 coalesce 패턴을 정책에 '인라인'으로 둬서 정상 — 그래서 가족만 실패.)
 -- 해결: 함수에 헤더 폴백을 포함한 최신 정의로 갱신(멱등). 앱은 모든 쓰기에 x-device-id=ownerID를 보냄.
 
+-- search_path 고정 — 모든 bl_* RLS 정책이 의존하는 핵심 함수라 공유 프로젝트에서 객체 셰도잉
+--   권한상승 벡터를 차단(다른 definer 함수와 동일 정책).
 create or replace function public.bl_owner_id()
-returns text language sql stable as $$
+returns text language sql stable
+set search_path = public as $$
   select coalesce(
     auth.uid()::text,
     nullif(current_setting('request.headers', true)::json ->> 'x-device-id', '')

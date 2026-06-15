@@ -73,7 +73,8 @@ struct BabyLogApp: App {
     /// CloudKit 미활성 빌드(isAvailableInBuild=false)에서는 no-op.
     private func maybeAutoRestoreFromCloud() async {
         guard CloudSyncService.isAvailableInBuild, CloudSyncService.isEnabled else { return }
-        guard store.children.isEmpty, store.diaryEntries.isEmpty, store.pregnancies.isEmpty else { return }
+        // 전체 사용자 데이터가 비었을 때만 복원(가계부·성장만 입력한 로컬을 덮어쓰지 않게).
+        guard store.isEffectivelyEmpty else { return }
         guard await CloudSyncService.shared.accountAvailable() else { return }
         if let state = try? await CloudSyncService.shared.pull() {
             await CloudSyncService.shared.pullPhotos()

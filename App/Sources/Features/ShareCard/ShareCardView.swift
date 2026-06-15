@@ -77,9 +77,8 @@ final class ShareCardViewModel: ObservableObject {
     // MARK: - Computed Helpers
 
     var monthAge: Int {
-        let calendar = Calendar.current
-        let comps = calendar.dateComponents([.month], from: child.birthDate, to: Date())
-        return max(0, comps.month ?? 0)
+        // 앱 전역과 동일 기준(AgeCalculator) — 월 경계에서 기록/홈 화면과 'N개월'이 어긋나지 않게.
+        AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: Date()).months
     }
 
     var dDay: Int {

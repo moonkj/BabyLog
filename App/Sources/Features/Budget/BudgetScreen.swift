@@ -172,7 +172,7 @@ struct BudgetScreen: View {
         subsidies.sorted { a, b in
             let ca = store.isSubsidyClaimed(id: a.id), cb = store.isSubsidyClaimed(id: b.id)
             if ca != cb { return !ca }   // 미수령 먼저
-            return false
+            return a.id < b.id           // 동일 상태는 id로 안정 정렬(렌더마다 순서 흔들림 방지)
         }
     }
 

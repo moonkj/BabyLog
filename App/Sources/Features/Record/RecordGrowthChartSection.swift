@@ -138,12 +138,21 @@ struct GrowthChartSection: View {
         ]
     }
 
+    // 성별 미상이면 표준을 추정하지 않는다(남아로 폴백 시 잘못된 '정상범위'를 권위 있게 그리게 됨).
     private var weightBands: [WHOBand] {
-        child.gender == .girl ? weightBandsGirl : weightBandsBoy
+        switch child.gender {
+        case .girl: return weightBandsGirl
+        case .boy:  return weightBandsBoy
+        default:    return []
+        }
     }
 
     private var heightBands: [WHOBand] {
-        child.gender == .girl ? heightBandsGirl : heightBandsBoy
+        switch child.gender {
+        case .girl: return heightBandsGirl
+        case .boy:  return heightBandsBoy
+        default:    return []
+        }
     }
 
     private var currentBands: [WHOBand] { metric == .weight ? weightBands : heightBands }

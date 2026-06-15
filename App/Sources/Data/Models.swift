@@ -169,6 +169,8 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
     var photoRefs: [String]
     /// 동영상 로컬 파일명 (App Support/BabyLog/photos/).
     var videoRef: String?
+    /// 임신 기록에서 출산 승계 시 옮겨온 '태아 시절' 항목이면 원본 임신 id — carry-over 멱등 판정용(캡션 수정에 영향 없음).
+    var carriedFromPregnancyId: String?
 
     init(
         id: UUID = UUID(),
@@ -179,7 +181,8 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
         milestone: String? = nil,
         photoRef: String? = nil,
         photoRefs: [String] = [],
-        videoRef: String? = nil
+        videoRef: String? = nil,
+        carriedFromPregnancyId: String? = nil
     ) {
         self.id = id
         self.childId = childId
@@ -190,6 +193,7 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
         self.photoRef = photoRef
         self.photoRefs = photoRefs
         self.videoRef = videoRef
+        self.carriedFromPregnancyId = carriedFromPregnancyId
     }
 
     /// 표시용 사진 목록 (다중 우선, 없으면 단일 photoRef).
@@ -201,7 +205,7 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
 
     // 하위 호환: 구 저장 데이터에 photoRefs/videoRef 키가 없어도 디코딩.
     enum CodingKeys: String, CodingKey {
-        case id, childId, date, recordType, content, milestone, photoRef, photoRefs, videoRef
+        case id, childId, date, recordType, content, milestone, photoRef, photoRefs, videoRef, carriedFromPregnancyId
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -216,6 +220,7 @@ struct DiaryEntry: Identifiable, Codable, Equatable {
         photoRef = try c.decodeIfPresent(String.self, forKey: .photoRef)
         photoRefs = try c.decodeIfPresent([String].self, forKey: .photoRefs) ?? []
         videoRef = try c.decodeIfPresent(String.self, forKey: .videoRef)
+        carriedFromPregnancyId = try c.decodeIfPresent(String.self, forKey: .carriedFromPregnancyId)
     }
 }
 
