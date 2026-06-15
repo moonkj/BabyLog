@@ -161,7 +161,21 @@ enum FamilyFeedBackend {
         // 성공 본문은 uuid가 따옴표로 둘러싸여 옴(예: "...uuid..."). 따옴표·공백 제거.
         let fid = body.trimmingCharacters(in: CharacterSet(charactersIn: "\"\n\r \t"))
         guard !fid.isEmpty else { lastError = "참여 응답이 비어 있어요."; return nil }
+        await notifyJoin(familyId: fid, name: name)   // 주인에게 '승인 대기' 푸시
         return fid
+    }
+
+    /// 가족 주인에게 '합류 요청' 푸시(승인 대기 알림) — notify-family-join Edge.
+    static func notifyJoin(familyId: String, name: String) async {
+        guard let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
+              let url = URL(string: "\(base)/functions/v1/notify-family-join") else { return }
+        var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 12
+        req.setValue(key, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
+        req.setValue(await SupabaseConfig.ownerID(), forHTTPHeaderField: "x-device-id")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["familyId": familyId, "name": String(name.prefix(40))])
+        _ = try? await URLSession.shared.data(for: req)
     }
 
     // MARK: - 가족 관리 (주인 — 멤버 조회/삭제)

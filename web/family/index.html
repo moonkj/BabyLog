@@ -136,6 +136,20 @@ async function enter(){
     me = data.user.id;
   }
   await start();
+  if (familyId) notifyJoin();   // 활성 입장 시 주인에게 '승인 요청' 푸시(1회)
+}
+
+// 가족 주인에게 합류 요청 알림 — notify-family-join Edge
+async function notifyJoin(){
+  try {
+    const { data:{ session } } = await sb.auth.getSession();
+    await fetch(`${SUPABASE_URL}/functions/v1/notify-family-join`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`,
+                 "x-device-id": me, "Content-Type": "application/json" },
+      body: JSON.stringify({ familyId, name: myName }),
+    });
+  } catch(e) {}
 }
 
 // ───────── 가족 확인(초대 합류 / 기존 멤버) ─────────

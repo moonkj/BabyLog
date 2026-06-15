@@ -65,9 +65,9 @@ struct FamilyFeedScreen: View {
                 }
             }
         }
-        .confirmationDialog("이 가족 구성원을 내보낼까요?", isPresented: Binding(
+        .alert("이 가족 구성원을 내보낼까요?", isPresented: Binding(
             get: { pendingRemove != nil }, set: { if !$0 { pendingRemove = nil } }
-        ), titleVisibility: .visible, presenting: pendingRemove) { member in
+        ), presenting: pendingRemove) { member in
             Button("내보내기", role: .destructive) { Task { await removeMember(member) } }
             Button("취소", role: .cancel) {}
         } message: { member in
@@ -128,7 +128,7 @@ struct FamilyFeedScreen: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "person.badge.plus")
-                Text(creatingInvite ? "만드는 중…" : "조부모님 초대하기")
+                Text(creatingInvite ? "만드는 중…" : "조부모님 및 가족 초대하기")
                 Spacer()
                 Image(systemName: "square.and.arrow.up").foregroundStyle(AppColors.ink3)
             }
