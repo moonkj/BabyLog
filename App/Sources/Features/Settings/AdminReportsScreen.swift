@@ -11,6 +11,10 @@ struct AdminReportsScreen: View {
     private enum Tab: String, CaseIterable { case stats = "통계", reports = "신고", content = "콘텐츠", dev = "개발" }
     @State private var tab: Tab = .stats
 
+    /// 운영자 모드 — 켜면 앱에 운영자 전용 도구(크루 오픈전/오픈후 미리보기 등)가 보이고,
+    /// 끄면 일반 사용자와 동일한 화면이 된다. (자격은 서버 ADMIN_UIDS가 별도로 강제.)
+    @AppStorage("bl_admin_mode") private var adminMode = false
+
     // 통계
     @State private var stats: AdminStats?
     @State private var loadingStats = true
@@ -469,6 +473,16 @@ struct AdminReportsScreen: View {
 
     @ViewBuilder private var devView: some View {
         List {
+            Section("운영자 모드") {
+                Toggle(isOn: $adminMode) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("운영자 모드 켜기").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Text("켜면 앱에 운영자 전용 도구가 표시돼요(예: 크루 오픈전/오픈후 미리보기). 끄면 일반 사용자와 똑같은 화면이 됩니다.")
+                            .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                    }
+                }
+                .tint(AppColors.primary)
+            }
             Section("개발 / 검증") {
                 Toggle(isOn: $store.isPro) {
                     VStack(alignment: .leading, spacing: 2) {

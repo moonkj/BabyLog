@@ -172,6 +172,9 @@ final class AppStore: ObservableObject {
         if marketItems.filter({ $0.mine && $0.isFree }).count >= 3 { s.insert("share_angel") }
         // 크루
         if !joinedCrewIds.isEmpty { s.insert("first_crew") }
+        // 초기 멤버 — 우리 동네 크루(모임/그룹)에 합류하면 부여. 콜드스타트(오픈 전) 화면의
+        // '초기 멤버 뱃지' 약속을 실제로 지킨다. (기존 미지급 상태였던 early_member 정합화.)
+        if !joinedCrewIds.isEmpty || !joinedCrewGroupIds.isEmpty { s.insert("early_member") }
         return s
     }
 

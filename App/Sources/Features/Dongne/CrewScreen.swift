@@ -182,22 +182,23 @@ extension CrewPost {
 /// `isPreviewActive` 내부 토글로 콜드스타트 / 활성 상태 전환 가능 (팀 QA용).
 struct CrewScreen: View {
     @EnvironmentObject private var store: AppStore
+    @ObservedObject private var auth = AuthStore.shared   // 운영자(내 계정) 식별 — 로그인 변화에 반응
+    @AppStorage("bl_admin_mode") private var adminMode = false   // 운영자 모드(대시보드 토글)
     @State private var showCreate = false
     @State private var showLogin = false
     @State private var refreshTick = 0          // 모임 생성 후 활성 화면 재로드 트리거
-    #if DEBUG
-    @State private var previewOverride: Bool? = nil   // 팀 QA — nil 자동 / true 콜드 / false 활성
-    #endif
+    // 미리보기 강제: nil 실데이터 / true 오픈전 / false 오픈후. 운영자 모드일 때만 노출·적용.
+    @State private var previewOverride: Bool? = nil
+
+    /// 운영자 자격 + 운영자 모드 ON일 때만 운영자 도구를 노출한다.
+    private var adminActive: Bool { AdminGate.isAdmin && adminMode }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             // 활성/콜드스타트는 CrewActiveContent가 실데이터(콘텐츠 유무 + 대기 수)로 자체 판정한다.
-            #if DEBUG
-            CrewActiveContent(refreshTick: refreshTick, coldStartOverride: previewOverride)
-            previewToggle   // 팀 QA 전용 — 릴리스 빌드 미노출
-            #else
-            CrewActiveContent(refreshTick: refreshTick)
-            #endif
+            // 운영자 모드에서만 미리보기로 오픈전/오픈후를 강제로 둘 다 볼 수 있다(일반 사용자는 항상 실데이터).
+            CrewActiveContent(refreshTick: refreshTick, coldStartOverride: adminActive ? previewOverride : nil)
+            if adminActive { previewToggle }   // 운영자 모드 전용 — 오픈전/오픈후 미리보기
         }
         .background(AppColors.canvas.ignoresSafeArea())
         // 공용 글래스 FAB — 모임 만들기 (로그인 필수: 신상 특정).
@@ -212,24 +213,23 @@ struct CrewScreen: View {
         .onChange(of: showCreate) { _, open in if !open { refreshTick += 1 } }
     }
 
-    #if DEBUG
-    // 미리보기 강제 3단계: 자동(실데이터) → 콜드스타트 → 활성 → 자동…
+    // 운영자 미리보기 3단계: 실데이터 → 오픈전 → 오픈후 → 실데이터…
     private var previewLabel: String {
-        switch previewOverride { case nil: return "자동"; case .some(true): return "오픈전"; case .some(false): return "활성" }
+        switch previewOverride { case nil: return "실데이터"; case .some(true): return "오픈전"; case .some(false): return "오픈후" }
     }
     private var previewToggle: some View {
         Button {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 switch previewOverride {
-                case nil:          previewOverride = true    // 콜드 강제
-                case .some(true):  previewOverride = false   // 활성 강제
-                case .some(false): previewOverride = nil      // 자동(실데이터)
+                case nil:          previewOverride = true    // 오픈전(콜드) 강제
+                case .some(true):  previewOverride = false   // 오픈후(활성) 강제
+                case .some(false): previewOverride = nil      // 실데이터(자동)
                 }
             }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "eye.fill").font(.system(size: 11, weight: .bold))
-                Text("미리보기: \(previewLabel)").font(.system(size: 11, weight: .bold))
+                Text("운영자 미리보기: \(previewLabel)").font(.system(size: 11, weight: .bold))
             }
             .foregroundStyle(AppColors.ink3)
             .padding(.horizontal, 10)
@@ -240,10 +240,9 @@ struct CrewScreen: View {
         .buttonStyle(LiquidPressStyle(scale: 0.95))
         .padding(.top, Spacing.s2)
         .padding(.trailing, Spacing.s5)
-        .accessibilityLabel("미리보기 모드 \(previewLabel). 탭하면 자동·오픈전·활성 순환")
-        .accessibilityHint("팀 미리보기 토글")
+        .accessibilityLabel("운영자 미리보기 \(previewLabel). 탭하면 실데이터·오픈전·오픈후 순환")
+        .accessibilityHint("운영자 전용 미리보기 토글")
     }
-    #endif
 }
 
 // MARK: - CrewActiveContent (활성 상태)
@@ -270,7 +269,8 @@ private struct CrewActiveContent: View {
     @State private var waitlistCount: Int? = nil
     /// 부모(CrewScreen)에서 모임 생성 후 증가 → 재로드 트리거
     var refreshTick: Int = 0
-    /// DEBUG 미리보기 강제(팀 QA): nil=실데이터 자동, true=콜드스타트 강제, false=활성 강제
+    /// 운영자 미리보기 강제: nil=실데이터 자동, true=오픈전(콜드) 강제, false=오픈후(활성) 강제.
+    /// (CrewScreen이 운영자일 때만 값을 전달 — 일반 사용자는 항상 nil로 실데이터 자동 판정.)
     var coldStartOverride: Bool? = nil
 
     private let sectionLimit = 5
@@ -321,7 +321,7 @@ private struct CrewActiveContent: View {
     /// 콜드스타트(기대감 UI) 여부 — 실데이터 기반. 콘텐츠 0 + 대기 수 < 오픈 임계면 '오픈 전' 동네로 본다.
     /// (모임/그룹/게시글이 하나라도 있거나 대기 수가 임계 이상이면 활성.) 로컬 데모(미구성)는 항상 활성.
     private var isColdStart: Bool {
-        if let o = coldStartOverride { return o }   // DEBUG 강제(콜드/활성 양방향)
+        if let o = coldStartOverride { return o }   // 운영자 미리보기 강제(오픈전/오픈후 양방향)
         guard SupabaseConfig.isConfigured, didLoad, !loadFailed else { return false }
         let empty = posts.isEmpty && meetups.isEmpty && groups.isEmpty
         return empty && (waitlistCount ?? 0) < CrewBackend.openThreshold
@@ -1050,28 +1050,41 @@ private struct CrewColdStartContent: View {
         .accessibilityElement(children: .contain)
     }
 
+    // MARK: 친구 초대 공유
+    /// 카톡 등으로 보낼 초대 메시지. (미발행 도메인 babylog.app을 공유하면 카톡이
+    ///  엉뚱한 사이트 미리보기를 띄우던 버그가 있어, 깨진 링크 대신 이 텍스트를 보낸다.)
+    private var inviteMessage: String {
+        "우리 동네 ‘\(hood)’ 육아 크루, 같이 열어요! 베이비로그에서 이웃이 모이면 동네 모임·정보 공유가 열려요 🌱"
+    }
+    /// 친구 초대 버튼 — 출시 후 APP_STORE_URL이 설정되면 실제 앱 링크를 함께 보내고,
+    /// 그 전까지는 텍스트만 공유한다(엉뚱한 도메인 미리보기 방지).
+    @ViewBuilder private var inviteButton: some View {
+        if let s = APIConfig.key("APP_STORE_URL"), !s.isEmpty, let url = URL(string: s) {
+            ShareLink(item: url, subject: Text("베이비로그 초대"), message: Text(inviteMessage)) { inviteButtonLabel }
+        } else {
+            ShareLink(item: inviteMessage, subject: Text("베이비로그 초대")) { inviteButtonLabel }
+        }
+    }
+    private var inviteButtonLabel: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "person.badge.plus.fill")
+                .font(.system(size: 17, weight: .bold))
+            Text("친구 초대하고 빨리 열기")
+                .font(.system(size: 16, weight: .bold))
+        }
+        .foregroundStyle(AppColors.onPrimary)
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .background(AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .blShadow(.chip)
+    }
+
     // MARK: 액션 버튼들
     private var actionButtons: some View {
         VStack(spacing: 10) {
-            // 친구 초대 — 시스템 공유 시트(ShareLink)
-            ShareLink(
-                item: URL(string: "https://babylog.app")!,
-                subject: Text("BabyLog 초대"),
-                message: Text("우리 동네 육아 앱 BabyLog, 같이 써요! 🌱")
-            ) {
-                HStack(spacing: 8) {
-                    Image(systemName: "person.badge.plus.fill")
-                        .font(.system(size: 17, weight: .bold))
-                    Text("친구 초대하고 빨리 열기")
-                        .font(.system(size: 16, weight: .bold))
-                }
-                .foregroundStyle(AppColors.onPrimary)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                .blShadow(.chip)
-            }
-            .accessibilityLabel("친구 초대하고 빨리 열기")
-            .accessibilityHint("공유 시트로 친구를 초대합니다")
+            // 친구 초대 — 시스템 공유 시트.
+            inviteButton
+                .accessibilityLabel("친구 초대하고 빨리 열기")
+                .accessibilityHint("공유 시트로 친구를 초대합니다")
 
             // 자동 안내 — 신청 버튼 없이, 우리 동네 사람이 모이면 자동으로 열리고 알림
             HStack(spacing: 6) {
@@ -1104,7 +1117,7 @@ private struct CrewColdStartContent: View {
                         .font(.system(size: 13.5, weight: .bold))
                         .foregroundStyle(AppColors.gold)
 
-                    Text("지금 합류하면 우리 동네 1호 멤버 영구 뱃지를 드려요.")
+                    Text("지금 우리 동네 크루에 함께하면 ‘초기 멤버’ 뱃지를 영구히 드려요.")
                         .font(.system(size: 12.5, weight: .regular))
                         .foregroundStyle(Color(hex: 0xA8813A))
                         .lineSpacing(3)
@@ -1114,7 +1127,7 @@ private struct CrewColdStartContent: View {
         }
         .background(AppColors.goldTint, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("초기 멤버 혜택. 우리 동네 1호 멤버 영구 뱃지")
+        .accessibilityLabel("초기 멤버 혜택. 우리 동네 크루에 함께하면 초기 멤버 뱃지")
     }
 }
 

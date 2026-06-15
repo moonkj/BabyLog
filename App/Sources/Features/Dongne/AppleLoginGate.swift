@@ -14,6 +14,18 @@ enum LoginGate {
     @MainActor static func ready() -> Bool { AuthStore.shared.isLoggedIn && nicknameSet() }
 }
 
+/// 운영자(내 계정) 여부 — 화면 표시 결정에만 쓰는 클라이언트 게이트.
+/// 실제 운영자 권한(신고 조회·삭제·통계)은 서버가 JWT uid 화이트리스트(ADMIN_UIDS)로 강제한다.
+/// uid는 비밀이 아니라 식별자이며, 위조해도 로컬 미리보기 토글만 보일 뿐 운영 기능은 서버가 막는다.
+enum AdminGate {
+    /// 서버 ADMIN_UIDS와 동일 값으로 유지.
+    private static let adminUIDs: Set<String> = ["33ac510c-9cbc-40a7-9bab-3fc84d6fa226"]
+    @MainActor static var isAdmin: Bool {
+        guard let uid = AuthStore.shared.userId else { return false }
+        return adminUIDs.contains(uid)
+    }
+}
+
 /// 로그인 + 닉네임 설정 시트. 둘 다 끝나면 onComplete 호출.
 struct AppleLoginSheet: View {
     var message: String = "마켓·크루는 신뢰를 위해 로그인이 필요해요."

@@ -176,6 +176,6 @@ extension BadgeCatalogItem {
         // BadgeEngine 발급 id와 정합화 — 명칭은 성별 중립 원칙에 따라 '동네 인플루언서'(구 맘 인플루언서)
         .init(id: "info_master",    name: "동네 인플루언서", condition: "게시글 좋아요 500개 이상",  tone: .amber,  systemIcon: "megaphone.fill",        category: .community, isEarned: false),
         // 특별
-        .init(id: "early_member",   name: "초기 멤버",    condition: "정식 출시 30일 이내 가입",     tone: .amber,  systemIcon: "crown.fill",            category: .special,   isEarned: true),
+        .init(id: "early_member",   name: "초기 멤버",    condition: "우리 동네 크루에 합류",        tone: .amber,  systemIcon: "crown.fill",            category: .special,   isEarned: false),
     ]
 }
