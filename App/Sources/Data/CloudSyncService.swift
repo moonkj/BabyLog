@@ -60,7 +60,6 @@ final class CloudSyncService {
     /// iCloud 계정 사용 가능 여부.
     func accountAvailable() async -> Bool {
         #if BL_CLOUDKIT
-        guard Self.isEnabled else { return false }
         return (try? await CKContainer.default().accountStatus()) == .available
         #else
         return false
@@ -70,7 +69,7 @@ final class CloudSyncService {
     /// 로컬 상태를 iCloud로 업로드 (last-write-wins).
     func push(_ state: PersistableState) async throws {
         #if BL_CLOUDKIT
-        guard Self.isEnabled else { throw CloudSyncError.notEnabled }
+        // 수동 '지금 백업'은 자동백업 토글과 무관하게 동작(자동 트리거만 scenePhase에서 isEnabled로 게이트).
         guard await accountAvailable() else { throw CloudSyncError.accountUnavailable }
         let id = CKRecord.ID(recordName: recordName)
         let record = (try? await database.record(for: id))
@@ -86,7 +85,6 @@ final class CloudSyncService {
     /// iCloud에서 상태를 가져온다 (없으면 nil).
     func pull() async throws -> PersistableState? {
         #if BL_CLOUDKIT
-        guard Self.isEnabled else { throw CloudSyncError.notEnabled }
         guard await accountAvailable() else { throw CloudSyncError.accountUnavailable }
         let id = CKRecord.ID(recordName: recordName)
         guard let record = try? await database.record(for: id),
@@ -107,7 +105,7 @@ final class CloudSyncService {
     /// 새 사진 파일만 CloudKit에 업로드(증분). best-effort — 실패분은 다음 기회에 재시도.
     func pushPhotos() async {
         #if BL_CLOUDKIT
-        guard Self.isEnabled, await accountAvailable() else { return }
+        guard await accountAvailable() else { return }
         var uploaded = Set(UserDefaults.standard.stringArray(forKey: Self.uploadedKey) ?? [])
         let pending = PhotoStore.allPhotoFileURLs().filter { !uploaded.contains($0.lastPathComponent) }
         guard !pending.isEmpty else { return }
@@ -133,7 +131,7 @@ final class CloudSyncService {
     /// CloudKit의 모든 사진을 로컬로 복원(로컬에 없는 파일만 기록). 새 기기/재설치 복원용.
     func pullPhotos() async {
         #if BL_CLOUDKIT
-        guard Self.isEnabled, await accountAvailable() else { return }
+        guard await accountAvailable() else { return }
         let query = CKQuery(recordType: Self.photoRecordType, predicate: NSPredicate(value: true))
         var cursor: CKQueryOperation.Cursor?
         repeat {
