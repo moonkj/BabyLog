@@ -5,7 +5,6 @@
 import SwiftUI
 
 struct AdminReportsScreen: View {
-    let pass: String
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
 
@@ -326,17 +325,26 @@ struct AdminReportsScreen: View {
             Section("개발 / 검증") {
                 Toggle(isOn: $store.isPro) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Pro 모드").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                        Text("켜면 조부모·친척(최대 8명) 초대 활성. 끄면 무료(부부 2명). 서버에도 반영 (출시 시 구독으로 대체)")
+                        Text("Pro 모드(로컬)").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        Text("클라 UI만 Pro로 전환(로컬 검증용). 서버 등급은 StoreKit 구독으로만 부여 — 이 토글은 서버에 반영되지 않음.")
                             .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
                     }
                 }
                 .tint(AppColors.primary)
-                // 서버 bl_profile.is_pro 동기화 — 무료/Pro 등급 테스트(조부모 초대·인원 제한)용
-                .onChange(of: store.isPro) { _, on in Task { await FamilyFeedBackend.setDevPro(on: on) } }
+                // (제거됨) 서버 is_pro 동기화 — bl_dev_set_pro 백도어 제거(출시 보안). 로컬 토글은 클라 게이트 검증 전용.
+            }
+            Section("내 운영자 ID (서버 ADMIN_UIDS에 등록)") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(AuthStore.shared.userId ?? "로그인 필요")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(AppColors.ink)
+                        .textSelection(.enabled)
+                    Text("이 값을 서버 ADMIN_UIDS 시크릿에 넣으면 이 계정만 운영자 조회·삭제가 가능해요. 길게 눌러 복사.")
+                        .font(.system(size: 11)).foregroundStyle(AppColors.ink3)
+                }
             }
             Section {
-                Text("운영자 전용 도구입니다. 출시 전 제거 예정.")
+                Text("운영자 전용 도구입니다. 권한은 서버(JWT uid 화이트리스트)가 최종 강제합니다.")
                     .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
             }
         }
@@ -348,7 +356,7 @@ struct AdminReportsScreen: View {
     private func performDelete(_ target: PendingDelete) {
         deleting.insert(target.rowId)
         Task { @MainActor in
-            let ok = await ReportBackend.adminDelete(pass: pass, kind: target.kind, id: target.rowId)
+            let ok = await ReportBackend.adminDelete(kind: target.kind, id: target.rowId)
             deleting.remove(target.rowId)
             if ok {
                 meetups.removeAll { $0.id == target.rowId }
@@ -365,13 +373,13 @@ struct AdminReportsScreen: View {
 
     private func loadReports() async {
         loadingReports = true; reportsFailed = false
-        if let r = await ReportBackend.adminFetch(pass: pass) { reports = r } else { reportsFailed = true }
+        if let r = await ReportBackend.adminFetch() { reports = r } else { reportsFailed = true }
         loadingReports = false
     }
 
     private func loadContent() async {
         loadingContent = true; contentFailed = false
-        if let c = await ReportBackend.adminListContent(pass: pass) {
+        if let c = await ReportBackend.adminListContent() {
             meetups = c.meetups; groups = c.groups; items = c.items; posts = c.posts
         } else { contentFailed = true }
         loadingContent = false

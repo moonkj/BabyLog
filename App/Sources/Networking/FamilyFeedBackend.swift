@@ -284,15 +284,8 @@ enum FamilyFeedBackend {
         return true
     }
 
-    /// 관리자 Pro 토글 — 서버 bl_profile.is_pro 동기화(개발/관리 용). 2xx면 true.
-    @discardableResult
-    static func setDevPro(on: Bool) async -> Bool {
-        guard var req = await rest("/rpc/bl_dev_set_pro", method: "POST") else { return false }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_on": on])
-        guard let (_, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
-        return true
-    }
+    // (제거됨) setDevPro — anon이 자기 is_pro를 위조하던 백도어 RPC(bl_dev_set_pro) 제거(출시 보안).
+    //   Pro 등급은 StoreKit 영수증 검증(verify-subscription, service_role)만 bl_profile.is_pro를 쓴다.
 
     // MARK: - 피드
 

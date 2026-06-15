@@ -45,11 +45,11 @@ struct SettingsScreen: View {
     @State private var backupAlert: String? = nil
     // 사진 앱 자동 저장(본인 iCloud 사진으로 보존)
     @State private var photoLibBackupOn = PhotoLibraryBackup.isEnabled
-    // 운영자 모드 — 버전 10회 탭 → 비밀번호 → 신고 목록
+    // 운영자 모드 — 내 계정 로그인 상태에서 버전 10회 탭 → 신고 목록(PIN 제거).
+    // 실제 권한은 서버(admin Edge)가 JWT uid 화이트리스트(ADMIN_UIDS)로 강제.
     @State private var versionTaps = 0
-    @State private var showAdminPass = false
-    @State private var adminPass = ""
     @State private var showAdmin = false
+    @State private var showAdminLoginHint = false   // 비로그인 상태에서 진입 시도 안내
 
     // MARK: Body
 
@@ -714,14 +714,16 @@ struct SettingsScreen: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 versionTaps += 1
-                if versionTaps >= 10 { versionTaps = 0; adminPass = ""; showAdminPass = true }
+                if versionTaps >= 10 {
+                    versionTaps = 0
+                    // 내 계정으로 로그인한 경우에만 진입(서버가 uid 화이트리스트로 최종 강제).
+                    if AuthStore.shared.isLoggedIn { showAdmin = true } else { showAdminLoginHint = true }
+                }
             }
-            .alert("운영자 모드", isPresented: $showAdminPass) {
-                SecureField("비밀번호", text: $adminPass)
-                Button("입장") { if adminPass == "1639316" { showAdmin = true } else { adminPass = "" } }
-                Button("취소", role: .cancel) { adminPass = "" }
-            } message: { Text("운영자 비밀번호를 입력하세요.") }
-            .sheet(isPresented: $showAdmin) { AdminReportsScreen(pass: adminPass).environmentObject(store) }
+            .alert("운영자 모드", isPresented: $showAdminLoginHint) {
+                Button("확인", role: .cancel) {}
+            } message: { Text("운영자 모드는 등록된 운영자 계정으로 로그인한 경우에만 사용할 수 있어요.") }
+            .sheet(isPresented: $showAdmin) { AdminReportsScreen().environmentObject(store) }
 
             Divider()
                 .overlay(AppColors.line)

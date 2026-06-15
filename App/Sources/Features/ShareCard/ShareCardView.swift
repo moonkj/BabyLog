@@ -5,8 +5,15 @@
 
 import SwiftUI
 import UIKit
+import Photos
 
 // MARK: - Supporting Types
+
+/// 공유 시트 표시용 — UIImage를 Identifiable로 감싸 .sheet(item:)에서 렌더 완료본만 표시.
+struct ShareImageItem: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
 
 /// 카드 비율 옵션
 enum CardAspect: String, CaseIterable {
@@ -54,6 +61,7 @@ final class ShareCardViewModel: ObservableObject {
     @Published var aspect: CardAspect = .fourFive
     @Published var position: DataPosition = .bottomLeft
     @Published var fields: ShareCardFields = ShareCardFields()
+    // 얼굴 가리기 토글 제거(off 고정). 워터마크는 토글 제거 + **항상 ON**(BabyLog 로고 무조건 표시 — 사용자 요청 2026-06-15).
     @Published var faceBlur: Bool = false
     @Published var watermark: Bool = true
 
@@ -118,9 +126,10 @@ struct ShareCardView: View {
         ))
     }
 
-    // 공유 시트
-    @State private var shareImage: UIImage? = nil
-    @State private var showShareSheet = false
+    // 공유 시트 — item 기반(렌더 완료 후 표시: 첫 탭 흰 화면 방지)
+    @State private var shareItem: ShareImageItem? = nil
+    // 사진 저장 결과 알림
+    @State private var saveMessage: String? = nil
     // 렌더 실패 알림
     @State private var showRenderError = false
 
@@ -149,28 +158,32 @@ struct ShareCardView: View {
                     controlsSection
                         .padding(.horizontal, Spacing.s5)
 
-                    // ── 공유 버튼 ─────────────────────────────────────────────
-                    shareButton
-                        .padding(.horizontal, Spacing.s5)
-                        .padding(.top, Spacing.s5)
-
-                    viralCaption
-                        .padding(.bottom, Spacing.s9)
+                    // ── 한 줄: 저장(폭 크게) + 공유(폭 작게), 높이 동일 ──────────
+                    HStack(spacing: Spacing.s3) {
+                        saveButton              // 폭 가변(넓게)
+                        shareButton             // 폭 고정(좁게)
+                    }
+                    .padding(.horizontal, Spacing.s5)
+                    .padding(.top, Spacing.s5)
+                    .padding(.bottom, Spacing.s9)
                 }
             }
         }
         .navigationTitle("성장 카드")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showShareSheet) {
-            if let img = shareImage {
-                ShareActivityView(image: img)
-            }
+        .sheet(item: $shareItem) { item in
+            ShareActivityView(image: item.image)
         }
         .alert("공유 카드", isPresented: $showRenderError) {
             Button("확인", role: .cancel) {}
         } message: {
             Text("카드를 만들지 못했어요. 잠시 후 다시 시도해 주세요.")
         }
+        .alert("사진 저장", isPresented: Binding(
+            get: { saveMessage != nil }, set: { if !$0 { saveMessage = nil } }
+        )) {
+            Button("확인", role: .cancel) {}
+        } message: { Text(saveMessage ?? "") }
     }
 
     // MARK: - Sections
@@ -262,75 +275,69 @@ struct ShareCardView: View {
                 }
                 // '또래 백분위' 칩 제거 — 실제 백분위 데이터가 없어 카드에 가짜 '상위 N%'가 찍히던 문제(정직·또래비교 원칙).
                 //   실데이터(WHO 밴드 기반) 연동 시 안심 톤으로 복원.
-                DarkChip(text: "이정표", isOn: vm.fields.milestone) {
-                    vm.fields.milestone.toggle()
-                }
+                // '이정표' 칩 제거(사용자 요청, 2026-06-15).
             }
-
-            // 프라이버시
-            privacySection
         }
     }
 
-    private var privacySection: some View {
-        VStack(spacing: 0) {
-            DarkToggleRow(
-                label: "얼굴 가리기",
-                subtitle: "블러로 비공개",
-                systemIcon: "person.crop.circle.badge.xmark",
-                isOn: $vm.faceBlur
-            )
 
-            Divider()
-                .overlay(AppColors.line)
-                .padding(.horizontal, Spacing.s4)
-
-            // 워터마크: 자유 토글(전면 무료). 기본 ON은 자연 바이럴용.
-            DarkToggleRow(
-                label: "워터마크",
-                subtitle: vm.watermark ? "BabyLog 로고 표시" : "로고 없음",
-                systemIcon: "sparkles",
-                isOn: Binding(
-                    get: { vm.watermark },
-                    set: { vm.watermark = $0 }
-                )
-            )
-        }
-        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                .stroke(AppColors.line, lineWidth: 1)
-        }
-    }
-
-    private var shareButton: some View {
-        LiquidButton(fill: AppColors.primary, action: handleShare) {
+    /// 사진으로 저장 — 주 동작(폭 넓게, 높이 52).
+    private var saveButton: some View {
+        LiquidButton(fill: AppColors.primary, action: handleSaveToPhotos) {
             HStack(spacing: Spacing.s2) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 18, weight: .semibold))
-                Text("공유하기")
+                Image(systemName: "square.and.arrow.down")
+                    .font(.system(size: 18, weight: .bold))
+                Text("사진으로 저장")
+                    .font(.system(size: 16.5, weight: .bold))
             }
+            .frame(maxWidth: .infinity).frame(height: 52)
         }
     }
 
-    private var viralCaption: some View {
-        Text("워터마크가 곧 자연 바이럴이 돼요.\n친구가 보고 \"이 앱 뭐야?\" → 동네 유입")
-            .font(AppFont.micro)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(AppColors.ink3)
-            .padding(.top, Spacing.s3)
+    /// 공유하기 — 보조 동작(폭 좁게, 높이 52로 동일).
+    private var shareButton: some View {
+        Button(action: handleShare) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("공유")
+                    .font(.system(size: 14.5, weight: .semibold))
+            }
+            .foregroundStyle(AppColors.ink2)
+            .frame(width: 96, height: 52)
+            .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.97))
     }
 
     // MARK: - Actions
 
     private func handleShare() {
         if let img = vm.renderCard() {
-            shareImage = img
-            showShareSheet = true
+            shareItem = ShareImageItem(image: img)   // .sheet(item:) → 렌더 완료본만 표시(첫 탭 흰 화면 방지)
         } else {
-            // 렌더 실패: 조용히 넘어가지 않고 사용자에게 안내
             Haptics.warning()
             showRenderError = true
+        }
+    }
+
+    /// 카드를 사진 앱에 저장(addOnly 권한). 성공·실패·권한거부를 알림으로 안내.
+    private func handleSaveToPhotos() {
+        guard let img = vm.renderCard() else { Haptics.warning(); showRenderError = true; return }
+        Task {
+            let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard status == .authorized || status == .limited else {
+                await MainActor.run { saveMessage = "사진 저장 권한이 필요해요. 설정 → BabyLog → 사진에서 허용해 주세요." }
+                return
+            }
+            do {
+                try await PHPhotoLibrary.shared().performChanges {
+                    PHAssetChangeRequest.creationRequestForAsset(from: img)
+                }
+                await MainActor.run { Haptics.success(); saveMessage = "사진 앱에 저장했어요." }
+            } catch {
+                await MainActor.run { Haptics.warning(); saveMessage = "저장하지 못했어요. 잠시 후 다시 시도해 주세요." }
+            }
         }
     }
 }

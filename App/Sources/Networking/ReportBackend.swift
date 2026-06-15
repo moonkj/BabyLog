@@ -92,15 +92,15 @@ enum ReportBackend {
         return true
     }
 
-    /// 운영자 — 비밀번호로 신고 목록 조회(Edge admin-reports). 실패/권한없음 시 nil.
-    static func adminFetch(pass: String) async -> [AdminReport]? {
+    /// 운영자 — 신고 목록 조회(Edge admin-reports). 권한은 서버가 JWT uid 화이트리스트(ADMIN_UIDS)로 강제.
+    static func adminFetch() async -> [AdminReport]? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let url = URL(string: "\(base)/functions/v1/admin-reports") else { return nil }
         var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["pass": pass])
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [:])
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
         struct Wrap: Decodable { let reports: [AdminReport] }
@@ -108,27 +108,26 @@ enum ReportBackend {
     }
 
     /// 운영자 — 콘텐츠 목록(모임/크루/매물/게시글) 조회(admin-action op=list). 실패 시 nil.
-    static func adminListContent(pass: String) async -> AdminContent? {
-        guard let data = await adminAction(pass: pass, body: ["op": "list"]) else { return nil }
+    static func adminListContent() async -> AdminContent? {
+        guard let data = await adminAction(body: ["op": "list"]) else { return nil }
         return try? JSONDecoder().decode(AdminContent.self, from: data)
     }
 
     /// 운영자 — 콘텐츠 삭제(admin-action op=delete). kind: crew_meetup/crew_group/market_item/crew_post.
     @discardableResult
-    static func adminDelete(pass: String, kind: String, id: String) async -> Bool {
-        await adminAction(pass: pass, body: ["op": "delete", "kind": kind, "id": id]) != nil
+    static func adminDelete(kind: String, id: String) async -> Bool {
+        await adminAction(body: ["op": "delete", "kind": kind, "id": id]) != nil
     }
 
-    /// admin-action Edge 공통 호출 — 성공(2xx) 시 응답 바디, 실패 시 nil.
-    private static func adminAction(pass: String, body: [String: Any]) async -> Data? {
+    /// admin-action Edge 공통 호출 — 성공(2xx) 시 응답 바디, 실패 시 nil. 권한은 서버 JWT uid 화이트리스트.
+    private static func adminAction(body: [String: Any]) async -> Data? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let url = URL(string: "\(base)/functions/v1/admin-action") else { return nil }
         var req = URLRequest(url: url); req.httpMethod = "POST"; req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var payload = body; payload["pass"] = pass
-        req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
         return data

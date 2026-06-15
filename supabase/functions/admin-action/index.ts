@@ -2,10 +2,10 @@
 // 운영자 전용 — 콘텐츠 조회/삭제(service_role로 RLS 우회). 비밀번호(ADMIN_PASS)로 게이트.
 // 익명(비로그인)으로 만들어 신원이 바뀌어 본인도 못 지우는 모임/크루/매물을 운영자가 정리.
 //
-// 시크릿: ADMIN_PASS (미설정 시 500 — fail closed).
-// 호출:
-//   POST { pass, op: "list" } → { meetups, groups, items, posts } 최근순
-//   POST { pass, op: "delete", kind, id } → 해당 행 삭제(자식 FK는 on delete cascade)
+// 권한: 호출자 Apple JWT의 uid가 ADMIN_UIDS(쉼표구분 시크릿)에 있어야 함. 미설정 시 fail-closed(500).
+// 호출(헤더 Authorization: Bearer <user JWT>):
+//   POST { op: "list" } → { meetups, groups, items, posts } 최근순
+//   POST { op: "delete", kind, id } → 해당 행 삭제(자식 FK는 on delete cascade)
 //     kind ∈ crew_meetup | crew_group | market_item | crew_post
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -19,15 +19,18 @@ const DELETABLE: Record<string, string> = {
 
 Deno.serve(async (req) => {
   try {
-    const { pass, op, kind, id } = await req.json().catch(() => ({}));
-    const expected = Deno.env.get("ADMIN_PASS");
-    if (!expected) return new Response("admin pass not configured", { status: 500 });
-    if (!pass || pass !== expected) return new Response("forbidden", { status: 403 });
+    const { op, kind, id } = await req.json().catch(() => ({}));
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+    // 운영자 화이트리스트(JWT uid) — 하드코딩 비번 제거.
+    const allow = (Deno.env.get("ADMIN_UIDS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (!allow.length) return new Response("admin not configured", { status: 500 });
+    const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    const { data: u } = await supabase.auth.getUser(jwt);
+    if (!u?.user || !allow.includes(u.user.id)) return new Response("forbidden", { status: 403 });
 
     if (op === "delete") {
       const table = DELETABLE[kind];

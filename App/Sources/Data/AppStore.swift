@@ -32,6 +32,8 @@ final class AppStore: ObservableObject {
     }
     /// 가족 피드 변경 신호(공유 완료 등). 증가 시 타임라인이 가족 반응을 다시 읽는다(메모리 전용).
     @Published var familyFeedVersion = 0
+    /// 저장 실패 안내(메모리 전용) — 디스크 실패 시 '저장됨' 위장 금지(정직·데이터손실 방지). UI가 알럿으로 노출.
+    @Published var lastPersistError: String? = nil
     /// 임신 홈에서 '검진 일정 보기' 탭 시 기록 화면을 검진 세그먼트로 여는 딥링크 신호(메모리 전용).
     @Published var openPregnancyCheckup = false
     /// 빈 타임라인 등에서 '빠른 기록'을 띄우라는 신호 — MainTabView가 mode에 맞춰 처리(메모리 전용).
@@ -517,7 +519,7 @@ final class AppStore: ObservableObject {
             .debounce(for: .seconds(0.5), scheduler: RunLoop.main)
             .sink { [weak self] in
                 guard let self else { return }
-                try? self.persistence?.save(self.snapshot())
+                self.persistSnapshot()
                 // 저장 직후 위젯 타임라인 갱신 — 호출하지 않으면 위젯이 시스템 재량
                 // 주기(수 시간)까지 스테일 데이터를 표시한다.
                 WidgetCenter.shared.reloadAllTimelines()
@@ -525,11 +527,25 @@ final class AppStore: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// 스냅샷 저장 — 실패를 삼키지 않고 lastPersistError로 노출(정직). 성공 시 에러 해제.
+    private func persistSnapshot() {
+        guard let persistence else { return }
+        do {
+            try persistence.save(snapshot())
+            if lastPersistError != nil { lastPersistError = nil }
+        } catch {
+            lastPersistError = "기록 저장에 실패했어요. 저장 공간을 확인하고 다시 시도해 주세요."
+            #if DEBUG
+            print("[AppStore] persist save 실패: \(error)")
+            #endif
+        }
+    }
+
     /// 즉시 저장 — 백그라운드 전환/복원 직후 등 debounce(0.5s)를 기다릴 수 없는 시점용.
     /// (마지막 기록이 앱 강제종료로 유실되는 것을 방지)
     func persistNow() {
         guard !loadDidFail else { return }
-        try? persistence?.save(snapshot())
+        persistSnapshot()
         // 백그라운드 전환 등 즉시 저장 직후에도 위젯을 갱신해 최신 기록을 반영한다.
         WidgetCenter.shared.reloadAllTimelines()
     }

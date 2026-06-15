@@ -329,29 +329,30 @@ struct HomeTab: View {
 
     // MARK: - 공통 헤더
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(greeting).font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
-                HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(greeting).font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
+            // 제목+육아칩은 서로 가운데로 묶고, 그 그룹과 우측 버튼(레이아웃·응급)만 아래라인을 맞춘다(.bottom).
+            HStack(alignment: .bottom, spacing: 8) {
+                HStack(spacing: 8) {   // 제목 ↔ 육아칩: 서로 가운데 정렬(칩이 위로 안 뜨게)
                     Text("베이비로그").font(.system(size: 28, weight: .heavy)).tracking(-0.4)
                         .foregroundStyle(AppColors.ink)
                     // 임신/육아 모드 전환 — 제목 옆 칩
                     ModeToggleChip()
                 }
+                Spacer(minLength: 8)
+                // 레이아웃 전환 메뉴(히어로/대시보드)
+                layoutMenu
+                // 응급 버튼
+                Button { Haptics.light(); showEmergency = true } label: {
+                    Label("응급", systemImage: "cross.case.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12).frame(height: 44)
+                        .background(AppColors.danger, in: Capsule())
+                }
+                .buttonStyle(LiquidPressStyle())
+                .accessibilityLabel("응급 메뉴 열기")
             }
-            Spacer()
-            // 레이아웃 전환 메뉴
-            layoutMenu
-            // 응급 버튼
-            Button { Haptics.light(); showEmergency = true } label: {
-                Label("응급", systemImage: "cross.case.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12).frame(height: 44)
-                    .background(AppColors.danger, in: Capsule())
-            }
-            .buttonStyle(LiquidPressStyle())
-            .accessibilityLabel("응급 메뉴 열기")
         }
     }
 
@@ -395,9 +396,11 @@ struct HomeTab: View {
                             }
                         }
                         .padding(.horizontal, 14)
-                        .frame(height: 48)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
                         .background(selected ? AppColors.goldTint : Color.clear,
                                     in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        .contentShape(Rectangle())   // 행 전체가 탭 영역(투명부도 인식) — '잘 안눌림' 수정
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("레이아웃 \(layout.label)\(selected ? ", 현재 선택됨" : "")")

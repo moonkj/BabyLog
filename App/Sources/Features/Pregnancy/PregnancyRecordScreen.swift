@@ -79,6 +79,9 @@ struct PregnancyRecordScreen: View {
 
                 ScrollView {
                     VStack(spacing: 0) {
+                        // 상단 큰 타이틀 — 다른 화면과 동일한 좌측 BLScreenHeader(가운데 네비 타이틀 대체).
+                        pregnancyHeader
+
                         // 등록된 임신이 없으면 빈 상태 (목업 대신)
                         if hasNoPregnancy {
                             emptyStateCard
@@ -125,8 +128,7 @@ struct PregnancyRecordScreen: View {
                     }
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
+            .toolbar(.hidden, for: .navigationBar)   // 좌측 BLScreenHeader 사용 — 가운데 네비 타이틀 제거(다른 화면과 통일)
             // 홈 '검진 일정 보기' 딥링크 — 진입 시 검진 세그먼트로 전환
             .onChange(of: store.openPregnancyCheckup) { _, open in
                 if open { withAnimation { selectedSegment = .checkup }; store.openPregnancyCheckup = false }
@@ -354,18 +356,12 @@ struct PregnancyRecordScreen: View {
         .accessibilityLabel("육아 모드에서 이어가요. 임신 기록은 안전히 보관돼 있고, 성장 기록 탭에서 아이의 하루를 담을 수 있어요.")
     }
 
-    // MARK: - 툴바
+    // MARK: - 상단 헤더 (다른 화면과 동일한 좌측 BLScreenHeader)
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            Text("기록")
-                .font(AppFont.h2)
-                .foregroundStyle(AppColors.ink)
-        }
-        // .active 상태일 때만 "출산했어요" 버튼 표시 (민감영역)
-        if store.activePregnancy != nil {
-            ToolbarItem(placement: .topBarTrailing) {
+    private var pregnancyHeader: some View {
+        BLScreenHeader(title: "기록", eyebrow: "임신 기록") {
+            // .active 상태일 때만 "출산했어요" 버튼 표시 (민감영역)
+            if store.activePregnancy != nil {
                 Button {
                     showBirthTransition = true
                 } label: {
@@ -377,7 +373,6 @@ struct PregnancyRecordScreen: View {
                     }
                     .foregroundStyle(AppColors.pregnancyPink)
                 }
-                .tint(AppColors.pregnancyPink)
                 .accessibilityLabel("출산 전환 시작")
                 .accessibilityHint("탭하면 아이 프로필로 전환하는 시트가 열립니다")
             }

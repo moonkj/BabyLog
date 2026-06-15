@@ -86,6 +86,13 @@ struct MainTabView: View {
         // (.overlay는 UIKit 시트 뒤로 가려지고 스크림도 잘렸음 → BadgeOverlayWindow로 이전)
         .onChange(of: store.pendingBadgeAward?.id) { _, _ in presentBadgeIfNeeded() }
         .onAppear { presentBadgeIfNeeded() }
+        // 저장 실패 안내(정직 — 무음 실패 금지). 디스크 오류 시 사용자에게 즉시 알림.
+        .alert("저장 실패", isPresented: Binding(
+            get: { store.lastPersistError != nil },
+            set: { if !$0 { store.lastPersistError = nil } }
+        )) {
+            Button("확인", role: .cancel) { store.lastPersistError = nil }
+        } message: { Text(store.lastPersistError ?? "") }
     }
 
     /// pendingBadgeAward 변화에 맞춰 윈도우 카드를 띄우거나 내린다.

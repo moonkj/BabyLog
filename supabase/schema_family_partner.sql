@@ -10,7 +10,8 @@ alter table public.bl_family add column if not exists partner_uid text;
 
 -- ② 멤버 판정 — 비구독 시 무료 배우자는 '명시 지정(partner_uid)' 우선, 미지정/무효면 가장 먼저 승인된 비주인.
 create or replace function public.bl_is_family_member(p_family uuid)
-returns boolean language plpgsql security definer stable as $$
+returns boolean language plpgsql security definer stable
+set search_path = public as $$
 declare me text; owner text; owner_pro boolean; partner text;
 begin
   me := public.bl_owner_id();

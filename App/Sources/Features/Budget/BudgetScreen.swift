@@ -57,6 +57,7 @@ struct BudgetScreen: View {
 
     @State private var subsidies: [SubsidyInfo] = []
     @State private var isLoadingSubsidies = true
+    @State private var subsidyChildId: UUID? = nil   // 지원금 조회 대상 아이(다자녀: 선택, 기본=활성 아이)
     @State private var period: BudgetPeriod = .month
     @State private var showAddExpense = false
     @State private var editingExpense: Expense? = nil   // 지출 행 탭 → 편집
@@ -66,9 +67,20 @@ struct BudgetScreen: View {
 
     // MARK: Computed
 
-    /// selectedChild가 있으면 실제 월령, 없으면 0
+    /// selectedChild가 있으면 실제 월령, 없으면 0 (월령 가이드용)
     private var childAgeMonths: Int {
         guard let child = store.selectedChild else { return 0 }
+        return AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: Date()).months
+    }
+
+    /// 지원금 조회 대상 아이 — 선택기에서 고른 아이(없으면 활성 아이). 다자녀별 지원금 표시용.
+    private var subsidyChild: Child? {
+        if let id = subsidyChildId, let c = store.children.first(where: { $0.id == id }) { return c }
+        return store.selectedChild
+    }
+    /// 지원금 조회 대상 아이의 월령.
+    private var subsidyChildAgeMonths: Int {
+        guard let child = subsidyChild else { return 0 }
         return AgeCalculator.childAgeMonths(birthDate: child.birthDate, asOf: Date()).months
     }
 
@@ -200,7 +212,7 @@ struct BudgetScreen: View {
             }
             .background(AppColors.canvas.ignoresSafeArea())
             .navigationBarHidden(true)
-            .task(id: store.selectedChild?.id) {
+            .task(id: subsidyChild?.id) {
                 await loadSubsidies()
             }
         }
@@ -628,7 +640,34 @@ struct BudgetScreen: View {
             )
             .accessibilityAddTraits(.isHeader)
 
-            if store.selectedChild == nil {
+            // 다자녀: 아이 선택기 — 지원금은 아이 월령별로 달라 누구 기준인지 명확히. 1명이면 이름만 표시.
+            if let child = subsidyChild {
+                if store.children.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(store.children) { c in
+                                let on = c.id == subsidyChild?.id
+                                Button { subsidyChildId = c.id } label: {
+                                    Text(c.name)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(on ? .white : AppColors.ink2)
+                                        .padding(.horizontal, 14).frame(height: 34)
+                                        .background(on ? AppColors.primary : AppColors.surface2, in: Capsule())
+                                }
+                                .buttonStyle(LiquidPressStyle(scale: 0.95))
+                                .accessibilityLabel("\(c.name) 지원금 보기")
+                                .accessibilityAddTraits(on ? [.isSelected] : [])
+                            }
+                        }
+                    }
+                }
+                Text("\(child.name) · 만 \(subsidyChildAgeMonths)개월 기준")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(AppColors.ink3)
+                    .accessibilityLabel("\(child.name), 만 \(subsidyChildAgeMonths)개월 기준 지원금")
+            }
+
+            if subsidyChild == nil {
                 BLEmptyState(
                     icon: "banknote",
                     title: "아이 등록 후 안내해드려요",
@@ -741,14 +780,15 @@ struct BudgetScreen: View {
     // MARK: - Async
 
     private func loadSubsidies() async {
-        guard store.selectedChild != nil else {
+        guard subsidyChild != nil else {
             subsidies = []
             isLoadingSubsidies = false
             return
         }
         isLoadingSubsidies = true
         do {
-            let result = try await ProviderFactory.subsidy().subsidies(childAgeMonths: childAgeMonths)
+            // 선택된 아이의 월령 기준으로 조회(다자녀면 아이별로 다름).
+            let result = try await ProviderFactory.subsidy().subsidies(childAgeMonths: subsidyChildAgeMonths)
             subsidies = result
         } catch {
             subsidies = []
