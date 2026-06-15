@@ -4,6 +4,7 @@
 // 이미지는 R2 공개 베이스(Secrets R2_PUBLIC_BASE, CDN/r2.dev 연결 후 점등) + 키로 구성.
 
 import SwiftUI
+import UIKit
 
 struct FamilyFeedScreen: View {
     @ObservedObject private var auth = AuthStore.shared
@@ -15,6 +16,8 @@ struct FamilyFeedScreen: View {
     @State private var busy = false
     @State private var errorMsg: String?
     @State private var pendingDelete: BLFeedPost?   // 본인 사진 삭제 확인
+    @State private var creatingInvite = false
+    @State private var inviteSheet: InviteInfo?     // 초대 링크 공유 시트
 
     private var myUid: String? { auth.userId }
     /// R2 공개 베이스(앱이 키로 이미지 URL 구성). 미설정이면 플레이스홀더.
@@ -43,6 +46,7 @@ struct FamilyFeedScreen: View {
         } message: { _ in
             Text("가족 모두의 보관함에서 사라지고 하트·댓글도 함께 삭제돼요. 되돌릴 수 없어요.")
         }
+        .sheet(item: $inviteSheet) { info in InviteShareSheet(info: info) }
     }
 
     @ViewBuilder private var content: some View {
@@ -63,6 +67,7 @@ struct FamilyFeedScreen: View {
         } else if family == nil {
             createFamilyCard
         } else {
+            inviteRow            // 조부모(안드로이드/아이폰) 초대 링크
             if posts.isEmpty {
                 BLEmptyState(icon: "photo.on.rectangle.angled", title: "기록하면 여기 모여요",
                              message: "기록 탭에서 사진을 올리면 가족 보관함에 자동으로 공유돼요. 가족이 하트·댓글로 함께해요.")
@@ -70,6 +75,43 @@ struct FamilyFeedScreen: View {
                 ForEach(posts) { post in postCard(post) }
             }
         }
+    }
+
+    /// 조부모 초대 — 코드 생성 후 공유 링크 시트. 안드로이드/아이폰 모두 브라우저로 합류.
+    private var inviteRow: some View {
+        Button {
+            guard let f = family, !creatingInvite else { return }
+            Task {
+                creatingInvite = true
+                if let code = await FamilyFeedBackend.createInvite(familyId: f.id),
+                   let url = URL(string: Self.inviteLink(code: code)) {
+                    inviteSheet = InviteInfo(url: url, code: code)
+                } else {
+                    errorMsg = FamilyFeedBackend.lastError ?? "초대 링크를 만들지 못했어요. 잠시 후 다시 시도해 주세요."
+                }
+                creatingInvite = false
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "person.badge.plus")
+                Text(creatingInvite ? "만드는 중…" : "조부모님 초대하기")
+                Spacer()
+                Image(systemName: "square.and.arrow.up").foregroundStyle(AppColors.ink3)
+            }
+            .font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.primary)
+            .padding(.horizontal, Spacing.s4).frame(height: 50)
+            .background(AppColors.primarySoft, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.98))
+        .disabled(creatingInvite)
+        .accessibilityLabel("조부모님 초대 링크 만들기")
+    }
+
+    /// 초대 링크 — 배포한 가족 웹(FAMILY_WEB_BASE) + ?invite=코드.
+    static func inviteLink(code: String) -> String {
+        var base = APIConfig.key("FAMILY_WEB_BASE") ?? "https://babylog-family.pages.dev/family/"
+        if !base.hasSuffix("/") { base += "/" }
+        return "\(base)?invite=\(code)"
     }
 
     private var createFamilyCard: some View {
@@ -195,6 +237,53 @@ struct FamilyFeedScreen: View {
         } else {
             errorMsg = "삭제하지 못했어요. 잠시 후 다시 시도해 주세요."
         }
+    }
+}
+
+// 초대 정보(공유 시트용)
+struct InviteInfo: Identifiable {
+    let id = UUID()
+    let url: URL
+    let code: String
+}
+
+// 초대 링크 공유 시트 — 카카오톡 등으로 보내기 / 복사
+private struct InviteShareSheet: View {
+    let info: InviteInfo
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            Text("조부모님 초대").font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
+            Text("아래 링크를 카카오톡 등으로 보내세요. 조부모님이 안드로이드·아이폰 어디서든 브라우저로 열어 이메일만 입력하면, 우리 아이 사진을 보고 ❤️·댓글을 남길 수 있어요.")
+                .font(.system(size: 14)).foregroundStyle(AppColors.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(info.url.absoluteString)
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppColors.primary)
+                .lineLimit(2).truncationMode(.middle)
+                .padding(Spacing.s3).frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+
+            ShareLink(item: info.url) {
+                Text("링크 보내기").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            }
+
+            Button {
+                UIPasteboard.general.string = info.url.absoluteString
+                copied = true; Haptics.success()
+            } label: {
+                Text(copied ? "복사됨 ✓" : "링크 복사")
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink2)
+                    .frame(maxWidth: .infinity).frame(height: 44)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(Spacing.s5)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }
 

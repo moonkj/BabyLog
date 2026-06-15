@@ -88,6 +88,35 @@ enum FamilyFeedBackend {
         return BLFamily(id: famId, ownerUid: uid, name: String(name.prefix(40)))
     }
 
+    // MARK: - 초대 (조부모 — 안드로이드/웹 합류)
+
+    /// 가족 초대 코드 생성 — 소유자가 미사용 멤버 행(uid=null, invite_code=코드)을 만든다.
+    /// 조부모는 웹(…/family/?invite=코드)에서 로그인 후 bl_claim_invite(코드)로 이 가족에 합류한다.
+    /// 같은 링크를 여러 명이 써도 됨(웹의 claim RPC가 둘째부터 새 멤버 행 추가). 반환: 초대 코드.
+    static func createInvite(familyId: String) async -> String? {
+        lastError = nil
+        let code = inviteCode()
+        guard var req = await rest("/bl_family_member", method: "POST") else { lastError = "서버 미구성"; return nil }
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        // uid 생략 → null(미사용 초대 행). RLS: 소유자만 INSERT 가능.
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "family_id": familyId, "invite_code": code, "role": "grandparent", "display_name": "가족",
+        ])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse else { lastError = "네트워크 오류"; return nil }
+        guard (200...299).contains(http.statusCode) else {
+            lastError = "초대 생성 실패 HTTP \(http.statusCode): \(String(data: data, encoding: .utf8)?.prefix(140) ?? "")"
+            return nil
+        }
+        return code
+    }
+
+    /// 혼동 문자(0/O/1/I/L) 제외한 8자리 코드.
+    private static func inviteCode() -> String {
+        let chars = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
+        return String((0..<8).map { _ in chars.randomElement()! })
+    }
+
     // MARK: - 피드
 
     static func fetchFeed(familyId: String) async -> [BLFeedPost] {

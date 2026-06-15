@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>베이비로그 · 가족 보기</title>
+<!--
+  베이비로그 가족 피드 웹 (안드로이드/PC 조부모용) — Supabase 가족 피드(bl_*) + Cloudflare R2 사진.
+  · 로그인: Supabase Auth 이메일 매직링크(비밀번호 없음) → 조부모도 좋아요·댓글 가능.
+  · 사진: R2 공개 URL에서 직접 로드(우리 서버 트래픽 0).
+  · 합류: 부모가 앱에서 만든 초대 링크 (…/family/?invite=CODE) 로 들어오면 bl_claim_invite RPC가 멤버로 등록.
+
+  ── 배포 전 채울 값(아래 CONFIG 3개) ──
+   SUPABASE_URL       : https://<project>.supabase.co
+   SUPABASE_ANON_KEY  : 프로젝트 anon(public) 키 — 클라이언트 공개용(RLS가 데이터 보호). 앱에 이미 쓰는 값.
+   R2_PUBLIC_BASE     : https://pub-xxxx.r2.dev  (가족 사진 공개 베이스)
+
+  ── Supabase 대시보드 설정(1회) ──
+   1) Authentication > Providers > Email 활성화(매직링크).
+   2) Authentication > URL Configuration > Redirect URLs 에 이 페이지 주소 추가
+      (예: https://<your-pages>.pages.dev/family/  및 로컬 테스트용 주소).
+   3) SQL: schema_family_feed.sql → schema_family_invite.sql 적용.
+
+  ── 배포 ──
+   Cloudflare Pages(무료 정적 호스팅)에 web/ 폴더 연결. 서버 비용 0.
+-->
+<style>
+  :root{ --ink:#1A1B2E; --ink2:#3A3A4A; --ink3:#737380; --canvas:#FAFAF7; --card:#fff;
+         --sage:#4E8268; --sage-soft:#E7F0EA; --pink:#B5478A; --line:#EDEDE9; }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html{ font-size:18px; }                         /* 조부모 가독성 — 기본 글자 크게 */
+  body{ font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+        background:var(--canvas); color:var(--ink); -webkit-font-smoothing:antialiased; line-height:1.5; }
+  header{ position:sticky; top:0; background:rgba(250,250,247,.93); backdrop-filter:blur(8px);
+          padding:14px 16px; display:flex; align-items:center; justify-content:space-between;
+          border-bottom:1px solid var(--line); z-index:10; }
+  header .t{ font-weight:800; font-size:1.15rem; letter-spacing:-.4px; }
+  header .t small{ display:block; font-weight:600; font-size:.72rem; color:var(--ink3); margin-top:1px; }
+  .btn{ font:inherit; font-weight:700; border:none; border-radius:999px; cursor:pointer; }
+  .btn-ghost{ background:none; color:var(--sage); padding:8px 10px; font-size:.85rem; }
+  .wrap{ max-width:580px; margin:0 auto; padding:10px 12px 80px; }
+  .card{ background:var(--card); border-radius:20px; overflow:hidden; box-shadow:0 6px 22px rgba(40,33,24,.08);
+         margin-bottom:18px; }
+  .meta{ padding:13px 16px 8px; display:flex; justify-content:space-between; align-items:baseline; }
+  .meta b{ font-size:1rem; } .meta span{ font-size:.82rem; color:var(--ink3); }
+  .swipe{ display:flex; overflow-x:auto; scroll-snap-type:x mandatory; background:#000; }
+  .swipe>*{ flex:0 0 100%; scroll-snap-align:start; }
+  .swipe img,.swipe video{ width:100%; display:block; }
+  .badge{ display:inline-block; background:#FBF0D8; color:#98711E; font-weight:800; font-size:.72rem;
+          padding:3px 9px; border-radius:999px; margin-bottom:6px; }
+  .caption{ padding:12px 16px 4px; font-size:1rem; }
+  .actions{ display:flex; align-items:center; gap:18px; padding:8px 16px 12px; }
+  .like{ display:flex; align-items:center; gap:7px; background:none; border:none; cursor:pointer;
+         font:inherit; font-weight:700; color:var(--ink2); padding:6px 4px; }
+  .like .heart{ font-size:1.4rem; line-height:1; transition:transform .15s; }
+  .like.on{ color:var(--pink); } .like.on .heart{ transform:scale(1.12); }
+  .cmeta{ display:flex; align-items:center; gap:6px; color:var(--ink3); font-size:.9rem; font-weight:700; }
+  .comments{ border-top:1px solid var(--line); padding:10px 16px; }
+  .comment{ font-size:.95rem; margin:6px 0; }
+  .comment b{ color:var(--ink); } .comment span{ color:var(--ink2); }
+  .crow{ display:flex; gap:8px; margin-top:10px; }
+  .crow input{ flex:1; font:inherit; font-size:.95rem; padding:11px 14px; border:1px solid var(--line);
+               border-radius:999px; background:var(--canvas); }
+  .crow button{ background:var(--sage); color:#fff; padding:0 18px; font-size:.92rem; }
+  .state{ text-align:center; color:var(--ink3); padding:64px 24px; font-size:1rem; }
+  /* 로그인 화면 */
+  .login{ max-width:420px; margin:8vh auto; padding:0 22px; text-align:center; }
+  .login h1{ font-size:1.5rem; font-weight:800; letter-spacing:-.5px; }
+  .login p{ color:var(--ink3); font-size:.95rem; margin:10px 0 26px; }
+  .login input{ width:100%; font:inherit; padding:15px 16px; border:1px solid var(--line);
+                border-radius:14px; background:#fff; margin-bottom:12px; }
+  .login .btn-go{ width:100%; background:var(--sage); color:#fff; padding:15px; font-size:1.02rem; }
+  .login .note{ font-size:.82rem; color:var(--ink3); margin-top:18px; line-height:1.6; }
+  .toast{ position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:var(--ink);
+          color:#fff; padding:12px 18px; border-radius:999px; font-size:.9rem; font-weight:700;
+          opacity:0; transition:opacity .25s; pointer-events:none; z-index:50; max-width:90%; }
+  .toast.show{ opacity:.95; }
+</style>
+</head>
+<body>
+<div id="app"><div class="state">불러오는 중…</div></div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// ───────── CONFIG (배포 전 채우기) ─────────
+const SUPABASE_URL      = "%%SUPABASE_URL%%";
+const SUPABASE_ANON_KEY = "%%SUPABASE_ANON_KEY%%";
+const R2_PUBLIC_BASE    = "%%R2_PUBLIC_BASE%%";
+// ──────────────────────────────────────────
+
+const app    = document.getElementById("app");
+const toastEl = document.getElementById("toast");
+const qs = (n) => new URLSearchParams(location.search).get(n);
+let sb, me, myName = "가족", familyId = null;
+
+function toast(m){ toastEl.textContent = m; toastEl.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(()=>toastEl.classList.remove("show"), 2200); }
+function setState(m){ app.innerHTML = `<div class="state">${m}</div>`; }
+function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmtDate(s){ try{ return new Date(s).toLocaleDateString("ko-KR",{month:"long",day:"numeric"}); }catch(e){ return ""; } }
+
+function notConfigured(){
+  return SUPABASE_URL.includes("%%") || SUPABASE_ANON_KEY.includes("%%") || R2_PUBLIC_BASE.includes("%%");
+}
+
+// ───────── 로그인 ─────────
+function showLogin(sentTo){
+  if (sentTo){
+    app.innerHTML = `<div class="login"><h1>메일을 확인해 주세요 ✉️</h1>
+      <p><b>${esc(sentTo)}</b> 로 보낸<br>‘로그인’ 링크를 누르면 바로 들어와요.<br>(비밀번호 없어요)</p>
+      <p class="note">메일이 안 보이면 스팸함도 확인해 주세요.<br>같은 기기·브라우저에서 링크를 열어주세요.</p></div>`;
+    return;
+  }
+  app.innerHTML = `<div class="login">
+    <h1>우리 아이 소식 보기</h1>
+    <p>처음이시면 성함과 이메일을 적어주세요.<br>이메일로 온 링크 한 번이면 끝이에요.</p>
+    <input id="name" placeholder="성함 (예: 외할머니)" autocomplete="name">
+    <input id="email" type="email" placeholder="이메일 주소" autocomplete="email" inputmode="email">
+    <button class="btn btn-go" id="go">로그인 링크 받기</button>
+    <p class="note">비밀번호가 없어요. 이메일로 받은 링크만 누르면 됩니다.</p>
+  </div>`;
+  document.getElementById("go").onclick = sendLink;
+  document.getElementById("email").addEventListener("keydown", e=>{ if(e.key==="Enter") sendLink(); });
+}
+
+async function sendLink(){
+  const email = document.getElementById("email").value.trim();
+  const name  = document.getElementById("name").value.trim();
+  if (!email || !email.includes("@")){ toast("이메일 주소를 확인해 주세요"); return; }
+  if (name) localStorage.setItem("bl_name", name);
+  document.getElementById("go").textContent = "보내는 중…";
+  const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.href } });
+  if (error){ toast("전송 실패: " + error.message); showLogin(); return; }
+  showLogin(email);
+}
+
+// ───────── 가족 확인(초대 합류 / 기존 멤버) ─────────
+async function resolveFamily(){
+  const invite = qs("invite");
+  if (invite){
+    const pname = localStorage.getItem("bl_name") || null;
+    const { data, error } = await sb.rpc("bl_claim_invite", { p_code: invite, p_name: pname });
+    if (!error && data) familyId = data;
+  }
+  if (!familyId){
+    const { data } = await sb.from("bl_family_member")
+      .select("family_id, display_name").eq("uid", me)
+      .order("joined_at", { ascending:true }).limit(1);
+    if (data && data[0]){ familyId = data[0].family_id; myName = data[0].display_name || myName; }
+  } else {
+    const { data } = await sb.from("bl_family_member")
+      .select("display_name").eq("uid", me).eq("family_id", familyId).limit(1);
+    if (data && data[0] && data[0].display_name) myName = data[0].display_name;
+  }
+  return familyId;
+}
+
+// ───────── 피드 ─────────
+async function loadFeed(){
+  const { data: posts, error } = await sb.from("bl_feed_post")
+    .select("*, bl_post_media(*), bl_reaction(uid,kind), bl_comment(*)")
+    .eq("family_id", familyId).order("created_at", { ascending:false }).limit(100);
+  if (error){ setState("불러오지 못했어요. 잠시 후 다시 시도해 주세요."); return; }
+  if (!posts || !posts.length){ setState("아직 공유된 사진이 없어요.\n부모님이 사진을 올리면 여기에 보여요."); return; }
+  app.innerHTML = `<div class="wrap" id="feed"></div>`;
+  const feed = document.getElementById("feed");
+  posts.forEach(p => feed.appendChild(cardEl(p)));
+}
+
+function cardEl(p){
+  const media = (p.bl_post_media||[]).map(m=>{
+    const url = `${R2_PUBLIC_BASE}/${m.r2_key}`;
+    return m.kind === "video"
+      ? `<video controls playsinline src="${url}"></video>`
+      : `<img loading="lazy" src="${url}" alt="가족 사진">`;
+  }).join("");
+  const reactions = p.bl_reaction || [];
+  const liked = reactions.some(r => r.uid === me && (r.kind||"heart")==="heart");
+  const hearts = reactions.filter(r => (r.kind||"heart")==="heart").length;
+  const comments = (p.bl_comment||[]).sort((a,b)=> new Date(a.created_at)-new Date(b.created_at));
+
+  const el = document.createElement("div");
+  el.className = "card";
+  el.innerHTML = `
+    <div class="meta"><b>${esc(p.child_label||"우리 아이")}</b><span>${fmtDate(p.taken_at||p.created_at)}</span></div>
+    ${media ? `<div class="swipe">${media}</div>` : ""}
+    ${(p.milestone||p.caption) ? `<div class="caption">${p.milestone?`<span class="badge">★ ${esc(p.milestone)}</span><br>`:""}${esc(p.caption||"")}</div>` : ""}
+    <div class="actions">
+      <button class="like ${liked?"on":""}" data-id="${p.id}"><span class="heart">${liked?"❤️":"🤍"}</span><span class="lc">${hearts||""}</span></button>
+      <span class="cmeta">💬 <span class="cc">${comments.length||0}</span></span>
+    </div>
+    <div class="comments">
+      <div class="clist">${comments.map(c=>`<div class="comment"><b>${esc(c.author_name||"가족")}</b> <span>${esc(c.text)}</span></div>`).join("")}</div>
+      <div class="crow"><input placeholder="따뜻한 한마디…" maxlength="1000"><button class="btn">남기기</button></div>
+    </div>`;
+
+  el.querySelector(".like").onclick = (e)=> toggleLike(p, e.currentTarget);
+  const inp = el.querySelector(".crow input"), btn = el.querySelector(".crow button");
+  const send = ()=> sendComment(p, inp, el);
+  btn.onclick = send;
+  inp.addEventListener("keydown", e=>{ if(e.key==="Enter") send(); });
+  return el;
+}
+
+async function toggleLike(p, btn){
+  const on = !btn.classList.contains("on");
+  btn.classList.toggle("on", on);
+  btn.querySelector(".heart").textContent = on ? "❤️" : "🤍";
+  const lc = btn.querySelector(".lc");
+  lc.textContent = Math.max(0, (parseInt(lc.textContent||"0",10)||0) + (on?1:-1)) || "";
+  if (on){
+    await sb.from("bl_reaction").upsert(
+      { post_id:p.id, family_id:familyId, uid:me, kind:"heart" },
+      { onConflict:"post_id,uid,kind", ignoreDuplicates:true });
+  } else {
+    await sb.from("bl_reaction").delete().eq("post_id",p.id).eq("uid",me).eq("kind","heart");
+  }
+}
+
+async function sendComment(p, inp, card){
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = ""; inp.disabled = true;
+  const { error } = await sb.from("bl_comment")
+    .insert({ post_id:p.id, family_id:familyId, uid:me, author_name:myName, text });
+  inp.disabled = false; inp.focus();
+  if (error){ toast("댓글 전송 실패"); inp.value = text; return; }
+  const list = card.querySelector(".clist");
+  list.insertAdjacentHTML("beforeend", `<div class="comment"><b>${esc(myName)}</b> <span>${esc(text)}</span></div>`);
+  const cc = card.querySelector(".cc"); cc.textContent = (parseInt(cc.textContent||"0",10)||0)+1;
+}
+
+// ───────── 부팅 ─────────
+async function boot(){
+  if (notConfigured()){ setState("아직 설정 전이에요.\n(SUPABASE_URL · ANON_KEY · R2_PUBLIC_BASE 입력 필요)"); return; }
+  sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const { data:{ session } } = await sb.auth.getSession();
+  if (!session){ showLogin(); return; }
+  me = session.user.id;
+  myName = localStorage.getItem("bl_name") || myName;
+
+  setState("불러오는 중…");
+  const fam = await resolveFamily();
+  if (!fam){
+    setState("초대 링크로 들어와 주세요.\n부모님께 ‘가족 초대 링크’를 받아 다시 눌러주세요.");
+    return;
+  }
+  // 헤더
+  document.body.insertAdjacentHTML("afterbegin",
+    `<header><div class="t">베이비로그<small>우리 아이 가족 보기</small></div>
+       <button class="btn btn-ghost" id="logout">로그아웃</button></header>`);
+  document.getElementById("logout").onclick = async()=>{ await sb.auth.signOut(); location.href = location.pathname; };
+
+  await loadFeed();
+  setInterval(()=>{ if(document.visibilityState==="visible") loadFeed(); }, 60000);
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") loadFeed(); });
+}
+
+boot();
+</script>
+</body>
+</html>
