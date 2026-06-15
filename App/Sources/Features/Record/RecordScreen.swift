@@ -18,6 +18,13 @@ struct RecordScreen: View {
                 // 상단 큰 타이틀 (공용 헤더 — 자체 여백 포함)
                 screenHeader
 
+                // 아이 선택 — 다자녀일 때만(전역 selectedChild 동기화: 타임라인·차트·접종 모두 전환)
+                if store.children.count > 1 {
+                    childSelector
+                        .padding(.horizontal, Spacing.s5)
+                        .padding(.bottom, Spacing.s4)
+                }
+
                 // 세그먼트 셀렉터
                 segmentPicker
                     .padding(.horizontal, Spacing.s5)
@@ -76,6 +83,31 @@ struct RecordScreen: View {
                             Button("닫기") { showFamilyFeed = false }
                         }
                     }
+            }
+        }
+    }
+
+    // MARK: 아이 선택(다자녀)
+
+    private var childSelector: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(store.children) { child in
+                    let on = child.id == store.selectedChild?.id
+                    Button {
+                        Haptics.selection()
+                        withAnimation(.easeOut(duration: 0.15)) { store.selectedChildId = child.id }
+                    } label: {
+                        Text(child.name)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(on ? .white : AppColors.ink2)
+                            .padding(.horizontal, 16).frame(height: 38)
+                            .background(on ? AppColors.primary : AppColors.surface2, in: Capsule())
+                    }
+                    .buttonStyle(LiquidPressStyle(scale: 0.96))
+                    .accessibilityLabel("\(child.name) 선택")
+                    .accessibilityAddTraits(on ? [.isSelected] : [])
+                }
             }
         }
     }

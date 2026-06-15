@@ -292,8 +292,14 @@ struct VaccineSection: View {
             VaccineGroup(id: key, name: groupName(key),
                          doses: doses.sorted { ($0.scheduledDate ?? .distantPast) < ($1.scheduledDate ?? .distantPast) })
         }
-        // 가장 이른 회차 순으로 그룹 정렬(0개월대 → 12개월대)
-        .sorted { ($0.doses.first?.scheduledDate ?? .distantFuture) < ($1.doses.first?.scheduledDate ?? .distantFuture) }
+        // 가장 이른 회차 순으로 그룹 정렬(0개월대 → 12개월대).
+        // ⚠️ Dictionary는 순서 비보장 + Swift sorted는 불안정 → 같은 시작월령(예: 생후 2개월) 그룹들이
+        //    매 렌더(확장 토글 등)마다 순서가 뒤바뀌던 문제 → id로 타이브레이크해 순서 고정.
+        .sorted {
+            let a = $0.doses.first?.scheduledDate ?? .distantFuture
+            let b = $1.doses.first?.scheduledDate ?? .distantFuture
+            return a != b ? a < b : $0.id < $1.id
+        }
     }
 
     private func isGroupDone(_ g: VaccineGroup) -> Bool {
@@ -504,7 +510,10 @@ struct VaccineSection: View {
             Text("\(g.doses.filter { isDone($0) }.count)/\(g.doses.count)")
                 .font(AppFont.num(11.5, weight: .bold))
                 .foregroundStyle(AppColors.ink3)
+                .lineLimit(1)
+                .fixedSize()   // "0/5"가 좁아질 때 "0/\n5"로 줄바꿈되던 문제 방지
         }
+        .fixedSize()   // 도트+카운트 묶음은 항상 한 줄로(이름이 대신 줄어듦)
         .accessibilityHidden(true)   // 그룹 행 레이블이 "N회 중 M회"로 대체 안내
     }
 
