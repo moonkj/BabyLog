@@ -167,7 +167,8 @@ enum FamilyFeedBackend {
 
     /// 가족 멤버 목록(가입순). 실패/디코드 실패 시 [].
     static func fetchMembers(familyId: String) async -> [BLFamilyMember] {
-        let path = "/bl_family_member?family_id=eq.\(familyId)&select=*&order=joined_at.asc"
+        // uid가 있는 '실제 합류한' 멤버만 — uid=null(미사용 초대 코드)은 제외(이름 '가족'으로 떠 혼란).
+        let path = "/bl_family_member?family_id=eq.\(familyId)&uid=not.is.null&select=*&order=joined_at.asc"
         guard let req = await rest(path, method: "GET"),
               let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
