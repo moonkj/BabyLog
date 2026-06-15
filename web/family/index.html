@@ -217,9 +217,13 @@ async function toggleLike(p, btn){
   const lc = btn.querySelector(".lc");
   lc.textContent = Math.max(0, (parseInt(lc.textContent||"0",10)||0) + (on?1:-1)) || "";
   if (on){
-    await sb.from("bl_reaction").upsert(
-      { post_id:p.id, family_id:familyId, uid:me, kind:"heart" },
-      { onConflict:"post_id,uid,kind", ignoreDuplicates:true });
+    const { error } = await sb.from("bl_reaction")
+      .insert({ post_id:p.id, family_id:familyId, uid:me, kind:"heart" });
+    if (error && error.code !== "23505"){   // 23505=이미 누름(중복) → 성공 취급
+      toast("좋아요 실패"); btn.classList.remove("on");
+      btn.querySelector(".heart").textContent = "🤍";
+      lc.textContent = Math.max(0, (parseInt(lc.textContent||"0",10)||0) - 1) || "";
+    }
   } else {
     await sb.from("bl_reaction").delete().eq("post_id",p.id).eq("uid",me).eq("kind","heart");
   }

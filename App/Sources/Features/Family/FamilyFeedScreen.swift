@@ -178,8 +178,8 @@ struct FamilyFeedScreen: View {
                             Text("\(post.comments.count)").font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
                         }
                         Spacer()
-                        // 올린 본인만 삭제 가능
-                        if post.authorUid == myUid {
+                        // 올린 본인 또는 가족 보관함 주인(부모)이면 삭제 가능
+                        if post.authorUid == myUid || family?.ownerUid == myUid {
                             Menu {
                                 Button(role: .destructive) { pendingDelete = post } label: {
                                     Label("사진 삭제", systemImage: "trash")

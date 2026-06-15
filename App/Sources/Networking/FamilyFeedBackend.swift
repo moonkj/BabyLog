@@ -298,13 +298,19 @@ enum FamilyFeedBackend {
     static func setHeart(post: BLFeedPost, on: Bool) async -> Bool {
         guard let uid = await AuthStore.shared.userId else { return false }
         if on {
-            guard var req = await rest("/bl_reaction?on_conflict=post_id,uid,kind", method: "POST") else { return false }
-            req.setValue("resolution=ignore-duplicates", forHTTPHeaderField: "Prefer")
+            // 평이한 INSERT(댓글과 동일 경로). on_conflict 업서트가 복합키에서 실패하던 문제 회피.
+            guard var req = await rest("/bl_reaction", method: "POST") else { return false }
+            req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
             req.httpBody = try? JSONSerialization.data(withJSONObject: [
                 "post_id": post.id, "family_id": post.familyId, "uid": uid, "kind": "heart",
             ])
-            guard let (_, resp) = try? await URLSession.shared.data(for: req),
-                  let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+            guard let (data, resp) = try? await URLSession.shared.data(for: req),
+                  let http = resp as? HTTPURLResponse else { return false }
+            if http.statusCode == 409 { return true }   // 이미 누름 = 성공
+            if !(200...299).contains(http.statusCode) {
+                lastError = "하트 실패 HTTP \(http.statusCode): \(String(data: data, encoding: .utf8)?.prefix(120) ?? "")"
+                return false
+            }
             return true
         } else {
             let path = "/bl_reaction?post_id=eq.\(post.id)&uid=eq.\(uid)&kind=eq.heart"
