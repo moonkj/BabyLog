@@ -85,7 +85,7 @@ struct FamilyFeedScreen: View {
                 creatingInvite = true
                 if let code = await FamilyFeedBackend.createInvite(familyId: f.id),
                    let url = URL(string: Self.inviteLink(code: code)) {
-                    inviteSheet = InviteInfo(url: url, code: code)
+                    inviteSheet = InviteInfo(url: url, code: code, familyId: f.id, defaultPass: Self.genPin())
                 } else {
                     errorMsg = FamilyFeedBackend.lastError ?? "초대 링크를 만들지 못했어요. 잠시 후 다시 시도해 주세요."
                 }
@@ -113,6 +113,9 @@ struct FamilyFeedScreen: View {
         if !base.hasSuffix("/") { base += "/" }
         return "\(base)?invite=\(code)"
     }
+
+    /// 기본 비밀번호 생성(숫자 6자리). 부모가 4~10자리로 바꿀 수 있음.
+    static func genPin() -> String { (0..<6).map { _ in String(Int.random(in: 0...9)) }.joined() }
 
     private var createFamilyCard: some View {
         BLCard {
@@ -245,45 +248,86 @@ struct InviteInfo: Identifiable {
     let id = UUID()
     let url: URL
     let code: String
+    let familyId: String
+    let defaultPass: String
 }
 
-// 초대 링크 공유 시트 — 카카오톡 등으로 보내기 / 복사
+// 초대 링크 + 비밀번호 시트 — 링크 보내기 / 비밀번호(숫자 4~10자리) 설정
 private struct InviteShareSheet: View {
     let info: InviteInfo
+    @State private var pin: String
+    @State private var savedPin = ""
+    @State private var saving = false
     @State private var copied = false
 
+    init(info: InviteInfo) { self.info = info; _pin = State(initialValue: info.defaultPass) }
+
+    private var valid: Bool { (4...10).contains(pin.count) && pin.allSatisfy(\.isNumber) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            Text("조부모님 초대").font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
-            Text("아래 링크를 카카오톡 등으로 보내세요. 조부모님이 안드로이드·아이폰 어디서든 브라우저로 열어 이메일만 입력하면, 우리 아이 사진을 보고 ❤️·댓글을 남길 수 있어요.")
-                .font(.system(size: 14)).foregroundStyle(AppColors.ink2)
-                .fixedSize(horizontal: false, vertical: true)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                Text("조부모님 초대").font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
+                Text("① 아래 링크를 보내고  ② 비밀번호는 따로(전화 등) 알려주세요.\n둘 다 있어야 들어올 수 있어 안전해요. 안드로이드·아이폰 모두 브라우저로 보고 ❤️·댓글 가능.")
+                    .font(.system(size: 13.5)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
 
-            Text(info.url.absoluteString)
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppColors.primary)
-                .lineLimit(2).truncationMode(.middle)
-                .padding(Spacing.s3).frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                // ── 링크 ──
+                Text("초대 링크").font(.system(size: 12.5, weight: .bold)).foregroundStyle(AppColors.ink3)
+                Text(info.url.absoluteString)
+                    .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(AppColors.primary)
+                    .lineLimit(2).truncationMode(.middle)
+                    .padding(Spacing.s3).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                HStack(spacing: Spacing.s2) {
+                    ShareLink(item: info.url) {
+                        Text("링크 보내기").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                            .frame(maxWidth: .infinity).frame(height: 48)
+                            .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    }
+                    Button { UIPasteboard.general.string = info.url.absoluteString; copied = true; Haptics.success() } label: {
+                        Text(copied ? "복사됨 ✓" : "복사").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.primary)
+                            .frame(width: 84).frame(height: 48)
+                            .background(AppColors.primarySoft, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    }
+                }
 
-            ShareLink(item: info.url) {
-                Text("링크 보내기").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity).frame(height: 52)
-                    .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                Divider().padding(.vertical, 2)
+
+                // ── 비밀번호 ──
+                Text("가족 비밀번호 (숫자 4~10자리)").font(.system(size: 12.5, weight: .bold)).foregroundStyle(AppColors.ink3)
+                HStack(spacing: Spacing.s2) {
+                    TextField("숫자 4~10자리", text: $pin)
+                        .keyboardType(.numberPad)
+                        .font(AppFont.num(20, weight: .heavy)).foregroundStyle(AppColors.ink)
+                        .padding(.horizontal, Spacing.s3).frame(height: 50)
+                        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        .onChange(of: pin) { _, v in
+                            let d = String(v.filter(\.isNumber).prefix(10)); if d != pin { pin = d }
+                        }
+                    Button { Task { await save() } } label: {
+                        Text(savedPin == pin && !savedPin.isEmpty ? "저장됨 ✓" : (saving ? "저장 중" : "저장"))
+                            .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                            .frame(width: 88).frame(height: 50)
+                            .background(valid && savedPin != pin ? AppColors.primary : AppColors.ink3,
+                                        in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    }.disabled(!valid || saving || savedPin == pin)
+                }
+                Text("이 비밀번호는 링크와 같은 곳(카톡 등)에 적지 말고, 전화 등으로 따로 알려주세요.")
+                    .font(.system(size: 12)).foregroundStyle(AppColors.ink3).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
-
-            Button {
-                UIPasteboard.general.string = info.url.absoluteString
-                copied = true; Haptics.success()
-            } label: {
-                Text(copied ? "복사됨 ✓" : "링크 복사")
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink2)
-                    .frame(maxWidth: .infinity).frame(height: 44)
-            }
-            Spacer(minLength: 0)
+            .padding(Spacing.s5)
         }
-        .padding(Spacing.s5)
-        .presentationDetents([.medium])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .task { await save() }   // 생성된 기본 비번을 즉시 적용(부모가 바꾸면 다시 저장)
+    }
+
+    private func save() async {
+        guard valid, pin != savedPin else { return }
+        saving = true
+        if await FamilyFeedBackend.setFamilyPass(familyId: info.familyId, pass: pin) { savedPin = pin }
+        saving = false
     }
 }
 

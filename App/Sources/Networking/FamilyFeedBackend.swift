@@ -117,6 +117,16 @@ enum FamilyFeedBackend {
         return String((0..<8).map { _ in chars.randomElement()! })
     }
 
+    /// 가족 비밀번호 설정/변경(소유자) — 숫자 4~10자리. 링크와 함께 2차 확인.
+    @discardableResult
+    static func setFamilyPass(familyId: String, pass: String) async -> Bool {
+        guard var req = await rest("/rpc/bl_set_family_pass", method: "POST") else { return false }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_family": familyId, "p_pass": pass])
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
     // MARK: - 피드
 
     static func fetchFeed(familyId: String) async -> [BLFeedPost] {

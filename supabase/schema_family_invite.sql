@@ -84,3 +84,65 @@ end;
 $$;
 
 grant execute on function public.bl_set_my_name(text) to anon, authenticated;
+
+-- ════════════════ 초대 비밀번호(보안) ════════════════
+-- 링크만으로는 합류 불가 — 부모가 정한 '가족 비밀번호'까지 맞아야 합류(2차 확인).
+-- 비밀번호는 해시로만 저장(평문 미보관). 이미 합류한 멤버는 재방문 시 비번 불필요.
+
+create extension if not exists pgcrypto with schema extensions;
+
+alter table public.bl_family add column if not exists join_pass_hash text;
+
+-- 가족 비밀번호 설정/변경 — 소유자(부모)만.
+create or replace function public.bl_set_family_pass(p_family uuid, p_pass text)
+returns void
+language plpgsql security definer set search_path = public, extensions
+as $$
+begin
+  if coalesce(p_pass, '') = '' then return; end if;
+  update public.bl_family
+     set join_pass_hash = crypt(p_pass, gen_salt('bf'))
+   where id = p_family and owner_uid = public.bl_owner_id();
+end;
+$$;
+grant execute on function public.bl_set_family_pass(uuid, text) to anon, authenticated;
+
+-- 비밀번호 검증을 포함한 합류(3-arg 오버로드). 웹은 이걸 호출한다.
+create or replace function public.bl_claim_invite(p_code text, p_name text, p_pass text)
+returns uuid
+language plpgsql security definer set search_path = public, extensions
+as $$
+declare me text; fam uuid; h text;
+begin
+  me := public.bl_owner_id();
+  if me is null then raise exception 'auth required'; end if;
+  if coalesce(p_code, '') = '' then raise exception 'invalid invite'; end if;
+
+  select family_id into fam from public.bl_family_member where invite_code = p_code limit 1;
+  if fam is null then raise exception 'invalid invite'; end if;
+
+  -- 이미 멤버면 비번 없이 통과(재방문)
+  if exists (select 1 from public.bl_family_member where family_id = fam and uid = me) then
+    return fam;
+  end if;
+
+  -- 가족 비밀번호가 설정돼 있으면 검증
+  select join_pass_hash into h from public.bl_family where id = fam;
+  if h is not null then
+    if coalesce(p_pass, '') = '' or crypt(p_pass, h) <> h then
+      raise exception 'wrong_password';
+    end if;
+  end if;
+
+  -- 합류(미사용 초대 행 claim → 없으면 새 멤버 행)
+  update public.bl_family_member
+     set uid = me, joined_at = now(), display_name = coalesce(nullif(p_name, ''), display_name)
+   where invite_code = p_code and uid is null;
+  if not found then
+    insert into public.bl_family_member (family_id, uid, role, display_name, joined_at)
+    values (fam, me, 'grandparent', coalesce(nullif(p_name, ''), '가족'), now());
+  end if;
+  return fam;
+end;
+$$;
+grant execute on function public.bl_claim_invite(text, text, text) to anon, authenticated;

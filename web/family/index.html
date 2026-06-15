@@ -93,7 +93,7 @@ const R2_PUBLIC_BASE    = "%%R2_PUBLIC_BASE%%";
 const app    = document.getElementById("app");
 const toastEl = document.getElementById("toast");
 const qs = (n) => new URLSearchParams(location.search).get(n);
-let sb, me, myName = "가족", familyId = null;
+let sb, me, myName = "가족", familyId = null, pendingPass = "", claimError = null;
 
 function toast(m){ toastEl.textContent = m; toastEl.classList.add("show");
   clearTimeout(toast._t); toast._t = setTimeout(()=>toastEl.classList.remove("show"), 2200); }
@@ -105,30 +105,35 @@ function notConfigured(){
   return SUPABASE_URL.includes("%%") || SUPABASE_ANON_KEY.includes("%%") || R2_PUBLIC_BASE.includes("%%");
 }
 
-// ───────── 입장 (익명 — 성함만, 이메일·비밀번호 없음) ─────────
-function showLogin(){
+// ───────── 입장 (익명 — 성함 + 가족 비밀번호) ─────────
+function showLogin(err){
   const hasInvite = !!qs("invite");
   app.innerHTML = `<div class="login">
     <h1>우리 아이 소식 보기</h1>
-    <p>성함만 적으면 바로 들어가요.<br>이메일도 비밀번호도 없어요.</p>
-    <input id="name" placeholder="성함 (예: 외할머니)" autocomplete="name">
+    <p>성함과 비밀번호만 적으면 바로 들어가요.<br>가입·이메일 없어요.</p>
+    <input id="name" placeholder="성함 (예: 외할머니)" autocomplete="name" value="${esc(localStorage.getItem('bl_name')||'')}">
+    <input id="pass" type="password" inputmode="numeric" placeholder="비밀번호 (숫자 4~10자리)" autocomplete="off">
     <button class="btn btn-go" id="go">들어가기</button>
+    ${err ? `<p class="note" style="color:#C0392B;font-weight:700">${esc(err)}</p>` : ""}
     <p class="note">${hasInvite
-      ? "부모님이 보내준 초대 링크로 들어오셨어요.<br>성함을 적고 들어가면 사진을 보고 ❤️·댓글을 남길 수 있어요."
+      ? "부모님이 보내준 초대 링크로 들어오셨어요.<br>성함·비밀번호를 적으면 사진을 보고 ❤️·댓글을 남길 수 있어요."
       : "부모님께 받은 ‘가족 초대 링크’로 들어와 주세요."}</p>
   </div>`;
   document.getElementById("go").onclick = enter;
-  document.getElementById("name").addEventListener("keydown", e=>{ if(e.key==="Enter") enter(); });
+  document.getElementById("pass").addEventListener("keydown", e=>{ if(e.key==="Enter") enter(); });
 }
 
 async function enter(){
   const name = document.getElementById("name").value.trim();
+  const pass = document.getElementById("pass").value;
   if (!name){ toast("성함을 입력해 주세요"); return; }
-  localStorage.setItem("bl_name", name); myName = name;
+  localStorage.setItem("bl_name", name); myName = name; pendingPass = pass;
   document.getElementById("go").textContent = "들어가는 중…";
-  const { data, error } = await sb.auth.signInAnonymously();
-  if (error){ toast("입장 실패: " + (error.message || "익명 로그인이 꺼져 있어요")); showLogin(); return; }
-  me = data.user.id;
+  if (!me){
+    const { data, error } = await sb.auth.signInAnonymously();
+    if (error){ toast("입장 실패: " + (error.message || "익명 로그인이 꺼져 있어요")); showLogin(); return; }
+    me = data.user.id;
+  }
   await start();
 }
 
@@ -136,9 +141,16 @@ async function enter(){
 async function resolveFamily(){
   const invite = qs("invite");
   const nm = (myName && myName !== "가족") ? myName : null;
+  claimError = null;
   if (invite){
-    const { data, error } = await sb.rpc("bl_claim_invite", { p_code: invite, p_name: nm });
-    if (!error && data) familyId = data;
+    const { data, error } = await sb.rpc("bl_claim_invite",
+      { p_code: invite, p_name: nm, p_pass: pendingPass || "" });
+    if (error){
+      const m = error.message || "";
+      if (m.includes("wrong_password")) claimError = "비밀번호가 맞지 않아요. 다시 확인해 주세요.";
+      else if (m.includes("invalid invite")) claimError = "초대 링크가 올바르지 않아요.";
+      else claimError = "들어오지 못했어요. 잠시 후 다시 시도해 주세요.";
+    } else if (data) familyId = data;
   }
   if (!familyId){
     const { data } = await sb.from("bl_family_member")
@@ -243,6 +255,7 @@ async function start(){
   setState("불러오는 중…");
   const fam = await resolveFamily();
   if (!fam){
+    if (claimError && qs("invite")){ showLogin(claimError); return; }   // 비번 틀림 등 → 입력 화면 + 안내
     app.innerHTML = `<div class="state">초대 링크로 들어와 주세요.\n부모님께 ‘가족 초대 링크’를 받아 그 링크로 다시 열어주세요.</div>`;
     return;
   }
