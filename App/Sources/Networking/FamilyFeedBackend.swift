@@ -82,6 +82,7 @@ enum FamilyFeedBackend {
                 "family_id": famId, "uid": uid, "role": "parent",
                 "display_name": String(nickname.prefix(40)),
                 "joined_at": ISO8601DateFormatter().string(from: Date()),
+                "approved": true,   // 주인은 자동 승인(승인 인원 카운트에 포함)
             ])
             _ = try? await URLSession.shared.data(for: mreq)
         }
@@ -165,15 +166,54 @@ enum FamilyFeedBackend {
 
     // MARK: - 가족 관리 (주인 — 멤버 조회/삭제)
 
-    /// 가족 멤버 목록(가입순). 실패/디코드 실패 시 [].
+    /// 가족 멤버 목록(가입순) — 승인된 멤버만. 실패/디코드 실패 시 [].
     static func fetchMembers(familyId: String) async -> [BLFamilyMember] {
         // uid가 있는 '실제 합류한' 멤버만 — uid=null(미사용 초대 코드)은 제외(이름 '가족'으로 떠 혼란).
-        let path = "/bl_family_member?family_id=eq.\(familyId)&uid=not.is.null&select=*&order=joined_at.asc"
+        // approved=true: 합류 승인된 멤버만(대기 중은 fetchPendingMembers로 따로 본다).
+        let path = "/bl_family_member?family_id=eq.\(familyId)&uid=not.is.null&approved=eq.true&select=*&order=joined_at.asc"
         guard let req = await rest(path, method: "GET"),
               let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
               let members = decode(data, [BLFamilyMember].self) else { return [] }
         return members
+    }
+
+    /// 승인 대기 중인 멤버(approved=false) — 주인의 승인/거절 대상. 실패 시 [].
+    static func fetchPendingMembers(familyId: String) async -> [BLFamilyMember] {
+        let path = "/bl_family_member?family_id=eq.\(familyId)&approved=eq.false&uid=not.is.null&select=*&order=joined_at.asc"
+        guard let req = await rest(path, method: "GET"),
+              let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let members = decode(data, [BLFamilyMember].self) else { return [] }
+        return members
+    }
+
+    /// 멤버 승인(주인) — 서버 RPC가 등급별 인원 상한(무료2/Pro8)을 검증. 2xx면 true.
+    /// 상한 초과(family_full) 또는 그 외 실패 시 lastError 설정 후 false.
+    @discardableResult
+    static func approveMember(memberId: String) async -> Bool {
+        lastError = nil
+        guard var req = await rest("/rpc/bl_approve_member", method: "POST") else { lastError = "서버 미구성"; return false }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_member": memberId])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse else { lastError = "승인 실패"; return false }
+        guard (200...299).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            lastError = body.contains("family_full") ? "가족 인원이 가득 찼어요 (최대 8명)." : "승인 실패"
+            return false
+        }
+        return true
+    }
+
+    /// 내 멤버 행 조회(내 승인 상태 확인용) — 대기 멤버도 본인 행은 RLS로 항상 보임. 없으면 nil.
+    static func myMembership(familyId: String) async -> BLFamilyMember? {
+        guard let uid = await AuthStore.shared.userId else { return nil }
+        let path = "/bl_family_member?family_id=eq.\(familyId)&uid=eq.\(uid)&select=*&limit=1"
+        guard let req = await rest(path, method: "GET"),
+              let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let members = decode(data, [BLFamilyMember].self) else { return nil }
+        return members.first
     }
 
     /// 멤버 내보내기(주인) — return=representation으로 실제 삭제된 행을 확인. 비어있으면 실패(권한·없음).
@@ -267,6 +307,7 @@ enum FamilyFeedBackend {
                 "family_id": familyId, "uid": uid, "role": "parent",
                 "display_name": String(nickname.prefix(40)),
                 "joined_at": ISO8601DateFormatter().string(from: Date()),
+                "approved": true,   // 소유자 본인 보장 — 자동 승인
             ])
             _ = try? await URLSession.shared.data(for: mreq)
         }

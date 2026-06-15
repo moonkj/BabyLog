@@ -94,6 +94,7 @@ const app    = document.getElementById("app");
 const toastEl = document.getElementById("toast");
 const qs = (n) => new URLSearchParams(location.search).get(n);
 let sb, me, myName = "가족", familyId = null, pendingPass = "", claimError = null;
+let approvalPoll = null;   // 승인 대기 폴링 핸들(중복 방지)
 
 function toast(m){ toastEl.textContent = m; toastEl.classList.add("show");
   clearTimeout(toast._t); toast._t = setTimeout(()=>toastEl.classList.remove("show"), 2200); }
@@ -266,15 +267,45 @@ async function start(){
     app.innerHTML = `<div class="state">초대 링크로 들어와 주세요.\n부모님께 ‘가족 초대 링크’를 받아 그 링크로 다시 열어주세요.</div>`;
     return;
   }
+  // 합류 승인 확인 — 미승인이면 RLS상 피드가 안 보이므로 '승인 대기' 화면
+  const approved = await isApproved();
+  if (!approved){ showPending(); return; }
+
+  showFeedHeader();
+  await loadFeed();
+  setInterval(()=>{ if(document.visibilityState==="visible") loadFeed(); }, 60000);
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") loadFeed(); });
+}
+
+// 내 멤버 행의 승인 상태 조회(미승인이어도 본인 행은 RLS상 조회 가능)
+async function isApproved(){
+  const { data } = await sb.from("bl_family_member")
+    .select("approved").eq("uid", me).eq("family_id", familyId).limit(1);
+  return data && data[0]?.approved === true;
+}
+
+function showFeedHeader(){
   document.querySelector("header")?.remove();
   document.body.insertAdjacentHTML("afterbegin",
     `<header><div class="t">베이비로그<small>우리 아이 가족 보기</small></div>
        <button class="btn btn-ghost" id="logout">나가기</button></header>`);
   document.getElementById("logout").onclick = async()=>{ await sb.auth.signOut(); location.href = location.pathname + location.search; };
+}
 
-  await loadFeed();
-  setInterval(()=>{ if(document.visibilityState==="visible") loadFeed(); }, 60000);
-  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") loadFeed(); });
+// 승인 대기 화면 + 20초 폴링/visibilitychange 재확인 → 승인되면 자동 전환
+function showPending(){
+  document.querySelector("header")?.remove();
+  setState("✋ 승인 대기 중이에요\n\n가족 주인이 승인하면 우리 아이 사진을 볼 수 있어요.\n부모님께 승인을 부탁해 주세요.");
+  const recheck = async()=>{
+    if (await isApproved()){
+      if (approvalPoll){ clearInterval(approvalPoll); approvalPoll = null; }
+      showFeedHeader();
+      await loadFeed();
+    }
+  };
+  if (approvalPoll){ clearInterval(approvalPoll); approvalPoll = null; }
+  approvalPoll = setInterval(recheck, 20000);
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") recheck(); });
 }
 
 boot();

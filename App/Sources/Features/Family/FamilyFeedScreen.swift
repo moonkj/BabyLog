@@ -22,6 +22,8 @@ struct FamilyFeedScreen: View {
     @State private var members: [BLFamilyMember] = []  // 가족 관리(주인) 멤버 목록
     @State private var loadingMembers = false
     @State private var pendingRemove: BLFamilyMember?  // 멤버 내보내기 확인
+    @State private var pendingMembers: [BLFamilyMember] = []  // 승인 대기(주인) 목록
+    @State private var myApproved: Bool? = nil          // 비주인 본인 승인 상태(nil=확인 전)
 
     private var myUid: String? { auth.userId }
     /// R2 공개 베이스(앱이 키로 이미지 URL 구성). 미설정이면 플레이스홀더.
@@ -91,11 +93,14 @@ struct FamilyFeedScreen: View {
         } else if family == nil {
             createFamilyCard
             joinFamilyCard       // 초대코드+비번으로 기존 가족 합류
+        } else if family?.ownerUid != myUid && myApproved == false {
+            // 비주인 + 미승인(대기) — 피드를 숨기고 승인 대기 안내만 표시.
+            waitingApprovalCard
         } else {
             if family?.ownerUid == myUid {
-                manageCard        // 주인: 가족 관리(멤버 목록·내보내기·초대)
+                manageCard        // 주인: 가족 관리(승인 대기·멤버 목록·내보내기·초대)
             } else {
-                inviteRow         // 멤버: 조부모 초대 링크만
+                inviteRow         // 승인된 멤버: 조부모 초대 링크만
             }
             if posts.isEmpty {
                 BLEmptyState(icon: "photo.on.rectangle.angled", title: "기록하면 여기 모여요",
@@ -134,6 +139,26 @@ struct FamilyFeedScreen: View {
         .buttonStyle(LiquidPressStyle(scale: 0.98))
         .disabled(creatingInvite)
         .accessibilityLabel("조부모님 초대 링크 만들기")
+    }
+
+    /// 승인 대기 안내(비주인·미승인) — 피드 대신 표시. 당겨서 새로고침으로 재확인.
+    private var waitingApprovalCard: some View {
+        BLCard {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                HStack(spacing: Spacing.s2) {
+                    Image(systemName: "hourglass")
+                        .font(.system(size: 22, weight: .semibold)).foregroundStyle(AppColors.primary)
+                        .frame(width: 40, height: 40)
+                        .background(AppColors.primarySoft, in: Circle())
+                    Text("승인 대기 중이에요")
+                        .font(.system(size: 16, weight: .bold)).foregroundStyle(AppColors.ink)
+                }
+                Text("가족 주인이 승인하면 사진을 볼 수 있어요. 주인에게 승인을 부탁해 주세요.")
+                    .font(.system(size: 13)).foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
+                Text("당겨서 새로고침하면 다시 확인해요.")
+                    .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+            }
+        }
     }
 
     /// 초대 링크 — 배포한 가족 웹(FAMILY_WEB_BASE) + ?invite=코드.
@@ -185,11 +210,22 @@ struct FamilyFeedScreen: View {
         }
     }
 
-    /// 가족 관리(주인) — 멤버 목록·내보내기 + 조부모 초대.
+    /// 가족 관리(주인) — 승인 대기·멤버 목록·내보내기 + 조부모 초대.
     private var manageCard: some View {
         BLCard {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Text("가족 관리").font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                if !pendingMembers.isEmpty {
+                    Text("승인 대기 \(pendingMembers.count)")
+                        .font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.primary)
+                    VStack(spacing: 0) {
+                        ForEach(Array(pendingMembers.enumerated()), id: \.element.id) { idx, m in
+                            if idx > 0 { Divider() }
+                            pendingRow(m)
+                        }
+                    }
+                    Divider().padding(.vertical, 2)
+                }
                 if loadingMembers {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, Spacing.s2)
                 } else if members.isEmpty {
@@ -206,6 +242,31 @@ struct FamilyFeedScreen: View {
             }
         }
         .task { await loadMembers() }
+    }
+
+    /// 승인 대기 한 행 — 이름·역할 + [승인]·[거절]. 승인=approveMember, 거절=removeMember.
+    private func pendingRow(_ m: BLFamilyMember) -> some View {
+        HStack(spacing: Spacing.s2) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(m.displayName).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink)
+                Text(roleLabel(m.role)).font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+            }
+            Spacer()
+            Button { Task { await approveMember(m) } } label: {
+                Text("승인").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, Spacing.s3).frame(height: 34)
+                    .background(AppColors.primary, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            }.buttonStyle(LiquidPressStyle(scale: 0.97))
+            .disabled(busy)
+            .accessibilityLabel("\(m.displayName) 승인")
+            Button { pendingRemove = m } label: {
+                Text("거절").font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.danger)
+                    .padding(.horizontal, Spacing.s3).frame(height: 34)
+                    .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            }.buttonStyle(LiquidPressStyle(scale: 0.97))
+            .accessibilityLabel("\(m.displayName) 거절")
+        }
+        .padding(.vertical, Spacing.s2)
     }
 
     /// 멤버 한 행 — 이름·역할 + (주인 본인·자기 자신 제외) 내보내기.
@@ -324,18 +385,38 @@ struct FamilyFeedScreen: View {
         loading = true
         family = await FamilyFeedBackend.myFamily()
         if let f = family {
-            posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
-            if f.ownerUid == myUid { await loadMembers() }
+            if f.ownerUid == myUid {
+                // 주인: 멤버·승인 대기 + 피드.
+                myApproved = true
+                await loadMembers()
+                posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
+            } else {
+                // 비주인: 내 승인 상태 먼저 확인. 승인된 경우만 피드 로드.
+                let approved = (await FamilyFeedBackend.myMembership(familyId: f.id))?.approved ?? false
+                myApproved = approved
+                posts = approved ? await FamilyFeedBackend.fetchFeed(familyId: f.id) : []
+            }
         }
         loading = false
     }
 
-    /// 가족 관리(주인) 멤버 목록 로드.
+    /// 가족 관리(주인) 멤버 목록 + 승인 대기 로드.
     private func loadMembers() async {
         guard let f = family else { return }
         loadingMembers = true
         members = await FamilyFeedBackend.fetchMembers(familyId: f.id)
+        pendingMembers = await FamilyFeedBackend.fetchPendingMembers(familyId: f.id)
         loadingMembers = false
+    }
+
+    /// 멤버 승인(주인) — 성공 시 대기·멤버 목록 재로딩, 실패 시 사유 알림(인원 초과 등).
+    private func approveMember(_ m: BLFamilyMember) async {
+        busy = true; defer { busy = false }
+        if await FamilyFeedBackend.approveMember(memberId: m.id) {
+            await loadMembers()
+        } else {
+            errorMsg = FamilyFeedBackend.lastError ?? "승인하지 못했어요. 잠시 후 다시 시도해 주세요."
+        }
     }
 
     /// 멤버 내보내기(주인) — 성공 시 목록 갱신.

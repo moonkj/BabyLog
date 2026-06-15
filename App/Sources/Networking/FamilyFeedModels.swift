@@ -17,8 +17,20 @@ struct BLFamilyMember: Identifiable, Codable, Equatable {
     let uid: String?
     let role: String          // parent | grandparent
     let displayName: String
+    let approved: Bool        // 합류 승인 여부(주인=true, 신규 합류=false=대기)
     enum CodingKeys: String, CodingKey {
-        case id, familyId = "family_id", uid, role, displayName = "display_name"
+        case id, familyId = "family_id", uid, role, displayName = "display_name", approved
+    }
+
+    // 서버 응답이 일부 필드를 빠뜨려도 안전하게(approved 기본 false=대기).
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id          = try c.decode(String.self, forKey: .id)
+        familyId    = try c.decode(String.self, forKey: .familyId)
+        uid         = try? c.decodeIfPresent(String.self, forKey: .uid)
+        role        = (try? c.decodeIfPresent(String.self, forKey: .role)) ?? "parent"
+        displayName = (try? c.decodeIfPresent(String.self, forKey: .displayName)) ?? "가족"
+        approved    = (try? c.decodeIfPresent(Bool.self, forKey: .approved)) ?? false
     }
 }
 
