@@ -95,9 +95,7 @@ struct PregnancyHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
             if activePregnancy == nil {
-                // 임신 미등록·멈춤 상태 — 헤더가 없으므로 상단에 모드 전환 칩(육아 복귀)
-                ModeToggleChip()
-                    .padding(.horizontal, Spacing.s5).padding(.top, Spacing.s2).padding(.bottom, Spacing.s2)
+                // 육아 복귀(모드 전환)는 우하단 FAB 메뉴로 이동.
                 // 민감영역: 일시중단/상실 임신이 있으면 등록 권유 대신 따뜻한 안내
                 if pausedOrLossPregnancy != nil {
                     pregnancyPausedCard
@@ -233,8 +231,6 @@ struct PregnancyHomeView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(fetusNickname)를 기다리며. 탭하면 임신 정보 수정")
                 .accessibilityAddTraits(.isButton)
-
-                ModeToggleChip()
             }
         }
         .padding(.top, Spacing.s5)

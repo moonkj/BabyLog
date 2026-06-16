@@ -84,9 +84,10 @@ struct AddChildSheet: View {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
                         Text("생년월일").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
                         DatePicker("", selection: $birthDate, in: ...Date(), displayedComponents: .date)
-                            .datePickerStyle(.graphical)
+                            .datePickerStyle(.wheel)   // 년·월·일 한 화면 — 접었다 펴는 단계 없이 바로 일 선택
                             .tint(AppColors.primary)
                             .labelsHidden()
+                            .frame(maxWidth: .infinity)
                     }
 
                     // 성별 (선택)

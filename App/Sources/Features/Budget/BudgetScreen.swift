@@ -192,7 +192,7 @@ struct BudgetScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    BLScreenHeader(title: "가계부", eyebrow: "지출 추이와 받을 지원금")
+                    BLScreenHeader(title: "가계부", eyebrow: "지출 추이와 받을 지원금", titleIcon: .budget)
                     VStack(alignment: .leading, spacing: Spacing.s6) {
 
                         // 1. 지출 추이 (기간 세그먼트 + 막대 차트 + 총액)

@@ -140,7 +140,7 @@ struct ProfileScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                BLScreenHeader(title: "내 정보") {
+                BLScreenHeader(title: "내 정보", titleIcon: .profile) {
                     Button { profileSheet = .settings } label: {
                         Image(systemName: "gearshape.fill")
                             .font(.system(size: 17, weight: .medium))
@@ -218,7 +218,9 @@ struct ProfileScreen: View {
     private var subscriptionCard: some View {
         let pro = store.isPro
         Button {
-            if pro { showManageSubscription = true } else { profileSheet = .pro }
+            // 실제 App Store 구독이 있을 때만 '구독 관리' 시트(없으면 빈 흰 화면이 뜬다).
+            // 운영자 로컬 Pro(devProOverride)·미구독 상태에선 구독 안내(ProUpsellSheet)로.
+            if store.subscriptionActive { showManageSubscription = true } else { profileSheet = .pro }
         } label: {
             HStack(spacing: Spacing.s3) {
                 ZStack {

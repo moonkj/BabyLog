@@ -170,15 +170,8 @@ create policy bl_comment_delete on public.bl_comment for delete using (uid = pub
 -- ⚠️ 미디어 업로드는 Edge Function(media-upload-url)이 is_pro + 멤버십 확인 후
 --    R2 presigned PUT URL을 발급한다. Postgres엔 키만 기록(바이트 미경유).
 
--- ════════════════ ⚠️ 개발 전용 (출시 전 반드시 삭제) ════════════════
--- 로컬 Pro 토글 검증용 — 호출자 본인(bl_owner_id)의 bl_profile.is_pro를 설정.
--- 정상 경로는 StoreKit 영수증 검증(verify-subscription, service_role)만 is_pro를 쓴다.
--- 이 함수는 누구나 호출해 Pro를 위조할 수 있으므로 출시 전 DROP 한다.
-create or replace function public.bl_dev_set_pro(p_on boolean)
-returns void language sql security definer as $$
-  insert into public.bl_profile (uid, is_pro, updated_at)
-  values (public.bl_owner_id(), p_on, now())
-  on conflict (uid) do update set is_pro = excluded.is_pro, updated_at = now();
-$$;
-grant execute on function public.bl_dev_set_pro(boolean) to anon, authenticated;
--- 출시 시: drop function if exists public.bl_dev_set_pro(boolean);
+-- ════════════════ (제거됨) 개발 전용 bl_dev_set_pro ════════════════
+-- 누구나 호출해 무료로 Pro를 위조할 수 있던 백도어 — 소스에서 영구 삭제.
+-- 클라 로컬 Pro 검증은 devProOverride(UserDefaults, 서버 미반영)로 대체됨.
+-- 운영 DB에서도 제거: drop function if exists public.bl_dev_set_pro(boolean);
+-- (schema_launch_security.sql가 drop을 멱등 보장)

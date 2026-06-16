@@ -173,7 +173,9 @@ struct MainTabView: View {
 
             // 빠른 기록 FAB (홈·기록) — 동네 탭은 팔기/모임 만들기 버튼이 있어 제외
             if tab == .home || tab == .record {
-                QuickRecordFAB(mode: mode, suppressTap: fabSuppressTap, onQuickRecord: {
+                QuickRecordFAB(mode: mode, suppressTap: fabSuppressTap,
+                               onToggleMode: { withAnimation(.easeOut(duration: 0.25)) { mode = (mode == .baby ? .pregnancy : .baby) } },
+                               onQuickRecord: {
                     Haptics.light()
                     // 아이/임신 미등록이면 빠른기록 대신 등록부터
                     if mode == .baby && store.children.isEmpty {
@@ -247,35 +249,7 @@ struct MainTabView: View {
 
 }
 
-/// 임신/육아 모드 전환 칩 — 각 홈(육아·임신) 상단 타이틀 아래에 배치.
-/// `bl_app_mode`를 @AppStorage로 직접 공유하므로 MainTabView와 별도 주입 없이 동기화된다.
-struct ModeToggleChip: View {
-    @AppStorage("bl_app_mode") private var mode: AppMode = .baby
-
-    var body: some View {
-        Button {
-            Haptics.selection()
-            withAnimation(.easeOut(duration: 0.25)) { mode = (mode == .baby ? .pregnancy : .baby) }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: mode == .baby ? "figure.and.child.holdinghands" : "figure.2.and.child.holdinghands")
-                    .font(.system(size: 12, weight: .bold))
-                Text(mode == .baby ? "육아" : "임신")
-                    .font(.system(size: 13, weight: .bold))
-                Image(systemName: "arrow.left.arrow.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .opacity(0.55)
-            }
-            .foregroundStyle(mode == .baby ? AppColors.primary : AppColors.pregnancyPink)
-            .padding(.horizontal, 12).frame(height: 34)
-            .liquidGlass(cornerRadius: Radius.pill)
-            // 시각 캡슐은 34pt 유지하되 히트영역만 44pt로 확대(아이 안고 엄지 조작 오조작 방지).
-            .contentShape(Rectangle())
-            .frame(minHeight: 44, alignment: .leading)
-        }
-        .accessibilityLabel(mode == .baby ? "육아 모드, 탭하면 임신 모드로 전환" : "임신 모드, 탭하면 육아 모드로 전환")
-    }
-}
+// (ModeToggleChip 제거 — 육아/임신 전환은 빠른기록 FAB 메뉴로 이동)
 
 // MARK: - 야간 디밍 (시트용)
 // SwiftUI .sheet은 별도 레이어로 떠서 루트의 nightDimOverlay를 벗어난다.

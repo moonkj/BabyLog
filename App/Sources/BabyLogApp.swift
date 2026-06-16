@@ -35,6 +35,7 @@ struct BabyLogApp: App {
                 .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 .task {
                     store.enableAutoPersist()
+                    KeyboardDismissTap.shared.install()   // 전역: 화면 탭 시 키보드 내림(검색·입력 공통)
                     // StoreKit 구독 — 엔타이틀먼트를 클라 게이트(isPro)에 브리지하고 서버 등급도 동기화.
                     StoreManager.shared.onEntitlementChange = { active in store.setSubscriptionActive(active) }
                     StoreManager.shared.start()

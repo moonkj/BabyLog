@@ -206,11 +206,13 @@ struct BirthTransitionView: View {
                                 in: ...Date(),
                                 displayedComponents: [.date]
                             )
-                            .datePickerStyle(.graphical)
+                            .datePickerStyle(.wheel)   // 년·월·일 한 화면 — 바로 일 선택
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity)
                             .tint(AppColors.pregnancyPink)
                             .padding(.top, Spacing.s2)
                             .transition(.move(edge: .top).combined(with: .opacity))
-                            .accessibilityLabel("달력에서 생년월일을 선택하세요")
+                            .accessibilityLabel("생년월일을 선택하세요")
                         }
                     }
                 }

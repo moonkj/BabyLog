@@ -409,6 +409,7 @@ struct MarketScreen: View {
                 }
             }
         }
+        .scrollDismissesKeyboard(.immediately)   // 검색 후 목록 스크롤 시 키보드 내림
         .background(AppColors.canvas.ignoresSafeArea())
         .refreshable { await loadItems() }
         // 공용 글래스 FAB — 팔기 (로그인 필수: 신상 특정)
@@ -464,6 +465,7 @@ struct MarketScreen: View {
                 HStack(spacing: Spacing.s3) {
                     ForEach(mkNeedSoonItems(ageMonths: age)) { item in
                         MkNeedSoonCard(item: item, reason: item.reason(ageMonths: age)) {
+                            hideKeyboard()
                             Haptics.selection()
                             withAnimation(.easeInOut(duration: 0.2)) { selectedCategory = item.category }
                         }
@@ -489,6 +491,7 @@ struct MarketScreen: View {
     private func marketFilterChip(label: String, icon: String? = nil, on: Bool,
                                   tint: Color, tintBg: Color, action: @escaping () -> Void) -> some View {
         Button {
+            hideKeyboard()   // 정렬·필터 탭 시 검색 키보드 내림
             Haptics.selection()
             withAnimation(.easeInOut(duration: 0.2)) { action() }
         } label: {
@@ -537,6 +540,7 @@ struct MarketScreen: View {
             HStack(spacing: Spacing.s2) {
                 ForEach(MarketCategory.allCases, id: \.self) { cat in
                     Button {
+                        hideKeyboard()   // 카테고리 탭 시 검색 키보드 내림
                         selectedCategory = cat
                     } label: {
                         HStack(spacing: 5) {

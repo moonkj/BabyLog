@@ -12,7 +12,9 @@ struct ProUpsellSheet: View {
     @ObservedObject private var sk = StoreManager.shared
     @ObservedObject private var auth = AuthStore.shared
     @State private var notice: String?
-    @State private var showLogin = false
+    // 단일 시트 라우팅(로그인/개인정보처리방침) — 한 뷰에 .sheet 둘 이상이면 누락 위험.
+    @State private var modal: Modal?
+    private enum Modal: String, Identifiable { case login, privacy; var id: String { rawValue } }
 
     var body: some View {
         ScrollView {
@@ -28,8 +30,22 @@ struct ProUpsellSheet: View {
         .presentationDetents([.large])
         .task { if !sk.loaded { await sk.loadProducts() } }
         .onChange(of: store.isPro) { _, pro in if pro { Haptics.success(); dismiss() } }
-        .sheet(isPresented: $showLogin) {
-            AppleLoginSheet(message: "구독은 로그인 후 이용할 수 있어요.") {}
+        .sheet(item: $modal) { m in
+            switch m {
+            case .login:
+                AppleLoginSheet(message: "구독은 로그인 후 이용할 수 있어요.") {}
+            case .privacy:
+                NavigationStack {
+                    PrivacyPolicyScreen()
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("닫기") { modal = nil }
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(AppColors.ink2)
+                            }
+                        }
+                }
+            }
         }
         .alert("구독", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
             Button("확인", role: .cancel) {}
@@ -117,12 +133,13 @@ struct ProUpsellSheet: View {
             }
             .disabled(sk.purchasing)
 
-            // App Store 요건 — 약관 링크(자동구독 고지는 위에 명시).
-            Link("이용약관(EULA)", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-                .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(AppColors.ink3)
-            Text("개인정보 처리는 설정 > 법적 고지 및 약관에서 확인할 수 있어요.")
-                .font(.system(size: 11)).foregroundStyle(AppColors.ink3)
-                .multilineTextAlignment(.center)
+            // App Store 요건(3.1.2) — 자동구독 화면에 이용약관·개인정보처리방침 '탭 가능한' 링크.
+            HStack(spacing: Spacing.s3) {
+                Link("이용약관(EULA)", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                Text("·").foregroundStyle(AppColors.ink3)
+                Button("개인정보처리방침") { modal = .privacy }
+            }
+            .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(AppColors.ink3)
 
             Button("나중에") { dismiss() }
                 .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.ink3).frame(height: 36)
@@ -142,7 +159,7 @@ struct ProUpsellSheet: View {
         Button {
             // 로그인 필수 — appAccountToken(uid) 바인딩이 있어야 서버가 구독을 인정한다.
             // 비로그인 구매는 서버 검증이 영구 실패하므로 먼저 로그인을 받는다.
-            guard auth.userId != nil else { showLogin = true; return }
+            guard auth.userId != nil else { modal = .login; return }
             guard let product else { notice = "지금은 구독을 시작할 수 없어요. 잠시 후 다시 시도해 주세요."; return }
             Task {
                 let ok = await sk.purchase(product)

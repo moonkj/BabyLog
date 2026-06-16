@@ -91,10 +91,11 @@ struct AddPregnancySheet: View {
                     // 출산 예정일
                     VStack(alignment: .leading, spacing: Spacing.s2) {
                         Text("출산 예정일").font(AppFont.subhead).foregroundStyle(AppColors.ink2)
-                        DatePicker("", selection: $edd, displayedComponents: .date)
-                            .datePickerStyle(.graphical)
+                        DatePicker("", selection: $edd, in: Date()..., displayedComponents: .date)
+                            .datePickerStyle(.wheel)   // 년·월·일 한 화면 — 바로 일 선택
                             .tint(AppColors.pregnancyPink)
                             .labelsHidden()
+                            .frame(maxWidth: .infinity)
                             .padding(.horizontal, Spacing.s2)
                             .padding(.vertical, Spacing.s1)
                             .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
@@ -113,9 +114,10 @@ struct AddPregnancySheet: View {
                         .tint(AppColors.pregnancyPink)
                         if useLMP {
                             DatePicker("", selection: $lmp, in: ...Date(), displayedComponents: .date)
-                                .datePickerStyle(.graphical)
+                                .datePickerStyle(.wheel)   // 년·월·일 한 화면 — 바로 일 선택
                                 .tint(AppColors.pregnancyPink)
                                 .labelsHidden()
+                                .frame(maxWidth: .infinity)
                                 .padding(.horizontal, Spacing.s2)
                                 .padding(.vertical, Spacing.s1)
                                 .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))

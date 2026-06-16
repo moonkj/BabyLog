@@ -9,7 +9,7 @@ settings:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: "QN975MTM7H"
     CODE_SIGN_STYLE: Automatic
     TARGETED_DEVICE_FAMILY: "1"
 targets:
@@ -20,6 +20,9 @@ targets:
     sources:
       - App/Sources
       - App/Resources/Assets.xcassets
+      # 개인정보 매니페스트(required-reason API 신고) — App Store 제출 필수.
+      - path: App/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
       # 외부 API 키(깃 제외). 없으면 자동 Mock 폴백 — fresh checkout/CI 대비 optional.
       - path: App/Resources/Secrets.plist
         optional: true

@@ -974,6 +974,7 @@ final class AppStore: ObservableObject {
             bus.publish(.milestoneAchieved(childId: childId, milestone: milestone))
         }
         refreshBadgeAwards()
+        persistNow()   // 사용자 명시 저장(2탭 기록) — 디바운스 대기 중 종료에도 유실 방지
         return entry.id
     }
 
@@ -1003,6 +1004,7 @@ final class AppStore: ObservableObject {
         growthRecords.append(record)
         bus.publish(.recordSaved(childId: childId))
         refreshBadgeAwards()
+        persistNow()
     }
 
     // MARK: - 가계부 CRUD
@@ -1016,6 +1018,7 @@ final class AppStore: ObservableObject {
                               memo: (trimmed?.isEmpty ?? true) ? nil : trimmed,
                               autoCollected: autoCollected)
         expenses.append(expense)
+        persistNow()
     }
 
     /// 지출 항목을 수정한다(금액·카테고리·날짜·메모). 0 이하 금액 무시.
@@ -1075,6 +1078,7 @@ final class AppStore: ObservableObject {
         guard kg > 0 else { return }
         pregnancyLogs.append(PregnancyLog(pregnancyId: pregnancyId, date: date,
                                           kind: .weight, value: kg))
+        persistNow()
     }
 
     /// 특정 임신의 체중 기록을 날짜 오름차순으로 반환한다.
@@ -1088,6 +1092,7 @@ final class AppStore: ObservableObject {
     func addBellyPhoto(pregnancyId: UUID, week: Int, photoRef: String) {
         pregnancyLogs.append(PregnancyLog(pregnancyId: pregnancyId, date: Date(),
                                           kind: .belly, value: Double(week), photoRef: photoRef))
+        persistNow()
     }
 
     /// 임신 메모를 추가한다(빠른기록 임신 모드 — 데이터 손실 방지).
@@ -1096,6 +1101,7 @@ final class AppStore: ObservableObject {
         guard !trimmed.isEmpty else { return }
         pregnancyLogs.append(PregnancyLog(pregnancyId: pregnancyId, date: Date(),
                                           kind: .memo, value: 0, note: trimmed))
+        persistNow()
     }
 
     /// 특정 임신의 메모를 최신순으로 반환한다.

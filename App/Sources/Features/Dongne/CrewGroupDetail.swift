@@ -235,6 +235,8 @@ struct CrewGroupChatSheet: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var messages: [ChatMessage] = []
     @State private var text = ""
+    @State private var sendFailed = false                 // 전송 실패 배너
+    @State private var lastFailedText = ""                 // 실패로 복원한 값(복원이 배너를 즉시 못 끄게)
     @State private var reportTarget: ChatMessage? = nil   // 신고 대상(작성자명 탭)
     @State private var reportDone = false
 
@@ -249,11 +251,15 @@ struct CrewGroupChatSheet: View {
     private func send() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        text = ""; Haptics.light()
+        text = ""; sendFailed = false; Haptics.light()
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         Task {
-            if await CrewBackend.sendGroupMessage(groupId: group.id, body: t, authorName: nickname),
-               let m = await CrewBackend.fetchGroupMessages(groupId: group.id) { messages = m }
+            if await CrewBackend.sendGroupMessage(groupId: group.id, body: t, authorName: nickname) {
+                if let m = await CrewBackend.fetchGroupMessages(groupId: group.id) { messages = m }
+            } else {
+                // 전송 실패 — 입력 내용을 되돌려 다시 시도할 수 있게(유실 방지) + 배너.
+                text = t; lastFailedText = t; sendFailed = true; Haptics.warning()
+            }
         }
     }
 
@@ -282,15 +288,24 @@ struct CrewGroupChatSheet: View {
                     }
                     .padding(Spacing.s4)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .onChange(of: messages.count) { _, _ in
                     if let last = messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                 }
+            }
+
+            if sendFailed {
+                Text("전송하지 못했어요. 다시 시도해 주세요.")
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(AppColors.danger)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.s4).padding(.top, Spacing.s2)
             }
 
             HStack(spacing: Spacing.s2) {
                 TextField("메시지 입력…", text: $text)
                     .font(AppFont.body).padding(.horizontal, Spacing.s4).frame(height: 44)
                     .background(AppColors.surface2, in: Capsule())
+                    .onChange(of: text) { _, _ in if sendFailed && text != lastFailedText { sendFailed = false } }
                 Button { send() } label: {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 30)).foregroundStyle(AppColors.primary)
                 }

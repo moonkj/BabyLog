@@ -359,7 +359,7 @@ struct PregnancyRecordScreen: View {
     // MARK: - 상단 헤더 (다른 화면과 동일한 좌측 BLScreenHeader)
 
     private var pregnancyHeader: some View {
-        BLScreenHeader(title: "기록", eyebrow: "임신 기록") {
+        BLScreenHeader(title: "기록", eyebrow: "임신 기록", titleIcon: .record) {
             // .active 상태일 때만 "출산했어요" 버튼 표시 (민감영역)
             if store.activePregnancy != nil {
                 Button {
@@ -367,12 +367,16 @@ struct PregnancyRecordScreen: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "figure.and.child.holdinghands")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 13, weight: .bold))
                         Text("출산했어요")
                             .font(.system(size: 13, weight: .bold))
                     }
-                    .foregroundStyle(AppColors.pregnancyPink)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12).frame(height: 34)
+                    .background(AppColors.pregnancyPink, in: Capsule())
+                    .blShadow(.chip)
                 }
+                .buttonStyle(LiquidPressStyle(scale: 0.96))
                 .accessibilityLabel("출산 전환 시작")
                 .accessibilityHint("탭하면 아이 프로필로 전환하는 시트가 열립니다")
             }

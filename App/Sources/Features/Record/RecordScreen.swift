@@ -124,7 +124,8 @@ struct RecordScreen: View {
     private var screenHeader: some View {
         BLScreenHeader(
             title: store.selectedChild?.name ?? "기록",
-            eyebrow: store.selectedChild != nil ? "성장 기록" : "아이 성장 기록"
+            eyebrow: store.selectedChild != nil ? "성장 기록" : "아이 성장 기록",
+            titleIcon: .record
         ) {
             HStack(spacing: 8) {
                 // 가족과 사진 공유(가족 보관함) — 항상 노출(로그인/가족 상태는 화면에서 안내)

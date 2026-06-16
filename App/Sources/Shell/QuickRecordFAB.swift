@@ -6,6 +6,8 @@ struct QuickRecordFAB: View {
     var mode: AppMode
     /// 방금 드래그로 이동했으면 true — 직후 탭(메뉴 열림)을 무시한다.
     var suppressTap: Bool = false
+    /// 육아 ↔ 임신 모드 전환(제목 옆 칩에서 FAB 메뉴로 이동).
+    var onToggleMode: () -> Void = {}
     var onQuickRecord: () -> Void = {}
     @State private var open = false
 
@@ -20,6 +22,31 @@ struct QuickRecordFAB: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 12) {
             if open {
+                // 육아 ↔ 임신 전환 — 기록 액션과 구분되는 모드 전환(맨 위, 다른 틴트).
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { open = false }
+                    Haptics.selection()
+                    onToggleMode()
+                } label: {
+                    HStack(spacing: 9) {
+                        Text(mode == .pregnancy ? "육아 기록으로" : "임신 기록으로")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(AppColors.ink)
+                            .padding(.horizontal, 11).frame(height: 32)
+                            .background(AppColors.surface, in: Capsule())
+                            .blShadow(.card)
+                        Image(systemName: mode == .pregnancy ? "figure.and.child.holdinghands" : "figure.2.and.child.holdinghands")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(mode == .pregnancy ? AppColors.primary : AppColors.pregnancyPink)
+                            .frame(width: 44, height: 44)
+                            .background(AppColors.surface, in: Circle())
+                            .blShadow(.card)
+                    }
+                }
+                .buttonStyle(LiquidPressStyle())
+                .accessibilityLabel(mode == .pregnancy ? "육아 기록으로 전환" : "임신 기록으로 전환")
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+
                 ForEach(actions, id: \.label) { a in
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { open = false }

@@ -113,6 +113,7 @@ struct CrewChatSheet: View {
                     .padding(.top, 12)
                     .padding(.bottom, 16)
                 }
+                .scrollDismissesKeyboard(.interactively)   // 메시지 스크롤 시 키보드 내림
                 .onChange(of: messages.count) { _ in
                     withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) }
                 }

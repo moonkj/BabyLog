@@ -333,11 +333,11 @@ struct HomeTab: View {
             Text(greeting).font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.ink3)
             // 제목+육아칩은 서로 가운데로 묶고, 그 그룹과 우측 버튼(레이아웃·응급)만 아래라인을 맞춘다(.bottom).
             HStack(alignment: .bottom, spacing: 8) {
-                HStack(spacing: 8) {   // 제목 ↔ 육아칩: 서로 가운데 정렬(칩이 위로 안 뜨게)
+                HStack(spacing: 7) {   // 제목 ↔ 홈 애니메이션 아이콘
                     Text("베이비로그").font(.system(size: 28, weight: .heavy)).tracking(-0.4)
                         .foregroundStyle(AppColors.ink)
-                    // 임신/육아 모드 전환 — 제목 옆 칩
-                    ModeToggleChip()
+                    // 제목 옆 마이크로 모션(홈). 육아/임신 전환은 FAB 메뉴로 이동.
+                    AnimatedTitleIcon(kind: .home, size: 27)
                 }
                 Spacer(minLength: 8)
                 // 레이아웃 전환 메뉴(히어로/대시보드)

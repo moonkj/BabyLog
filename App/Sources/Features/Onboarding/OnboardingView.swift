@@ -502,7 +502,7 @@ struct OnboardingView: View {
                             displayedComponents: .date
                         )
                         .labelsHidden()
-                        .datePickerStyle(.graphical)
+                        .datePickerStyle(.wheel)   // 년·월·일 한 화면 — 바로 일 선택(접기 단계 없음)
                         .tint(AppColors.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, Spacing.s2)

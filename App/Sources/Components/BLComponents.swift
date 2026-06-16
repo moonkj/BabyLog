@@ -159,6 +159,7 @@ struct BLScreenHeader<Trailing: View>: View {
     let title: String
     var eyebrow: String? = nil
     var subtitle: String? = nil
+    var titleIcon: AnimatedTitleIcon.Kind? = nil   // 제목 옆 마이크로 모션 아이콘
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -169,11 +170,14 @@ struct BLScreenHeader<Trailing: View>: View {
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(AppColors.ink3)
                 }
-                Text(title)
-                    .font(.system(size: 28, weight: .heavy))
-                    .tracking(-0.4)
-                    .foregroundStyle(AppColors.ink)
-                    .accessibilityAddTraits(.isHeader)
+                HStack(spacing: 7) {
+                    Text(title)
+                        .font(.system(size: 28, weight: .heavy))
+                        .tracking(-0.4)
+                        .foregroundStyle(AppColors.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    if let titleIcon { AnimatedTitleIcon(kind: titleIcon, size: 27) }
+                }
                 if let subtitle {
                     Text(subtitle)
                         .font(AppFont.caption)
@@ -190,7 +194,7 @@ struct BLScreenHeader<Trailing: View>: View {
 }
 
 extension BLScreenHeader where Trailing == EmptyView {
-    init(title: String, eyebrow: String? = nil, subtitle: String? = nil) {
-        self.init(title: title, eyebrow: eyebrow, subtitle: subtitle, trailing: { EmptyView() })
+    init(title: String, eyebrow: String? = nil, subtitle: String? = nil, titleIcon: AnimatedTitleIcon.Kind? = nil) {
+        self.init(title: title, eyebrow: eyebrow, subtitle: subtitle, titleIcon: titleIcon, trailing: { EmptyView() })
     }
 }
