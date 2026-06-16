@@ -131,6 +131,19 @@ final class CloudSyncService {
         #endif
     }
 
+    /// 클라우드에 저장된 '가장 최근 백업'의 시각(복원 확인창에 표시 — 사용자가 무엇을 되살리는지 명확히).
+    /// 레코드는 1개뿐이라 이 값이 곧 최신 백업 시각. 없거나 미사용이면 nil.
+    func backupDate() async -> Date? {
+        #if BL_CLOUDKIT
+        guard await accountAvailable() else { return nil }
+        let id = CKRecord.ID(recordName: recordName)
+        guard let record = try? await database.record(for: id) else { return nil }
+        return (record["updatedAt"] as? Date) ?? record.modificationDate
+        #else
+        return nil
+        #endif
+    }
+
     // MARK: - 사진 동기화 (CKAsset)
     // 상태(JSON)만 백업하면 사진 파일이 빠져 복원 시 빈 액자가 된다 → 사진도 CloudKit에 함께 보관.
     // 사진은 파일별 레코드(BabyLogPhoto, recordName=photo-<파일명>)에 CKAsset으로 저장(증분 업로드).
@@ -138,6 +151,12 @@ final class CloudSyncService {
     private static let photoRecordType = "BabyLogPhoto"
     private static let uploadedKey = "bl_ck_uploaded_photos"   // 이미 올린 파일명(증분)
     private static let tombstoneKey = "bl_ck_deleted_photos"   // 로컬에서 지운 파일명 — CK에서도 지우고 복원 시 부활 차단
+
+    /// iCloud에 아직 안 올라간 로컬 사진·영상 수(원장 기준, 네트워크 없이 계산). 0이면 모두 백업됨.
+    nonisolated static func pendingUploadCount() -> Int {
+        let uploaded = Set(UserDefaults.standard.stringArray(forKey: uploadedKey) ?? [])
+        return PhotoStore.allPhotoFileURLs().filter { !uploaded.contains($0.lastPathComponent) }.count
+    }
 
     /// 로컬 사진 삭제 시 호출(PhotoStore.delete) — 툼스톤 기록. 다음 백업에서 CK 레코드를 지우고
     /// 복원(pullPhotos)이 되살리지 않게 한다(민감영역: 지운 사진이 부활하면 안 됨). CloudKit 미사용이어도 무해.
@@ -149,9 +168,11 @@ final class CloudSyncService {
     }
 
     /// 새 사진 파일만 CloudKit에 업로드(증분) + 툼스톤(삭제된 사진) CK 레코드 제거. best-effort.
-    func pushPhotos() async {
+    /// 반환: (이번에 올린 수, 올릴 대상이던 수, 실패 수) — 진단·표시용.
+    @discardableResult
+    func pushPhotos() async -> (uploaded: Int, pending: Int, failed: Int, error: String?) {
         #if BL_CLOUDKIT
-        guard await accountAvailable() else { return }
+        guard await accountAvailable() else { return (0, 0, 0, "iCloud 계정 사용 불가") }
         // 0) 삭제 툼스톤 처리 — CK 레코드 삭제 + 업로드 원장/툼스톤에서 제거(부활 차단).
         let tombstones = Set(UserDefaults.standard.stringArray(forKey: Self.tombstoneKey) ?? [])
         if !tombstones.isEmpty {
@@ -168,8 +189,12 @@ final class CloudSyncService {
         }
         var uploaded = Set(UserDefaults.standard.stringArray(forKey: Self.uploadedKey) ?? [])
         let pending = PhotoStore.allPhotoFileURLs().filter { !uploaded.contains($0.lastPathComponent) }
-        guard !pending.isEmpty else { return }
-        for batch in pending.chunked(into: 40) {
+        guard !pending.isEmpty else { return (0, 0, 0, nil) }
+        var uploadedCount = 0, failedCount = 0
+        var firstError: String? = nil
+        // 작은 배치 + 실패해도 break하지 않고 다음 배치 계속 — 한 사진의 문제가 전체 업로드를
+        // 막아 사진이 통째로 안 올라가던 문제 방지(증분이라 다음 백업에서 실패분 재시도).
+        for batch in pending.chunked(into: 5) {
             let records = batch.map { url -> CKRecord in
                 let rec = CKRecord(recordType: Self.photoRecordType,
                                    recordID: CKRecord.ID(recordName: "photo-\(url.lastPathComponent)"))
@@ -178,46 +203,91 @@ final class CloudSyncService {
                 return rec
             }
             do {
-                _ = try await database.modifyRecords(saving: records, deleting: [], savePolicy: .allKeys)
-                for url in batch { uploaded.insert(url.lastPathComponent) }
+                // ⚠️ async modifyRecords는 개별 레코드 실패를 throw하지 않고 saveResults에 담는다.
+                //    예전엔 _ = try ... 로 무시해 '거짓 성공'(실제 저장 실패인데 올림으로 카운트)이 났다.
+                //    → 반드시 per-record 결과를 검사해 성공한 것만 원장에 기록한다.
+                let result = try await database.modifyRecords(saving: records, deleting: [], savePolicy: .allKeys)
+                for (id, res) in result.saveResults {
+                    switch res {
+                    case .success:
+                        let name = String(id.recordName.dropFirst("photo-".count))
+                        uploaded.insert(name); uploadedCount += 1
+                    case .failure(let err):
+                        failedCount += 1
+                        if firstError == nil { firstError = Self.message(for: err) }
+                    }
+                }
                 UserDefaults.standard.set(Array(uploaded), forKey: Self.uploadedKey)
             } catch {
-                break   // 네트워크/용량 문제 — 다음 백업 때 이어서
+                failedCount += batch.count
+                if firstError == nil { firstError = Self.message(for: error) }
+                continue   // 이 배치만 건너뛰고 나머지는 계속 시도
             }
         }
+        return (uploadedCount, pending.count, failedCount, firstError)
+        #else
+        return (0, 0, 0, nil)
         #endif
     }
 
-    /// CloudKit의 모든 사진을 로컬로 복원(로컬에 없는 파일만 기록). 새 기기/재설치 복원용.
-    func pullPhotos() async {
+    /// 복원에 필요한 사진을 CloudKit에서 로컬로 가져온다(로컬에 없는 것만). 새 기기/재설치 복원용.
+    /// ⚠️ recordID로 직접 일괄 조회한다 — CKQuery(전체검색)는 recordName에 Queryable 인덱스가
+    ///    없으면 실패해 사진이 하나도 안 내려온다(상태 JSON은 record(for:)라 정상이라 불일치 발생).
+    ///    refs는 복원한 상태(state.allPhotoRefs)에서 넘어온 모든 사진·영상 파일명.
+    /// 반환: (요청 수, CloudKit에서 찾은 레코드 수, 실제 복사한 수, 에러) — 진단·표시용.
+    @discardableResult
+    func pullPhotos(refs: [String]) async -> (requested: Int, found: Int, copied: Int, error: String?) {
         #if BL_CLOUDKIT
-        guard await accountAvailable() else { return }
+        guard await accountAvailable() else { return (0, 0, 0, "iCloud 계정 사용 불가") }
         let tombstones = Set(UserDefaults.standard.stringArray(forKey: Self.tombstoneKey) ?? [])
-        let query = CKQuery(recordType: Self.photoRecordType, predicate: NSPredicate(value: true))
-        var cursor: CKQueryOperation.Cursor?
-        repeat {
+        let needed = refs.filter { name in
+            guard !name.isEmpty, !tombstones.contains(name),
+                  let dest = PhotoStore.safeRestoreURL(for: name) else { return false }
+            return !FileManager.default.fileExists(atPath: dest.path)   // 이미 있으면 건너뜀
+        }
+        guard !needed.isEmpty else { return (0, 0, 0, nil) }
+        var found = 0, copied = 0
+        var firstError: String? = nil
+        for batch in needed.chunked(into: 100) {           // records(for:) 일괄 조회(쿼리 인덱스 불필요)
+            let ids = batch.map { CKRecord.ID(recordName: "photo-\($0)") }
+            let results: [CKRecord.ID: Result<CKRecord, Error>]
             do {
-                let page: (matchResults: [(CKRecord.ID, Result<CKRecord, Error>)], queryCursor: CKQueryOperation.Cursor?)
-                if let c = cursor {
-                    page = try await database.records(continuingMatchFrom: c)
-                } else {
-                    page = try await database.records(matching: query)
-                }
-                for (_, result) in page.matchResults {
-                    guard let rec = try? result.get(),
-                          let name = rec["name"] as? String,
-                          !tombstones.contains(name),   // 로컬에서 지운 사진은 복원하지 않음(부활 차단)
-                          let asset = rec["asset"] as? CKAsset, let src = asset.fileURL,
-                          let dest = PhotoStore.safeRestoreURL(for: name),
-                          !FileManager.default.fileExists(atPath: dest.path) else { continue }
-                    try? FileManager.default.copyItem(at: src, to: dest)
-                }
-                cursor = page.queryCursor
+                results = try await database.records(for: ids)
             } catch {
-                break
+                if firstError == nil { firstError = Self.message(for: error) }
+                continue
             }
-        } while cursor != nil
+            for (_, result) in results {
+                guard let rec = try? result.get() else { continue }
+                found += 1
+                guard let name = rec["name"] as? String,
+                      let asset = rec["asset"] as? CKAsset, let src = asset.fileURL,
+                      let dest = PhotoStore.safeRestoreURL(for: name),
+                      !FileManager.default.fileExists(atPath: dest.path) else { continue }
+                if (try? FileManager.default.copyItem(at: src, to: dest)) != nil { copied += 1 }
+            }
+        }
+        return (needed.count, found, copied, firstError)
+        #else
+        return (0, 0, 0, nil)
         #endif
+    }
+}
+
+extension PersistableState {
+    /// 백업/복원에 필요한 모든 로컬 사진·영상 파일명(중복 제거). pullPhotos가 ID로 조회할 대상.
+    var allPhotoRefs: [String] {
+        var refs: [String] = []
+        for e in diaryEntries {
+            refs.append(contentsOf: e.photoRefList)
+            if let v = e.videoRef, !v.isEmpty { refs.append(v) }
+        }
+        for log in pregnancyLogs where log.kind == .belly {
+            if let r = log.photoRef, !r.isEmpty { refs.append(r) }
+        }
+        for c in children { if let r = c.profileImageRef, !r.isEmpty { refs.append(r) } }
+        for m in marketItems { refs.append(contentsOf: m.photoRefs) }
+        return Array(Set(refs.filter { !$0.isEmpty }))
     }
 }
 

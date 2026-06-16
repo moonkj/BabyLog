@@ -1,8 +1,39 @@
 import SwiftUI
 import UIKit
+import BackgroundTasks
 
 // MARK: - AppDelegate (원격 푸시 토큰 — 실시간 크루 오픈 알림)
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    static let backupTaskID = "com.vibelab.babylog.icloudbackup"
+
+    // 앱 닫을 때 못 올린 사진을 OS가 충전/유휴 시 마저 올리도록 등록(catch-up).
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.backupTaskID, using: nil) { task in
+            Self.handleBackupCatchup(task as! BGProcessingTask)
+        }
+        return true
+    }
+
+    /// 백그라운드 사진 업로드 catch-up 예약 — iCloud 자동백업이 켜진 경우만.
+    static func scheduleBackupCatchup() {
+        guard CloudSyncService.isAvailableInBuild, CloudSyncService.isEnabled else { return }
+        let req = BGProcessingTaskRequest(identifier: backupTaskID)
+        req.requiresNetworkConnectivity = true
+        req.requiresExternalPower = false
+        try? BGTaskScheduler.shared.submit(req)
+    }
+
+    /// OS가 시간을 줄 때 남은 사진을 증분 업로드(앱이 닫혀 있어도 동작). 시간 초과 시 다음 기회에 이어서.
+    static func handleBackupCatchup(_ task: BGProcessingTask) {
+        scheduleBackupCatchup()   // 연쇄 예약(다음에도 catch-up 가능하게)
+        let work = Task {
+            await CloudSyncService.shared.pushPhotos()   // 증분 — uploadedKey에 없는 것만
+            task.setTaskCompleted(success: true)
+        }
+        task.expirationHandler = { work.cancel() }
+    }
+
     func application(_ app: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
         UserDefaults.standard.set(hex, forKey: "bl_apns_token")   // 동네 잡히면 hood 갱신용 보관
@@ -59,10 +90,9 @@ struct BabyLogApp: App {
                         // 앱을 닫을 때 스냅샷을 자동 푸시(엔타이틀먼트 없으면 isAvailableInBuild=false → no-op).
                         if CloudSyncService.isAvailableInBuild && CloudSyncService.isEnabled {
                             let snapshot = store.snapshot()
-                            Task {
-                                try? await CloudSyncService.shared.push(snapshot)
-                                await CloudSyncService.shared.pushPhotos()   // 기록+사진 함께 백업
-                            }
+                            Task { await backupToCloudInBackground(snapshot) }
+                            // 닫는 30초 안에 못 올린 사진은 OS가 충전/유휴 시 마저 올리도록 예약(catch-up).
+                            AppDelegate.scheduleBackupCatchup()
                         }
                         Task { await syncPhotoLibrary() }   // 닫을 때 새 사진을 사진 앱에 저장
                     }
@@ -85,15 +115,33 @@ struct BabyLogApp: App {
         await PhotoLibraryBackup.sync(refs: store.memoryPhotoRefs())
     }
 
+    /// 앱이 백그라운드로 갈 때 iCloud 백업(기록+사진)을 끝까지 올리도록 실행시간을 확보한다.
+    /// 확보하지 않으면 iOS가 곧 앱을 정지시켜 용량 큰 사진 업로드가 잘려 CloudKit에 안 들어간다
+    /// (기록 JSON은 작아 먼저 올라가고 사진만 누락되던 원인). 증분 업로드라 다음 백업에서 이어서 올린다.
+    @MainActor
+    private func backupToCloudInBackground(_ snapshot: PersistableState) async {
+        let app = UIApplication.shared
+        var taskId: UIBackgroundTaskIdentifier = .invalid
+        taskId = app.beginBackgroundTask(withName: "bl-icloud-backup") {
+            if taskId != .invalid { app.endBackgroundTask(taskId); taskId = .invalid }
+        }
+        try? await CloudSyncService.shared.push(snapshot)
+        await CloudSyncService.shared.pushPhotos()
+        if taskId != .invalid { app.endBackgroundTask(taskId); taskId = .invalid }
+    }
+
     /// 재설치 직후 iCloud(CloudKit) 백업 자동 복원 — 로컬이 비어 있을 때만(기존 데이터 보호).
     /// CloudKit 미활성 빌드(isAvailableInBuild=false)에서는 no-op.
+    /// ⚠️ isEnabled(자동백업 토글)로 게이트하지 않는다 — 앱을 지우면 UserDefaults가 초기화돼 토글이
+    ///    꺼짐으로 리셋되는데, 재설치 복구가 바로 이 함수의 목적이므로 그 토글에 막히면 안 된다.
+    ///    (백업이 없으면 pull이 nil → no-op이라 안전. 푸시/자동백업은 여전히 토글로 게이트.)
     private func maybeAutoRestoreFromCloud() async {
-        guard CloudSyncService.isAvailableInBuild, CloudSyncService.isEnabled else { return }
+        guard CloudSyncService.isAvailableInBuild else { return }
         // 전체 사용자 데이터가 비었을 때만 복원(가계부·성장만 입력한 로컬을 덮어쓰지 않게).
         guard store.isEffectivelyEmpty else { return }
         guard await CloudSyncService.shared.accountAvailable() else { return }
         if let state = try? await CloudSyncService.shared.pull() {
-            await CloudSyncService.shared.pullPhotos()
+            await CloudSyncService.shared.pullPhotos(refs: state.allPhotoRefs)
             // pull은 네트워크라 수백 ms~수 초 걸린다. 그 사이 사용자가 첫 기록을 입력했으면
             // 복원이 그 입력을 덮어쓰므로, restore 직전에 '여전히 비어있는지' 다시 확인한다.
             guard store.isEffectivelyEmpty else { return }

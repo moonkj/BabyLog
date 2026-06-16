@@ -28,6 +28,8 @@ struct SettingsScreen: View {
     @State private var cloudStatus: String? = nil
     @State private var cloudBusy = false
     @State private var showCloudRestoreConfirm = false
+    @State private var cloudBackupAt: Date? = nil   // 복원 확인창에 보여줄 '최신 백업' 시각
+    @State private var pendingUploads: Int = 0      // iCloud에 아직 안 올라간 사진 수(미백업 안내)
 
     // MARK: Environment
 
@@ -79,6 +81,7 @@ struct SettingsScreen: View {
         .background(AppColors.canvas.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         // 설정 변경 미세 피드백 (§8.5)
+        .onAppear { pendingUploads = CloudSyncService.pendingUploadCount() }
         .sensoryFeedback(.selection, trigger: fabSide)
         .sensoryFeedback(.selection, trigger: caregiverTitle)
         .sensoryFeedback(.impact(weight: .light), trigger: nightDim)
@@ -94,7 +97,7 @@ struct SettingsScreen: View {
             }
         }
         .fileImporter(isPresented: $showBackupImporter,
-                      allowedContentTypes: [UTType(filenameExtension: BackupService.fileExtension) ?? .data, .data]) { result in
+                      allowedContentTypes: [UTType(filenameExtension: BackupService.fileExtension) ?? .data, .data, .item]) { result in
             switch result {
             case .success(let url):
                 // 큰 백업은 복원이 길어질 수 있어 "준비 중…" 표시가 먼저 그려지도록
@@ -136,11 +139,11 @@ struct SettingsScreen: View {
         .alert("계정", isPresented: Binding(get: { authAlert != nil }, set: { if !$0 { authAlert = nil } })) {
             Button("확인", role: .cancel) {}
         } message: { Text(authAlert ?? "") }
-        .confirmationDialog("iCloud 백업으로 덮어쓸까요?", isPresented: $showCloudRestoreConfirm, titleVisibility: .visible) {
+        .alert("iCloud 백업으로 덮어쓸까요?", isPresented: $showCloudRestoreConfirm) {
             Button("iCloud에서 복원", role: .destructive) { Task { await runCloud(.restore) } }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("이 기기의 현재 기록을 iCloud 백업으로 덮어씁니다. iCloud 백업이 더 오래된 것이면 최근 기록이 사라질 수 있어요.")
+            Text(cloudRestoreMessage)
         }
     }
 
@@ -426,14 +429,24 @@ struct SettingsScreen: View {
                     }
                 }.buttonStyle(.plain).disabled(cloudBusy).opacity(cloudBusy ? 0.5 : 1)
                 Divider().overlay(AppColors.line).padding(.leading, 62)
-                Button { showCloudRestoreConfirm = true } label: {
+                Button {
+                    // 확인창을 띄우기 전에 '최신 백업' 시각을 먼저 조회해 사용자가 무엇을 되살리는지 보여준다.
+                    Task { cloudBackupAt = await CloudSyncService.shared.backupDate(); showCloudRestoreConfirm = true }
+                } label: {
                     settingsRow(icon: "arrow.down.circle.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
                         Text("iCloud에서 복원").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
                     }
                 }.buttonStyle(.plain).disabled(cloudBusy).opacity(cloudBusy ? 0.5 : 1)
+                if cloudSync && pendingUploads > 0 {
+                    Text("⚠️ iCloud에 아직 안 올라간 사진 \(pendingUploads)장 — ‘지금 백업’을 눌러 올려두세요.")
+                        .font(AppFont.caption).foregroundStyle(AppColors.gold)
+                        .padding(.horizontal, Spacing.s4).padding(.bottom, Spacing.s2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let s = cloudStatus {
                     Text(s).font(AppFont.caption).foregroundStyle(AppColors.ink3)
                         .padding(.horizontal, Spacing.s4).padding(.bottom, Spacing.s2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 settingsRow(icon: "icloud", iconBg: Color(hex: 0xE6F1FB), iconFg: Color(hex: 0x3B6FA8)) {
@@ -448,21 +461,54 @@ struct SettingsScreen: View {
         }
     }
 
+    /// 복원 확인창 문구 — '가장 최근 백업'임을 명시하고, 가능하면 그 백업 시각을 보여준다.
+    private var cloudRestoreMessage: String {
+        if let d = cloudBackupAt {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "ko_KR")
+            f.dateFormat = "yyyy.MM.dd HH:mm"
+            return "가장 최근 iCloud 백업(\(f.string(from: d)))으로 이 기기의 현재 기록을 덮어씁니다. 이 백업 이후에 추가한 기록은 사라질 수 있어요."
+        }
+        return "가장 최근 iCloud 백업으로 이 기기의 현재 기록을 덮어씁니다. 이 백업 이후에 추가한 기록은 사라질 수 있어요."
+    }
+
     private enum CloudOp { case backup, restore }
     private func runCloud(_ op: CloudOp) async {
         cloudBusy = true; cloudStatus = nil
-        defer { cloudBusy = false }
+        // 포그라운드 백업/복원이 도중에 앱을 벗어나도 끊기지 않게 백그라운드 실행시간 확보(시간제한 완화).
+        let app = UIApplication.shared
+        var bgId: UIBackgroundTaskIdentifier = .invalid
+        bgId = app.beginBackgroundTask(withName: "bl-icloud-manual") {
+            if bgId != .invalid { app.endBackgroundTask(bgId); bgId = .invalid }
+        }
+        defer {
+            cloudBusy = false
+            pendingUploads = CloudSyncService.pendingUploadCount()   // 미백업 수 갱신
+            if bgId != .invalid { app.endBackgroundTask(bgId); bgId = .invalid }
+        }
         do {
             switch op {
             case .backup:
                 try await CloudSyncService.shared.push(store.snapshot())
-                await CloudSyncService.shared.pushPhotos()       // 사진도 함께 백업
-                cloudStatus = "백업 완료 ✓"
+                let up = await CloudSyncService.shared.pushPhotos()       // 사진도 함께 백업
+                if let e = up.error {
+                    cloudStatus = up.uploaded > 0
+                        ? "사진 \(up.uploaded)장 백업했어요. 일부는 못 올렸어요 — \(e.prefix(120))"
+                        : e   // 친절 메시지(저장공간 부족 등)
+                } else {
+                    cloudStatus = up.uploaded > 0 ? "백업 완료 · 사진 \(up.uploaded)장" : "백업 완료"
+                }
             case .restore:
                 if let remote = try await CloudSyncService.shared.pull() {
-                    await CloudSyncService.shared.pullPhotos()    // 사진 먼저 내려받고 상태 적용
+                    let r = await CloudSyncService.shared.pullPhotos(refs: remote.allPhotoRefs)  // 사진 먼저 내려받고 상태 적용
                     store.restore(remote)
-                    cloudStatus = "복원 완료 ✓"
+                    if let e = r.error {
+                        cloudStatus = r.copied > 0
+                            ? "복원 완료 · 사진 \(r.copied)장. 일부는 못 받았어요 — \(e.prefix(120))"
+                            : "복원했지만 사진을 받지 못했어요 — \(e.prefix(120))"
+                    } else {
+                        cloudStatus = r.copied > 0 ? "복원 완료 · 사진 \(r.copied)장" : "복원 완료"
+                    }
                 } else {
                     cloudStatus = "iCloud에 백업이 없어요."
                 }
@@ -574,7 +620,7 @@ struct SettingsScreen: View {
                     Text(lastBackupText)
                         .font(.system(size: 14.5, weight: .semibold))
                         .foregroundStyle(backupOverdue ? AppColors.gold : AppColors.ink)
-                    Text("앱을 삭제하면 기기 데이터가 사라져요. 사진·기록 전체를 파일로 백업해 두세요.")
+                    Text("⚠️ 앱을 삭제하면 이 기기의 데이터가 모두 사라져요. ‘iCloud 자동 백업’을 켜두거나, 전체 백업 파일을 iCloud Drive에 저장해 두세요.")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.ink3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -609,7 +655,7 @@ struct SettingsScreen: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(backupBusy ? "준비 중…" : "전체 백업 내보내기")
                             .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                        Text("사진·영상·기록을 파일 하나로 — 파일 앱/iCloud Drive에 저장")
+                        Text("사진·영상·기록을 파일 하나로. ⚠️ 꼭 iCloud Drive 등 앱 바깥에 저장하세요 — 앱을 지우면 앱 안에 둔 파일은 함께 사라져요.")
                             .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -624,7 +670,7 @@ struct SettingsScreen: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("백업에서 복원")
                             .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
-                        Text("새 기기·재설치 후 백업 파일로 사진과 기록을 되살려요")
+                        Text("앱 바깥(iCloud Drive 등)에 저장해 둔 백업 파일로 사진·기록을 되살려요")
                             .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -851,18 +897,14 @@ struct SettingsScreen: View {
 
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-            if showChevron {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
-                    .accessibilityHidden(true)
-            }
+            // 오른쪽 '>' 셰브론 제거 — 사용자가 그 부분을 눌러야 실행되는 줄 오인. (showChevron 무시)
         }
         .padding(.horizontal, Spacing.s4)
         // 세로 패딩 추가 — 버튼·세그먼트가 든 행에서 카드가 콘텐츠에 딱 붙던 문제 해결(여백 확보).
         .padding(.vertical, Spacing.s3)
-        .frame(minHeight: 64)
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        // 행 전체(빈 여백 포함)를 탭 영역으로 — 텍스트만 눌러야 하던 좁은 터치영역 문제 해결.
+        .contentShape(Rectangle())
     }
 }
 
