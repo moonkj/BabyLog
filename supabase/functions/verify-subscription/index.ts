@@ -77,16 +77,28 @@ Deno.serve(async (req) => {
   const txId = body.transactionId;
   if (!txId) return json({ error: "missing_transactionId" }, 400);
 
-  // App Store Server API — 구독 상태 조회
-  const host = Deno.env.get("APPLE_API_HOST") ?? "api.storekit.itunes.apple.com";
+  // App Store Server API — 구독 상태 조회.
+  //  실거래는 운영에만, TestFlight/샌드박스 거래는 샌드박스에만 존재한다. 호스트를 매번 바꾸지 않도록
+  //  운영 먼저 시도 → 404(해당 환경에 없음)면 샌드박스로 자동 폴백(Apple 권장). 같은 JWT가 양쪽 모두 동작.
+  //  APPLE_API_HOST를 명시하면 그 호스트만 사용(수동 고정).
+  const forced = Deno.env.get("APPLE_API_HOST");
+  const hosts = forced
+    ? [forced]
+    : ["api.storekit.itunes.apple.com", "api.storekit-sandbox.itunes.apple.com"];
   const apiJwt = await appleApiJWT();
-  let res: Response;
-  try {
-    res = await fetch(`https://${host}/inApps/v1/subscriptions/${txId}`, {
-      headers: { Authorization: `Bearer ${apiJwt}` },
-      signal: AbortSignal.timeout(8000),   // Apple API 지연 시 무한 대기 방지
-    });
-  } catch { return json({ error: "apple_api_timeout" }, 504); }
+  let res: Response | null = null;
+  for (const h of hosts) {
+    try {
+      const r = await fetch(`https://${h}/inApps/v1/subscriptions/${txId}`, {
+        headers: { Authorization: `Bearer ${apiJwt}` },
+        signal: AbortSignal.timeout(8000),   // Apple API 지연 시 무한 대기 방지
+      });
+      res = r;
+      if (r.status === 404 && hosts.length > 1) continue;   // 이 환경엔 없음 → 다음(샌드박스) 시도
+      break;
+    } catch { /* 타임아웃/네트워크 → 다음 호스트 시도 */ }
+  }
+  if (!res) return json({ error: "apple_api_timeout" }, 504);
   if (!res.ok) return json({ error: "apple_api", status: res.status }, 502);
 
   // 응답에서 '호출자 소유' 거래의 만료일만 추출.
