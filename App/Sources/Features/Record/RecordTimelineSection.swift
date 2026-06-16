@@ -438,11 +438,13 @@ private struct DiaryTimelineCard: View {
             DiaryCommentSheet(entryId: entry.id, authorName: child.name)
                 .environmentObject(store)
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showEdit) {
             DiaryEditSheet(entry: entry)
                 .environmentObject(store)
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 

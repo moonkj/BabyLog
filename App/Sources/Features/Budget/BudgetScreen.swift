@@ -180,7 +180,7 @@ struct BudgetScreen: View {
     /// 받지 않은 지원금 먼저, 받은(완료) 지원금은 아래로.
     private var sortedSubsidies: [SubsidyInfo] {
         subsidies.sorted { a, b in
-            let ca = store.isSubsidyClaimed(id: a.id), cb = store.isSubsidyClaimed(id: b.id)
+            let ca = store.isSubsidyClaimed(childId: subsidyChild?.id, id: a.id), cb = store.isSubsidyClaimed(childId: subsidyChild?.id, id: b.id)
             if ca != cb { return !ca }   // 미수령 먼저
             return a.id < b.id           // 동일 상태는 id로 안정 정렬(렌더마다 순서 흔들림 방지)
         }
@@ -426,22 +426,25 @@ struct BudgetScreen: View {
         .accessibilityLabel("\(rangeLabel) 지출 기록이 없어요. 오른쪽 아래 더하기 버튼으로 지출을 추가하세요.")
     }
 
-    /// 전기 대비 증감 배지 (색+부호+레이블)
+    /// 전기 대비 증감 배지 (색+부호+레이블). 0%(반올림 포함)는 '감소'로 오표기하지 않고 중립 처리.
     private func deltaBadge(_ pct: Int) -> some View {
-        let down = pct <= 0
+        let dir = pct == 0 ? 0 : (pct < 0 ? -1 : 1)   // -1 감소 / 0 동일 / 1 증가
+        let icon = dir == 0 ? "equal" : (dir < 0 ? "arrow.down.right" : "arrow.up.right")
+        let tint = dir == 0 ? AppColors.ink3 : (dir < 0 ? AppColors.primary : AppColors.danger)
+        let bg   = dir == 0 ? AppColors.surface2 : (dir < 0 ? AppColors.primaryTint : AppColors.dangerTint)
+        let word = dir == 0 ? "변동 없음" : (dir < 0 ? "감소" : "증가")
         return HStack(spacing: 2) {
-            Image(systemName: down ? "arrow.down.right" : "arrow.up.right")
+            Image(systemName: icon)
                 .font(.system(size: 9, weight: .heavy))
             Text("\(abs(pct))%")
                 .font(AppFont.num(11.5, weight: .heavy))
         }
-        .foregroundStyle(down ? AppColors.primary : AppColors.danger)
+        .foregroundStyle(tint)
         .padding(.horizontal, 7).padding(.vertical, 3)
-        .background((down ? AppColors.primaryTint : AppColors.dangerTint), in: Capsule())
-        // 연도 모드(과거 연도 탐색 포함)에선 '직전 1년'이 아니라 '전년(선택연도-1)' 대비임을 명확히.
+        .background(bg, in: Capsule())
         .accessibilityLabel(isYearMode
-            ? "\(selectedYear - 1)년 대비 \(down ? "감소" : "증가") \(abs(pct))퍼센트"
-            : "직전 \(period.label) 대비 \(down ? "감소" : "증가") \(abs(pct))퍼센트")
+            ? "\(selectedYear - 1)년 대비 \(word) \(abs(pct))퍼센트"
+            : "직전 \(period.label) 대비 \(word) \(abs(pct))퍼센트")
     }
 
     // MARK: 2. 도넛 차트 대시보드 (카테고리 비중)
@@ -714,11 +717,11 @@ struct BudgetScreen: View {
             } else {
                 // 아직 안 받은 지원금 환기 배너 — 금액 합산은 월지급/일시금이 섞여 오해 소지라
                 // '개수'만 정직하게 표시(받을 수 있는 가장 강한 가치를 전면화).
-                let unclaimed = subsidies.filter { !store.isSubsidyClaimed(id: $0.id) }.count
+                let unclaimed = subsidies.filter { !store.isSubsidyClaimed(childId: subsidyChild?.id, id: $0.id) }.count
                 if unclaimed > 0 {
                     HStack(spacing: Spacing.s2) {
                         Image(systemName: "gift.fill")
-                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.gold)
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(AppColors.goldText)
                         Text("아직 안 받은 지원금 \(unclaimed)개 — 잊지 말고 챙기세요")
                             .font(.system(size: 13, weight: .semibold)).foregroundStyle(AppColors.ink)
                         Spacer(minLength: 0)
@@ -732,11 +735,11 @@ struct BudgetScreen: View {
                 ForEach(sortedSubsidies) { subsidy in
                     SubsidyCard(
                         info: subsidy,
-                        claimed: store.isSubsidyClaimed(id: subsidy.id),
+                        claimed: store.isSubsidyClaimed(childId: subsidyChild?.id, id: subsidy.id),
                         onToggleClaim: {
                             Haptics.light()
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                store.toggleSubsidyClaimed(id: subsidy.id)
+                                store.toggleSubsidyClaimed(childId: subsidyChild?.id, id: subsidy.id)
                             }
                         }
                     )

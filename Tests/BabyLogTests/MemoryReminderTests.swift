@@ -14,7 +14,7 @@ final class MemoryReminderTests: XCTestCase {
     func test_buildsForUpcomingAnniversary() {
         let now = day(2026, 6, 1)
         let e = DiaryEntry(childId: UUID(), date: day(2025, 7, 10), recordType: "photo", photoRef: "a.jpg")
-        let reqs = NotificationScheduler.memoryReminders(diaryEntries: [e], childName: "지호", now: now, calendar: cal)
+        let reqs = NotificationScheduler.memoryReminders(diaryEntries: [e], childNames: [:], now: now, calendar: cal)
         XCTAssertEqual(reqs.count, 1)
         XCTAssertTrue(reqs[0].title.contains("1년 전"))
         XCTAssertTrue(reqs[0].fireDate > now)
@@ -23,7 +23,7 @@ final class MemoryReminderTests: XCTestCase {
     func test_skipsEntriesWithoutPhoto() {
         let now = day(2026, 6, 1)
         let e = DiaryEntry(childId: UUID(), date: day(2025, 7, 10), recordType: "diary") // 사진 없음
-        XCTAssertTrue(NotificationScheduler.memoryReminders(diaryEntries: [e], childName: "지호", now: now, calendar: cal).isEmpty)
+        XCTAssertTrue(NotificationScheduler.memoryReminders(diaryEntries: [e], childNames: [:], now: now, calendar: cal).isEmpty)
     }
 
     func test_oncePerMonth() {
@@ -31,7 +31,7 @@ final class MemoryReminderTests: XCTestCase {
         // 같은 달(7월)의 두 사진 → 주년도 같은 달 → 1건만
         let e1 = DiaryEntry(childId: UUID(), date: day(2025, 7, 10), recordType: "photo", photoRef: "a.jpg")
         let e2 = DiaryEntry(childId: UUID(), date: day(2025, 7, 20), recordType: "photo", photoRef: "b.jpg")
-        let reqs = NotificationScheduler.memoryReminders(diaryEntries: [e1, e2], childName: "지호", now: now, calendar: cal)
+        let reqs = NotificationScheduler.memoryReminders(diaryEntries: [e1, e2], childNames: [:], now: now, calendar: cal)
         XCTAssertEqual(reqs.count, 1)
     }
 
@@ -39,7 +39,7 @@ final class MemoryReminderTests: XCTestCase {
         let now = day(2026, 6, 1)
         let e1 = DiaryEntry(childId: UUID(), date: day(2025, 7, 10), recordType: "photo", photoRef: "a.jpg")
         let e2 = DiaryEntry(childId: UUID(), date: day(2025, 9, 10), recordType: "photo", photoRef: "b.jpg")
-        let reqs = NotificationScheduler.memoryReminders(diaryEntries: [e1, e2], childName: "지호", now: now, calendar: cal)
+        let reqs = NotificationScheduler.memoryReminders(diaryEntries: [e1, e2], childNames: [:], now: now, calendar: cal)
         XCTAssertEqual(reqs.count, 2)  // 7월·9월 → 각 1건
     }
 }

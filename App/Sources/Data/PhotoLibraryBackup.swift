@@ -39,8 +39,17 @@ enum PhotoLibraryBackup {
 
     /// 주어진 photoRef 중 아직 안 내보낸 것을 사진 앱 앨범에 저장. (백그라운드 안전, best-effort)
     /// - Returns: 이번에 새로 저장한 장수.
+    @MainActor private static var isRunning = false
+
     @discardableResult
     static func sync(refs: [String]) async -> Int {
+        // 동시 실행 가드 — 런치 .task와 백그라운드 전환 Task가 겹치면 같은 사진을 두 번 저장하던 문제 방지.
+        let canRun = await MainActor.run { () -> Bool in
+            if isRunning { return false }
+            isRunning = true; return true
+        }
+        guard canRun else { return 0 }
+        defer { Task { @MainActor in isRunning = false } }
         guard isEnabled, await requestAuthorization() else { return 0 }
         var exported = exportedSet()
         let pending = refs.filter { !exported.contains($0) }

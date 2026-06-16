@@ -56,6 +56,9 @@ enum AppColors {
     // Accent — 앤티크 골드 (TickLab 럭셔리 시그니처 / Pro·골든 티어)
     static let gold     = dyn(0xC9A961, 0xD8B973)
     static let goldTint = dyn(0xFAF6E8, 0x322D1C)
+    // 골드 '텍스트/아이콘 전경'용 — gold(#C9A961)는 흰 배경 대비 2.25:1로 WCAG 미달이라
+    // 작은 텍스트(Pro·배우자 배지·지원금 액수)엔 이 진한 골드를 쓴다(흰 배경 대비 ≈4.6:1).
+    static let goldText = dyn(0x8A6A1E, 0xD8B973)
 
     // 브랜드 코어 — 앱 아이콘·스플래시 정체성 색(크림 배경·금색 링·잎 그린).
     // 감정 피크 화면(저장 보상·뱃지)에 재등장시켜 "하나의 세계관"으로 묶는다(고정색 — 아이콘과 동일).

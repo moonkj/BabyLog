@@ -68,8 +68,10 @@ enum CrewBackend {
         // merge-duplicates(DO UPDATE)는 crew_waitlist에 UPDATE RLS 정책이 없어 42501로 실패한다.
         // 페이로드가 (hood, device_id)뿐이라 갱신할 값이 없으므로 DO NOTHING(ignore-duplicates)이 안전·동등.
         req.setValue("resolution=ignore-duplicates", forHTTPHeaderField: "Prefer")
+        // device_id = ownerID()(로그인 시 auth.uid, 아니면 기기ID). 원시 deviceID를 보내면 로그인 사용자는
+        // RLS device_id=coalesce(auth.uid,header) 와 불일치(42501)로 대기신청이 조용히 실패한다.
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "hood": hood, "device_id": SupabaseConfig.deviceID,
+            "hood": hood, "device_id": await SupabaseConfig.ownerID(),
         ])
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
@@ -341,18 +343,18 @@ enum CrewBackend {
         return true
     }
 
-    /// 모임 참가(crew_meetup_join upsert).
+    /// 모임 참가 — 정원을 서버에서 강제하는 RPC(crew_join_meetup)로만 참가한다.
+    /// (직접 INSERT는 서버에서 봉쇄됨 — 정원 우회 방지.) 'ok'/'full'/'not_found'/'unauthorized' 반환.
     @discardableResult
     static func joinMeetup(meetupId: String) async -> Bool {
         guard SupabaseConfig.isConfigured,
-              var req = await request("/rest/v1/crew_meetup_join?on_conflict=meetup_id,device_id", method: "POST") else { return false }
-        req.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "meetup_id": meetupId, "device_id": await SupabaseConfig.ownerID(),
-        ])
-        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              var req = await request("/rest/v1/rpc/crew_join_meetup", method: "POST") else { return false }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["p_meetup": meetupId])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
-        return true
+        // RPC는 text를 반환(JSON 문자열). 'ok'만 성공으로 본다(정원 마감/미존재는 false).
+        let result = (String(data: data, encoding: .utf8) ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "\"\n "))
+        return result == "ok"
     }
 
     // MARK: - 그룹(동네 공유)

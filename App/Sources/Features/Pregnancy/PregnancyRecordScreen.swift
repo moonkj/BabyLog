@@ -56,6 +56,9 @@ struct PregnancyRecordScreen: View {
     @State private var showBirthTransition: Bool = false
     @State private var showPauseConfirm: Bool = false
     @State private var showReg: Bool = false
+    @State private var showLossRestartConfirm: Bool = false   // 상실 후 '다시 시작' 실수 탭 방지(부드러운 확인)
+    @State private var showCleanupConfirm: Bool = false        // 상실/멈춤 후 기록 정리(삭제) 확인
+    @State private var manageTargetPregnancy: Pregnancy? = nil // 위 두 확인의 대상
 
     // ── 등록된 임신이 하나도 없는 상태 ────────────────────────────────
     private var hasNoPregnancy: Bool {
@@ -88,8 +91,11 @@ struct PregnancyRecordScreen: View {
                                 .padding(.horizontal, Spacing.s5)
                                 .padding(.top, Spacing.s4)
                         }
-                        // 상실/일시중단 상태면 안내 카드
-                        else if let preg = store.activePregnancy ?? store.pregnancies.first,
+                        // 상실/일시중단 상태면 안내 카드 — 민감영역: 상실/멈춤 임신이
+                        // .delivered 등 다른 비활성 임신(pregnancies.first 순서)에 가려지지 않도록 우선 탐색.
+                        else if let preg = store.activePregnancy
+                                    ?? store.pregnancies.first(where: { $0.status == .loss || $0.status == .paused })
+                                    ?? store.pregnancies.first,
                            preg.status == .loss || preg.status == .paused {
                             pausedOrLossCard(pregnancy: preg)
                                 .padding(.horizontal, Spacing.s5)
@@ -148,6 +154,26 @@ struct PregnancyRecordScreen: View {
                 Button("취소", role: .cancel) {}
             } message: {
                 Text("기록은 안전히 보관돼요. 언제든 다시 시작할 수 있어요.\n'기록을 마칠게요'를 선택하면 주차 알림이 자동으로 멈춰요.")
+            }
+            .alert("임신 기록을 다시 시작할까요?", isPresented: $showLossRestartConfirm) {
+                if let preg = manageTargetPregnancy {
+                    Button("다시 시작하기") {
+                        store.updatePregnancyStatus(pregnancyId: preg.id, to: .active)
+                    }
+                }
+                Button("아니요", role: .cancel) {}
+            } message: {
+                Text("주차 진행과 태아 가이드가 다시 보여요. 천천히 결정하셔도 괜찮아요.")
+            }
+            .alert("기록을 정리할까요?", isPresented: $showCleanupConfirm) {
+                if let preg = manageTargetPregnancy {
+                    Button("기록 삭제", role: .destructive) {
+                        store.deletePregnancy(id: preg.id)
+                    }
+                }
+                Button("취소", role: .cancel) {}
+            } message: {
+                Text("이 임신 기록과 배 사진이 기기에서 삭제돼요. 이 작업은 되돌릴 수 없어요.")
             }
         }
         .sheet(isPresented: $showBirthTransition) {
@@ -270,24 +296,31 @@ struct PregnancyRecordScreen: View {
                     .padding(.top, Spacing.s3)
 
                     VStack(spacing: Spacing.s2) {
-                        Text("언제든 돌아오세요")
+                        // 상실(.loss)과 일시중단(.paused)의 카피를 분리 — 상실에는 '다시 시작' 권유 톤을 줄이고
+                        // 보관·위로 중심으로, 멈춤에는 복귀 중심으로 따뜻하게.
+                        Text(pregnancy.status == .loss ? "마음이 괜찮아질 때까지" : "언제든 돌아오세요")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(AppColors.ink)
                             .multilineTextAlignment(.center)
 
-                        Text("기록은 안전히 보관돼요.\n준비가 될 때 언제든 다시 시작할 수 있어요.")
+                        Text(pregnancy.status == .loss
+                             ? "남기신 기록은 안전히 보관돼요.\n천천히, 준비가 될 때 다시 찾아오셔도 괜찮아요."
+                             : "기록은 안전히 보관돼요.\n준비가 될 때 언제든 다시 시작할 수 있어요.")
                             .font(AppFont.callout)
                             .foregroundStyle(AppColors.ink2)
                             .multilineTextAlignment(.center)
                             .lineSpacing(3)
                     }
 
-                    // 다시 시작 버튼
+                    // 다시 시작 버튼 — 상실은 실수 탭 시 진행 화면이 갑자기 되살아나 상처가 될 수 있어
+                    // 부드러운 확인을 거친다. 멈춤은 바로 재활성화(기존 동작).
                     Button {
-                        store.updatePregnancyStatus(
-                            pregnancyId: pregnancy.id,
-                            to: .active
-                        )
+                        if pregnancy.status == .loss {
+                            manageTargetPregnancy = pregnancy
+                            showLossRestartConfirm = true
+                        } else {
+                            store.updatePregnancyStatus(pregnancyId: pregnancy.id, to: .active)
+                        }
                     } label: {
                         Text("다시 시작하기")
                             .font(.system(size: 15, weight: .bold))
@@ -307,7 +340,21 @@ struct PregnancyRecordScreen: View {
                         .font(AppFont.micro)
                         .foregroundStyle(AppColors.ink3)
                         .multilineTextAlignment(.center)
-                        .padding(.bottom, Spacing.s2)
+
+                    // 기록 정리(삭제) 진입점 — 상실 후 "배 사진·태명을 지우고 싶다"는 절박한 요구를
+                    // 임신을 되살리지 않고도 충족할 수 있게(데이터 주권). 아주 절제된 텍스트 버튼.
+                    Button {
+                        manageTargetPregnancy = pregnancy
+                        showCleanupConfirm = true
+                    } label: {
+                        Text("기록 정리하기")
+                            .font(AppFont.micro)
+                            .foregroundStyle(AppColors.ink3)
+                            .underline()
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, Spacing.s2)
+                    .accessibilityHint("탭하면 이 임신 기록과 배 사진을 삭제할 수 있어요")
                 }
                 .padding(.vertical, Spacing.s2)
             }

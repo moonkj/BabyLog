@@ -7,6 +7,12 @@ import UIKit
 
 enum PhotoStore {
 
+    /// 디코드 결과 캐시 — 같은 사진을 뷰 재평가마다 다시 디코드(수 MB)하던 비용 제거.
+    /// 파일명 키. 삭제 시 무효화. (NSCache는 메모리 압박 시 자동 비움.)
+    private static let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>(); c.countLimit = 80; return c
+    }()
+
     /// 사진 디렉토리 (없으면 생성)
     private static var directory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -22,7 +28,8 @@ enum PhotoStore {
         guard let data = resized.jpegData(compressionQuality: quality) else { return nil }
         let name = "\(UUID().uuidString).jpg"
         do {
-            try data.write(to: directory.appendingPathComponent(name), options: .atomic)
+            // 아동 사진은 가장 민감 — 잠금 시 보호(파일이 열려있지 않으면 잠금화면에서 읽기 불가).
+            try data.write(to: directory.appendingPathComponent(name), options: [.atomic, .completeFileProtectionUnlessOpen])
             return name
         } catch {
             return nil
@@ -32,9 +39,12 @@ enum PhotoStore {
     /// 파일명으로 이미지를 로드. 없으면 nil.
     static func image(_ name: String?) -> UIImage? {
         guard let name, !name.isEmpty else { return nil }
+        let key = name as NSString
+        if let cached = cache.object(forKey: key) { return cached }
         let url = directory.appendingPathComponent(name)
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return UIImage(data: data)
+        guard let data = try? Data(contentsOf: url), let img = UIImage(data: data) else { return nil }
+        cache.setObject(img, forKey: key)
+        return img
     }
 
     /// 기존 사진 파일을 새 파일로 복제하고 새 파일명을 반환. 실패 시 nil.
@@ -57,6 +67,7 @@ enum PhotoStore {
     /// 사진 삭제 (기록 삭제 시).
     static func delete(_ name: String?) {
         guard let name, !name.isEmpty else { return }
+        cache.removeObject(forKey: name as NSString)   // 디코드 캐시 무효화(지운 사진 부활 방지)
         try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
         // iCloud 백업에서도 지우고 복원 시 부활하지 않게 툼스톤 기록(민감영역: 지운 사진 부활 금지).
         CloudSyncService.tombstonePhoto(name)

@@ -1115,7 +1115,7 @@ private struct CrewColdStartContent: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("초기 멤버 혜택")
                         .font(.system(size: 13.5, weight: .bold))
-                        .foregroundStyle(AppColors.gold)
+                        .foregroundStyle(AppColors.goldText)
 
                     Text("지금 우리 동네 크루에 함께하면 ‘초기 멤버’ 뱃지를 영구히 드려요.")
                         .font(.system(size: 12.5, weight: .regular))

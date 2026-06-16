@@ -97,6 +97,11 @@ struct QuickRecordFAB: View {
                 .accessibilityLabel("빠른 기록")
                 .accessibilityHint("탭하면 빠른 메뉴, 길게 눌러 위치 이동")
                 .accessibilityAddTraits(.isButton)
+                // onTapGesture는 VoiceOver '활성화(더블탭)' 액션을 받지 못한다 → 별도 액션을
+                // 등록해 VoiceOver 사용자도 빠른 기록 메뉴를 열 수 있게 한다(핵심 플로우 접근성).
+                .accessibilityAction {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { open.toggle() }
+                }
         }
     }
 }

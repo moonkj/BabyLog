@@ -620,7 +620,7 @@ struct VaccineSection: View {
                 Spacer()
                 Text(dLabel)
                     .font(AppFont.num(20, weight: .heavy))
-                    .foregroundStyle(AppColors.gold)
+                    .foregroundStyle(AppColors.goldText)
                     .accessibilityLabel("\(dNum)일 후")
             }
         }

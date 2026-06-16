@@ -31,7 +31,13 @@ struct MarketChatSheet: View {
     @State private var resolvedBuyer: String? = nil
 
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
-    private var messages: [ChatMessage] { serverMessages ?? store.marketMessages(itemId: item.id) }
+    @ObservedObject private var blocks = BlockStore.shared
+    private var messages: [ChatMessage] {
+        (serverMessages ?? store.marketMessages(itemId: item.id))
+            .filter { $0.mine || !blocks.isBlocked($0.authorId) }
+    }
+    /// 1:1 상대 식별자 — 상대가 보낸 메시지의 작성자ID(차단 대상).
+    private var counterpartId: String? { (serverMessages ?? store.marketMessages(itemId: item.id)).first(where: { !$0.mine })?.authorId }
     /// 헤더에 표시할 상대 — 판매자 화면이면 구매자명, 구매자 화면이면 판매자명.
     private var counterpartName: String {
         if buyer != nil { return buyerName ?? "구매자" }
@@ -41,14 +47,22 @@ struct MarketChatSheet: View {
         ChatTranscript.text(itemTitle: item.title, counterpart: counterpartName, messages: messages)
     }
 
-    /// 채팅 열려 있는 동안 3초 주기 폴링(시트 닫히면 task 취소, 백그라운드면 건너뜀).
+    /// 채팅 열려 있는 동안 폴링(시트 닫히면 task 취소, 백그라운드면 건너뜀).
     /// resolvedBuyer가 정해진 뒤에만 동작한다(스레드 식별 전엔 잘못된 조회 방지).
+    /// 실패 시 지수 백오프(3→6→…→30초) — 끊긴 망에서 무한 재시도하던 배터리·데이터 낭비 방지.
     private func pollLoop() async {
         guard SupabaseConfig.isConfigured, let rb = resolvedBuyer else { return }
+        var delay: UInt64 = 3_000_000_000
+        let maxDelay: UInt64 = 30_000_000_000
         while !Task.isCancelled {
-            if scenePhase == .active,
-               let msgs = await MarketBackend.fetchMessages(itemId: item.id, buyer: rb) { serverMessages = msgs }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if scenePhase == .active {
+                if let msgs = await MarketBackend.fetchMessages(itemId: item.id, buyer: rb) {
+                    serverMessages = msgs; delay = 3_000_000_000
+                } else {
+                    delay = min(delay * 2, maxDelay)
+                }
+            }
+            try? await Task.sleep(nanoseconds: delay)
         }
     }
 
@@ -171,6 +185,7 @@ struct MarketChatSheet: View {
         .sheet(isPresented: $showReport) {
             TradeReportSheet(item: item, transcript: messages).environmentObject(store)
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .task(id: item.id) {
             // 스레드 식별자 확정 — 판매자 화면은 전달된 buyer, 구매자 화면은 내 식별자.
@@ -212,13 +227,18 @@ struct MarketChatSheet: View {
                     Button(role: .destructive) { showReport = true } label: {
                         Label("거래 신고하기", systemImage: "exclamationmark.bubble.fill")
                     }
+                    if let cid = counterpartId {
+                        Button(role: .destructive) { blocks.block(cid); dismiss() } label: {
+                            Label("이 사용자 차단", systemImage: "hand.raised.fill")
+                        }
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(AppColors.ink2)
                         .frame(width: 44, height: 44)
                 }
-                .accessibilityLabel("대화 메뉴 — 내보내기·신고")
+                .accessibilityLabel("대화 메뉴 — 내보내기·신고·차단")
 
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")

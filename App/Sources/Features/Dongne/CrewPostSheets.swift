@@ -139,29 +139,42 @@ struct CrewPostDetailSheet: View {
     /// 서버 공유 댓글(미구성/미로드 시 nil → 로컬 폴백)
     @State private var serverComments: [CrewReply]? = nil
     @State private var reportTarget: CrewReply? = nil   // 댓글 작성자명 탭 → 신고
+    @ObservedObject private var blocks = BlockStore.shared
     @State private var reportDone = false
     @AppStorage("bl_nickname") private var nickname: String = "양육자님"
 
     private var isLiked: Bool { store.isCrewPostLiked(post.id) }
     private var likeCount: Int { post.likeCount + (isLiked ? 1 : 0) }
-    /// 표시용 댓글 — 서버는 작성자 포함, 로컬 폴백은 본인 작성으로 매핑.
+    /// 표시용 댓글 — 서버는 작성자 포함, 로컬 폴백은 본인 작성으로 매핑. 차단한 작성자 댓글은 숨김.
     private var comments: [CrewReply] {
-        if let s = serverComments { return s }
-        return store.crewPostCommentList(postId: post.id).enumerated().map {
-            CrewReply(id: "local-\($0.offset)", authorName: nil, authorId: nil, body: $0.element, mine: true)
+        let base: [CrewReply]
+        if let s = serverComments { base = s }
+        else {
+            base = store.crewPostCommentList(postId: post.id).enumerated().map {
+                CrewReply(id: "local-\($0.offset)", authorName: nil, authorId: nil, body: $0.element, mine: true)
+            }
         }
+        return base.filter { $0.mine || !blocks.isBlocked($0.authorId) }
     }
     private var replyCount: Int {
         serverComments?.count ?? (SupabaseConfig.isConfigured ? post.replyCount : store.crewPostReplyCount(post))
     }
 
-    /// 댓글 폴링(상세 열려 있는 동안 3초 주기, 닫히면 task 취소, 백그라운드면 건너뜀).
+    /// 댓글 폴링(상세 열려 있는 동안, 닫히면 task 취소, 백그라운드면 건너뜀).
+    /// 실패 시 지수 백오프(3→6→…→30초)로 끊긴 망에서 무한 재시도 방지.
     private func pollReplies() async {
         guard SupabaseConfig.isConfigured else { return }
+        var delay: UInt64 = 3_000_000_000
+        let maxDelay: UInt64 = 30_000_000_000
         while !Task.isCancelled {
-            if scenePhase == .active,
-               let r = await CrewBackend.fetchReplies(postId: post.id) { serverComments = r }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if scenePhase == .active {
+                if let r = await CrewBackend.fetchReplies(postId: post.id) {
+                    serverComments = r; delay = 3_000_000_000
+                } else {
+                    delay = min(delay * 2, maxDelay)
+                }
+            }
+            try? await Task.sleep(nanoseconds: delay)
         }
     }
 
@@ -272,7 +285,7 @@ struct CrewPostDetailSheet: View {
         .sheet(isPresented: $showLogin) {
             AppleLoginSheet(message: "좋아요·댓글은 로그인이 필요해요.") {}
         }
-        .confirmationDialog("이 댓글 작성자를 신고할까요?", isPresented: Binding(
+        .confirmationDialog("신고 또는 차단", isPresented: Binding(
             get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }
         ), titleVisibility: .visible, presenting: reportTarget) { reply in
             ForEach(ReportBackend.reasons, id: \.self) { reason in
@@ -283,8 +296,9 @@ struct CrewPostDetailSheet: View {
                     reportDone = true
                 }
             }
+            Button("이 사용자 차단", role: .destructive) { blocks.block(reportTarget?.authorId) }
             Button("취소", role: .cancel) {}
-        } message: { reply in Text("‘\(reply.authorName ?? "이웃")’ 님의 댓글을 신고합니다. 내용이 운영자에게 증거로 전달돼요.") }
+        } message: { reply in Text("‘\(reply.authorName ?? "이웃")’ 님의 댓글을 신고하거나 작성자를 차단할 수 있어요.") }
         .alert("신고 접수됐어요", isPresented: $reportDone) {
             Button("확인", role: .cancel) {}
         } message: { Text("운영자가 확인 후 조치합니다. 감사합니다.") }

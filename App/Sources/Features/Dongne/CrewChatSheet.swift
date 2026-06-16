@@ -27,16 +27,30 @@ struct CrewChatSheet: View {
     @State private var reportTarget: ChatMessage? = nil
     @State private var reportDone = false
 
-    private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
-    private var messages: [ChatMessage] { serverMessages ?? store.crewChat(meetupId: meetup.id) }
+    @ObservedObject private var blocks = BlockStore.shared
 
-    /// 채팅 열려 있는 동안 3초 주기 폴링(시트 닫히면 task 취소, 백그라운드면 건너뜀).
+    private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
+    private var messages: [ChatMessage] {
+        // 차단한 사용자의 메시지는 숨긴다(본인 메시지는 항상 표시).
+        (serverMessages ?? store.crewChat(meetupId: meetup.id))
+            .filter { $0.mine || !blocks.isBlocked($0.authorId) }
+    }
+
+    /// 채팅 열려 있는 동안 폴링(시트 닫히면 task 취소, 백그라운드면 건너뜀).
+    /// 실패 시 지수 백오프(3→6→…→30초) — 끊긴 망에서 3초마다 무한 재시도하던 배터리·데이터 낭비 방지.
     private func pollLoop() async {
         guard SupabaseConfig.isConfigured else { return }
+        var delay: UInt64 = 3_000_000_000
+        let maxDelay: UInt64 = 30_000_000_000
         while !Task.isCancelled {
-            if scenePhase == .active,
-               let msgs = await CrewBackend.fetchMessages(meetupId: meetup.id) { serverMessages = msgs }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if scenePhase == .active {
+                if let msgs = await CrewBackend.fetchMessages(meetupId: meetup.id) {
+                    serverMessages = msgs; delay = 3_000_000_000          // 성공 → 주기 리셋
+                } else {
+                    delay = min(delay * 2, maxDelay)                       // 실패 → 백오프
+                }
+            }
+            try? await Task.sleep(nanoseconds: delay)
         }
     }
 
@@ -128,7 +142,7 @@ struct CrewChatSheet: View {
         .background(AppColors.canvas)
         .accessibilityElement(children: .contain)
         .task(id: meetup.id) { await pollLoop() }
-        .confirmationDialog("이 사용자를 신고할까요?", isPresented: Binding(
+        .confirmationDialog("신고 또는 차단", isPresented: Binding(
             get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }
         ), titleVisibility: .visible, presenting: reportTarget) { msg in
             ForEach(ReportBackend.reasons, id: \.self) { reason in
@@ -139,8 +153,9 @@ struct CrewChatSheet: View {
                     reportDone = true
                 }
             }
+            Button("이 사용자 차단", role: .destructive) { blocks.block(reportTarget?.authorId) }
             Button("취소", role: .cancel) {}
-        } message: { msg in Text("‘\(msg.author ?? "사용자")’ 님을 신고합니다. 대화 내용이 운영자에게 증거로 전달돼요.") }
+        } message: { msg in Text("‘\(msg.author ?? "사용자")’ 님을 신고하거나 차단할 수 있어요. 차단하면 이 사용자의 메시지가 보이지 않아요.") }
         .alert("신고 접수됐어요", isPresented: $reportDone) {
             Button("확인", role: .cancel) {}
         } message: { Text("운영자가 확인 후 조치합니다. 감사합니다.") }
@@ -323,7 +338,8 @@ private struct CrewChatBubble: View {
 
             if !isMe { Spacer(minLength: 48) }
         }
-        .accessibilityLabel(isMe ? "나: \(text)" : "\(text)")
+        // 단체 채팅 — VoiceOver에서 누가 보낸 메시지인지 작성자명을 함께 읽어준다.
+        .accessibilityLabel(isMe ? "나: \(text)" : "\((author?.isEmpty == false ? author! : "이웃")): \(text)")
     }
 }
 

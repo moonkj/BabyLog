@@ -3,8 +3,12 @@
 // 지금은 빌드타임 상수. 추후 원격 구성(Supabase)으로 승격 가능.
 
 /// 소수점 콤마("8,5") 로케일 입력도 허용해 Double 파싱. 키/몸무게 입력 유실 방지.
+/// `isFinite` 가드 — "inf"/"nan"/"1e400" 붙여넣기(클립보드·하드웨어 키보드)가 차트로 흘러가
+/// Swift Charts 도메인을 NaN/무한으로 만들어 크래시시키는 경로를 차단한다.
 func blDecimal(_ s: String) -> Double? {
-    Double(s.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+    guard let v = Double(s.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")),
+          v.isFinite else { return nil }
+    return v
 }
 
 enum AppFeatures {

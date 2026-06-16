@@ -86,7 +86,7 @@ enum NotificationScheduler {
     /// - Returns: fireDate 오름차순 LocalNotificationRequest 배열 (id: "memory-<entryId>")
     static func memoryReminders(
         diaryEntries: [DiaryEntry],
-        childName: String,
+        childNames: [UUID: String],   // entry.childId → 이름(다자녀 오인 라벨 방지)
         now: Date,
         calendar: Calendar = .current,
         maxCount: Int = 12
@@ -111,12 +111,9 @@ enum NotificationScheduler {
             usedMonths.insert(monthKey)
 
             let years = max(1, calendar.component(.year, from: fire) - calendar.component(.year, from: entry.date))
-            let body: String
-            if let c = entry.content, !c.isEmpty {
-                body = "\(childName)의 '\(c)' — 그날의 사진을 다시 볼까요? 🤍"
-            } else {
-                body = "\(childName)의 그날 사진을 다시 볼까요? 🤍"
-            }
+            // 다자녀: 해당 기록의 실제 아이 이름. 잠금화면 노출이라 일기 본문(민감한 자유 텍스트)은 넣지 않는다.
+            let name = childNames[entry.childId] ?? "우리 아이"
+            let body = "\(name)의 그날 사진을 다시 볼까요? 🤍"
             results.append(LocalNotificationRequest(
                 id: "memory-\(entry.id.uuidString)",
                 title: "📸 \(years)년 전 오늘",

@@ -366,7 +366,7 @@ struct FamilyFeedScreen: View {
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppColors.primarySoft, in: Capsule())
                     } else if isPartner {
-                        Text("무료 배우자").font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.gold)
+                        Text("무료 배우자").font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.goldText)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(AppColors.goldTint, in: Capsule())
                     }
@@ -463,12 +463,14 @@ struct FamilyFeedScreen: View {
                     }
                     .frame(maxWidth: .infinity)
                     .background(AppColors.surface2)
+                    .accessibilityElement()
+                    .accessibilityLabel("가족 피드 사진")
                 } else {
                     ZStack {
                         Rectangle().fill(AppColors.surface2).frame(height: 200)
                         VStack(spacing: 6) {
                             Image(systemName: "photo").font(.system(size: 28)).foregroundStyle(AppColors.ink3)
-                            Text("사진 표시 준비 중 (CDN 연결 필요)").font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                            Text("사진을 불러오는 중이에요").font(AppFont.caption).foregroundStyle(AppColors.ink3)
                         }
                     }
                 }
@@ -481,10 +483,14 @@ struct FamilyFeedScreen: View {
                                 Text("\(post.reactions.count)").font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
                             }
                         }.buttonStyle(.plain)
+                        .accessibilityLabel(liked ? "좋아요 취소" : "좋아요")
+                        .accessibilityValue("\(post.reactions.count)명")
                         HStack(spacing: 4) {
                             Image(systemName: "bubble.right").foregroundStyle(AppColors.ink)
                             Text("\(post.comments.count)").font(AppFont.num(13)).foregroundStyle(AppColors.ink2)
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("댓글 \(post.comments.count)개")
                         Spacer()
                         // 올린 본인 또는 가족 보관함 주인(부모)이면 삭제 가능
                         if post.authorUid == myUid || family?.ownerUid == myUid {

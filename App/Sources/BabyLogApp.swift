@@ -52,6 +52,9 @@ struct BabyLogApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background || phase == .inactive {
                         store.persistNow()
+                        // 마지막 사용(앱 이탈) 시각 기록 — 다음 실행 시 '오래 미접속' 자동 감지에 쓴다.
+                        // (민감영역: 오래 떠나 있던 사용자에게 권유/추억 알림을 자동 완화하기 위함.)
+                        UserDefaults.standard.set(Date(), forKey: "bl_last_active_at")
                         // iCloud '자동 백업'이 켜져 있고 CloudKit이 빌드에 활성화된 경우에만
                         // 앱을 닫을 때 스냅샷을 자동 푸시(엔타이틀먼트 없으면 isAvailableInBuild=false → no-op).
                         if CloudSyncService.isAvailableInBuild && CloudSyncService.isEnabled {
@@ -122,11 +125,29 @@ struct BabyLogApp: App {
         // 설정의 '추억 알림' 토글(bl_memory_notif, 기본 ON)이 꺼져 있으면 등록하지 않는다.
         let memoryNotifOn = (UserDefaults.standard.object(forKey: "bl_memory_notif") as? Bool) ?? true
         guard memoryNotifOn else { return }
+        // 민감영역(미사용 자동 완화): 오래 미접속한 사용자에겐 추억/권유 알림을 자동으로 줄인다.
+        // 사용자가 직접 설정하는 부담을 주지 않기 위함 — 상실 등을 겪고 앱을 떠난 경우의 안전장치.
+        let cap = softenedMemoryCap()
+        guard cap > 0 else { return }   // 장기 미접속(예: 90일+) → 권유 알림을 보내지 않는다.
+        let names = Dictionary(store.children.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         let memories = NotificationScheduler.memoryReminders(
             diaryEntries: store.diaryEntries,
-            childName: store.selectedChild?.name ?? "우리 아이",
-            now: Date()
+            childNames: names,
+            now: Date(),
+            maxCount: cap
         )
         if !memories.isEmpty { scheduler.schedule(memories) }
+    }
+
+    /// 마지막 사용 이후 경과일에 따른 추억 알림 상한(자동 완화).
+    ///  ~30일: 12(기본) · 31~90일: 4(절제) · 90일 초과: 0(권유 중단).
+    private func softenedMemoryCap() -> Int {
+        guard let last = UserDefaults.standard.object(forKey: "bl_last_active_at") as? Date else { return 12 }
+        let days = Calendar.current.dateComponents([.day], from: last, to: Date()).day ?? 0
+        switch days {
+        case ..<31:  return 12
+        case 31...90: return 4
+        default:     return 0
+        }
     }
 }

@@ -49,6 +49,7 @@ struct QuickRecordSheet: View {
     @State private var pendingShareURLs: [URL] = []
     @State private var showProUpsell = false   // 프리에서 가족공유 탭 시 Pro 안내
     @State private var showClearMediaConfirm = false   // 선택 사진 모두 지우기 재확인
+    @State private var saveFailNotice: String? = nil    // 저장공간 부족 등으로 사진/영상 저장 실패 시 정직 안내
 
     // MARK: 모드별 콘텐츠
     private var sheetTitle: String {
@@ -167,6 +168,14 @@ struct QuickRecordSheet: View {
         .onChange(of: selectedMilestones) { _ in clearEmptyHintIfNeeded() }
         .onChange(of: heightText) { _ in clearEmptyHintIfNeeded() }
         .onChange(of: weightText) { _ in clearEmptyHintIfNeeded() }
+        .alert("저장 공간 부족", isPresented: Binding(
+            get: { saveFailNotice != nil },
+            set: { if !$0 { saveFailNotice = nil } }
+        )) {
+            Button("확인", role: .cancel) { saveFailNotice = nil; onClose() }
+        } message: {
+            Text(saveFailNotice ?? "")
+        }
     }
 
     private func clearEmptyHintIfNeeded() {
@@ -761,9 +770,25 @@ struct QuickRecordSheet: View {
                 var shareURLs: [URL] = []
                 var firstEntryId: UUID? = nil   // 가족 피드 포스트 id로 연결(기록↔피드 동일 id)
                 var firstVideoFile: String? = nil   // 가족 피드 업로드용 영상 파일(첫 사본 1개)
+                var savedPhotoRefs: [String]? = nil // 첫 아이 사본 — 형제는 copy로 분리(대용량 재복사·재인코딩 방지)
+                var savedVideoRef: String? = nil
+                var mediaSaveFailed = false         // 선택한 미디어 중 저장 실패분 발생(저장공간 부족 등) — 정직 안내용
                 for tid in targetIds {
-                    let refs = selectedImages.compactMap { PhotoStore.save($0) }
-                    let videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
+                    let refs: [String]
+                    let videoFile: String?
+                    if let first = savedPhotoRefs {
+                        // 형제·자매: 첫 아이의 로컬 파일을 복제해 파일 수명만 분리(원본 영상 N벌 무압축 복사 방지).
+                        refs = first.compactMap { PhotoStore.copy($0) }
+                        videoFile = savedVideoRef.flatMap { PhotoStore.copy($0) }
+                    } else {
+                        refs = selectedImages.compactMap { PhotoStore.save($0) }
+                        videoFile = selectedVideoURL.flatMap { PhotoStore.saveVideo(from: $0) }
+                        savedPhotoRefs = refs
+                        savedVideoRef = videoFile
+                        // 선택한 사진/영상보다 저장된 게 적으면(디스크 오류·공간 부족) 정직하게 알린다.
+                        if refs.count < selectedImages.count { mediaSaveFailed = true }
+                        if selectedVideoURL != nil && videoFile == nil { mediaSaveFailed = true }
+                    }
                     // 사진 저장이 모두 실패(디스크 오류 등)하고 메모·이정표도 없으면 빈 기록을
                     // 만들지 않는다 — 성공 위장·쓰레기 기록 방지(정직 원칙).
                     guard content != nil || milestoneText != nil || !refs.isEmpty || videoFile != nil else { continue }
@@ -782,6 +807,9 @@ struct QuickRecordSheet: View {
                     )
                     if firstEntryId == nil { firstEntryId = newId; firstVideoFile = videoFile }
                     didSave = true
+                }
+                if mediaSaveFailed {
+                    saveFailNotice = "저장 공간이 부족해 일부 사진·영상을 담지 못했어요. 입력한 기록은 저장됐어요."
                 }
                 pendingShareURLs = (shareToFamily && hasMedia) ? shareURLs : []
                 // 로그인 + 사진 공유 ON → 이 기록의 사진을 가족 피드(서버)로 자동 게시할 준비.
@@ -826,6 +854,15 @@ struct QuickRecordSheet: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 showEmptyHint = true
             }
+            return
+        }
+
+        // 미디어 저장 실패가 있었으면 성공을 위장하지 않는다(정직 원칙) — 축하 오버레이·자동 닫기를
+        // 생략하고 정직 안내(alert)만 띄운다. 저장된 텍스트 기록은 onSave로 부모에 반영하고,
+        // 사용자가 확인을 누르면 닫는다(확인 버튼에서 onClose). 닫지 않고 재시도 시 중복을 피한다.
+        if saveFailNotice != nil {
+            Haptics.warning()
+            onSave()
             return
         }
 

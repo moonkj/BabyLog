@@ -387,12 +387,12 @@ struct HomeTab: View {
                                            size: 22)
                             Text(layout.label)
                                 .font(.system(size: 15, weight: selected ? .bold : .medium))
-                                .foregroundStyle(selected ? AppColors.gold : AppColors.ink)
+                                .foregroundStyle(selected ? AppColors.goldText : AppColors.ink)
                             Spacer(minLength: 12)
                             if selected {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(AppColors.gold)
+                                    .foregroundStyle(AppColors.goldText)
                             }
                         }
                         .padding(.horizontal, 14)
@@ -626,7 +626,7 @@ struct HomeTab: View {
                     HomeIconBadge(symbol: priorityIcon(item.kind), tint: AppColors.gold, size: 46)
                     VStack(alignment: .leading, spacing: 6) {
                         Label("지금 가장 중요해요", systemImage: "sparkles")
-                            .font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.gold)
+                            .font(.system(size: 12, weight: .bold)).foregroundStyle(AppColors.goldText)
                         Text(item.title)
                             .font(.system(size: 20, weight: .heavy)).foregroundStyle(AppColors.ink)
                         Text(item.subtitle)
@@ -635,7 +635,7 @@ struct HomeTab: View {
                     Spacer()
                     if let dDay = item.dDay {
                         Text("D-\(dDay)")
-                            .font(.system(size: 22, weight: .heavy)).foregroundStyle(AppColors.gold)
+                            .font(.system(size: 22, weight: .heavy)).foregroundStyle(AppColors.goldText)
                             .accessibilityLabel("디데이 \(dDay)일 전")
                     }
                 }
@@ -664,7 +664,7 @@ struct HomeTab: View {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("지금 가장 중요해요", systemImage: "sparkles")
-                            .font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.gold)
+                            .font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.goldText)
                         Text(item.title)
                             .font(.system(size: 15, weight: .heavy)).foregroundStyle(AppColors.ink)
                         Text(item.subtitle)
@@ -674,10 +674,10 @@ struct HomeTab: View {
                     Spacer()
                     if let dDay = item.dDay {
                         Text("D-\(dDay)")
-                            .font(.system(size: 26, weight: .heavy)).foregroundStyle(AppColors.gold)
+                            .font(.system(size: 26, weight: .heavy)).foregroundStyle(AppColors.goldText)
                     }
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .bold)).foregroundStyle(AppColors.gold)
+                        .font(.system(size: 14, weight: .bold)).foregroundStyle(AppColors.goldText)
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)

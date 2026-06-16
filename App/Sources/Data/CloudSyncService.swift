@@ -101,11 +101,12 @@ final class CloudSyncService {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("bl-state-\(UUID().uuidString).json")
         try data.write(to: tmp)
+        // save가 throw해도 임시 JSON이 누적되지 않게 defer로 정리(백그라운드 전환마다 push 실패 시 누수 방지).
+        defer { try? FileManager.default.removeItem(at: tmp) }
         record["jsonAsset"] = CKAsset(fileURL: tmp)
         record["json"] = nil          // 레거시 inline 필드 제거(1MB 한계에 합산되지 않게)
         record["updatedAt"] = Date() as CKRecordValue
         _ = try await database.save(record)
-        try? FileManager.default.removeItem(at: tmp)
         #else
         throw CloudSyncError.notEnabled
         #endif

@@ -113,13 +113,16 @@ Deno.serve(async (req) => {
     for (const t of tokens) {
       const host = t.env === "production" ? "api.push.apple.com"
                  : t.env === "sandbox" ? "api.sandbox.push.apple.com" : fallbackHost;
-      const r = await fetch(`https://${host}/3/device/${t.apns_token}`, {
-        method: "POST",
-        headers: { authorization: `bearer ${jwt}`, "apns-topic": topic, "apns-push-type": "alert", "apns-priority": "10" },
-        body,
-      });
-      if (r.ok) { sent++; continue; }
-      if (r.status === 410) stale.push(t.apns_token);
+      try {
+        const r = await fetch(`https://${host}/3/device/${t.apns_token}`, {
+          method: "POST",
+          headers: { authorization: `bearer ${jwt}`, "apns-topic": topic, "apns-push-type": "alert", "apns-priority": "10" },
+          body,
+          signal: AbortSignal.timeout(5000),   // 한 토큰 지연이 전체 루프를 막지 않게
+        });
+        if (r.ok) { sent++; continue; }
+        if (r.status === 410) stale.push(t.apns_token);
+      } catch { /* 타임아웃/네트워크 — 이 토큰 건너뜀 */ }
     }
     if (stale.length) await supabase.from("crew_push_token").delete().in("apns_token", stale);
     return new Response(JSON.stringify({ sent, recipients: recipients.length, pruned: stale.length }), { status: 200 });

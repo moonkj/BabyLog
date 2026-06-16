@@ -549,11 +549,23 @@ final class AppStore: ObservableObject {
             .sink { [weak self] in
                 guard let self else { return }
                 self.persistSnapshot()
-                // 저장 직후 위젯 타임라인 갱신 — 호출하지 않으면 위젯이 시스템 재량
-                // 주기(수 시간)까지 스테일 데이터를 표시한다.
-                WidgetCenter.shared.reloadAllTimelines()
+                // 저장 직후 위젯 타임라인 갱신 — 단, 위젯이 실제로 쓰는 데이터(아이 이름·생일)가
+                // 바뀐 경우에만. UI 전용 @Published(딥링크 토글 등)까지 매번 reload하면
+                // WidgetKit 일일 reload 예산을 소진해 정작 필요한 갱신을 굶긴다.
+                self.reloadWidgetsIfNeeded()
             }
             .store(in: &cancellables)
+    }
+
+    /// 위젯 스냅샷에 들어가는 값(아이 id·이름·생일)의 서명. 바뀐 경우에만 위젯을 reload.
+    private var lastWidgetSignature = ""
+    private func reloadWidgetsIfNeeded() {
+        let sig = children
+            .map { "\($0.id.uuidString)|\($0.name)|\($0.birthDate.timeIntervalSince1970)" }
+            .joined(separator: ";")
+        guard sig != lastWidgetSignature else { return }
+        lastWidgetSignature = sig
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// 스냅샷 저장 — 실패를 삼키지 않고 lastPersistError로 노출(정직). 성공 시 에러 해제.
@@ -578,8 +590,8 @@ final class AppStore: ObservableObject {
     func persistNow() {
         guard !loadDidFail else { return }
         persistSnapshot()
-        // 백그라운드 전환 등 즉시 저장 직후에도 위젯을 갱신해 최신 기록을 반영한다.
-        WidgetCenter.shared.reloadAllTimelines()
+        // 백그라운드 전환 등 즉시 저장 직후에도 위젯을 갱신(아이 이름·생일 변경 시에만).
+        reloadWidgetsIfNeeded()
     }
 
     // MARK: - Persistence Convenience
@@ -733,6 +745,7 @@ final class AppStore: ObservableObject {
         children.append(child)
         selectedChildId = child.id
         refreshBadgeAwards()
+        persistNow()   // 온보딩 핵심 생성 — 디바운스 전 종료에도 유실 방지
     }
 
     /// 아이 정보를 수정한다. 빈 이름은 무시(기존 유지). profileImageRef는 .some일 때만 갱신.
@@ -782,6 +795,7 @@ final class AppStore: ObservableObject {
         vaccineHospitals = vaccineHospitals.filter { !$0.key.hasPrefix(prefix) }
         children.removeAll { $0.id == id }
         if selectedChildId == id { selectedChildId = children.first?.id }
+        persistNow()   // 민감영역 — 지운 기록이 다음 실행에 부활하지 않도록 즉시 저장
     }
 
     /// 임신 상태 변경 (민감 영역 — 상실·일시중단 포함).
@@ -814,6 +828,7 @@ final class AppStore: ObservableObject {
                              clinic: nil, status: .active)
         pregnancies.append(preg)
         refreshBadgeAwards()
+        persistNow()   // 임신 시작 핵심 생성 — 유실 방지
     }
 
     /// 임신 정보(태명·예정일·LMP) 수정.
@@ -847,6 +862,7 @@ final class AppStore: ObservableObject {
         if checkupRemindersOn && !pregnancies.contains(where: { $0.status == .active }) {
             checkupRemindersOn = false
         }
+        persistNow()   // 민감영역 — 지운 임신 기록 부활 방지
     }
 
     // MARK: - Atomic Birth Transition
@@ -892,6 +908,7 @@ final class AppStore: ObservableObject {
             carryOverBellyPhotos(from: pregnancy, to: child)
             bus.publish(.recordSaved(childId: child.id))
             refreshBadgeAwards()
+            persistNow()   // 핵심 데이터 전환(출산 승계) — 디바운스 전 종료에도 유실 방지
             return .success(child)
         }
     }
@@ -921,8 +938,16 @@ final class AppStore: ObservableObject {
             guard let copiedRef = PhotoStore.copy(log.photoRef) else { continue }
             // value(주차)가 NaN/Inf/비정상이면 Int() 변환이 트랩될 수 있어 방어 후 0~45주로 클램프.
             let week = log.value.isFinite ? min(max(Int(log.value), 0), 45) : 0
-            let estimated = pregnancy.lmpDate
-                .flatMap { cal.date(byAdding: .day, value: week * 7, to: $0) } ?? log.date
+            // 승계 날짜 추정 — 주차 순서를 항상 보존(여러 배사진을 출산 후 한 번에 백필해도 뭉치지 않게).
+            //  LMP 있으면 LMP+주차, 없으면 예정일(EDD) 역산, 둘 다 없으면 상한선에서 주차순으로 분산.
+            let estimated: Date
+            if let lmp = pregnancy.lmpDate {
+                estimated = cal.date(byAdding: .day, value: week * 7, to: lmp) ?? upperBound
+            } else if let edd = pregnancy.eddDate {
+                estimated = cal.date(byAdding: .day, value: -((40 - week) * 7), to: edd) ?? upperBound
+            } else {
+                estimated = cal.date(byAdding: .day, value: -(45 - week), to: upperBound) ?? upperBound
+            }
             let date = min(estimated, upperBound)
             let entry = DiaryEntry(
                 childId: child.id,
@@ -1040,14 +1065,18 @@ final class AppStore: ObservableObject {
 
     // MARK: - 정부지원금 '받음' 체크 (영속)
 
-    func isSubsidyClaimed(id: String) -> Bool {
-        claimedSubsidyIds.contains(id)
+    func isSubsidyClaimed(childId: UUID?, id: String) -> Bool {
+        guard let childId else { return false }
+        return claimedSubsidyIds.contains("\(childId.uuidString)|\(id)")
     }
 
-    /// 지원금 '받음' 상태를 토글한다(받았다고 체크 ↔ 해제).
-    func toggleSubsidyClaimed(id: String) {
-        if claimedSubsidyIds.contains(id) { claimedSubsidyIds.remove(id) }
-        else { claimedSubsidyIds.insert(id) }
+    /// 지원금 '받음' 상태를 토글한다(받았다고 체크 ↔ 해제). 아이별로 분리(다자녀: 한 아이 체크가 형제에 전염 방지).
+    func toggleSubsidyClaimed(childId: UUID?, id: String) {
+        guard let childId else { return }
+        let key = "\(childId.uuidString)|\(id)"
+        if claimedSubsidyIds.contains(key) { claimedSubsidyIds.remove(key) }
+        else { claimedSubsidyIds.insert(key) }
+        persistNow()
     }
 
     // MARK: - 접종 완료 (안정 키 영속)

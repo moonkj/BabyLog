@@ -85,7 +85,7 @@ struct CrewGroupDetail: View {
                     Image(systemName: "crown.fill").font(.system(size: 10, weight: .bold))
                     Text("크루장 \(leader)").font(.system(size: 11.5, weight: .bold))
                 }
-                .foregroundStyle(AppColors.gold)
+                .foregroundStyle(AppColors.goldText)
                 .padding(.horizontal, 9).frame(height: 22)
                 .background(AppColors.goldTint, in: Capsule())
             }
@@ -238,14 +238,27 @@ struct CrewGroupChatSheet: View {
     @State private var sendFailed = false                 // 전송 실패 배너
     @State private var lastFailedText = ""                 // 실패로 복원한 값(복원이 배너를 즉시 못 끄게)
     @State private var reportTarget: ChatMessage? = nil   // 신고 대상(작성자명 탭)
+    @ObservedObject private var blocks = BlockStore.shared
+    private var visibleMessages: [ChatMessage] {   // 차단한 사용자 메시지 숨김(본인은 항상 표시)
+        messages.filter { $0.mine || !blocks.isBlocked($0.authorId) }
+    }
     @State private var reportDone = false
 
     private var nickname: String { UserDefaults.standard.string(forKey: "bl_nickname") ?? "양육자님" }
 
+    /// 그룹 채팅 폴링 — 실패 시 지수 백오프(3→6→…→30초)로 끊긴 망에서 무한 재시도 방지.
     private func poll() async {
+        var delay: UInt64 = 3_000_000_000
+        let maxDelay: UInt64 = 30_000_000_000
         while !Task.isCancelled {
-            if scenePhase == .active, let m = await CrewBackend.fetchGroupMessages(groupId: group.id) { messages = m }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if scenePhase == .active {
+                if let m = await CrewBackend.fetchGroupMessages(groupId: group.id) {
+                    messages = m; delay = 3_000_000_000
+                } else {
+                    delay = min(delay * 2, maxDelay)
+                }
+            }
+            try? await Task.sleep(nanoseconds: delay)
         }
     }
     private func send() {
@@ -284,7 +297,7 @@ struct CrewGroupChatSheet: View {
                                 .font(AppFont.caption).foregroundStyle(AppColors.ink3)
                                 .frame(maxWidth: .infinity).padding(.vertical, Spacing.s5)
                         }
-                        ForEach(messages) { m in bubble(m).id(m.id) }
+                        ForEach(visibleMessages) { m in bubble(m).id(m.id) }
                     }
                     .padding(Spacing.s4)
                 }
@@ -314,7 +327,7 @@ struct CrewGroupChatSheet: View {
         }
         .background(AppColors.canvas.ignoresSafeArea())
         .task(id: group.id) { await poll() }
-        .confirmationDialog("이 사용자를 신고할까요?", isPresented: Binding(
+        .confirmationDialog("신고 또는 차단", isPresented: Binding(
             get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }
         ), titleVisibility: .visible, presenting: reportTarget) { msg in
             ForEach(ReportBackend.reasons, id: \.self) { reason in
@@ -325,8 +338,9 @@ struct CrewGroupChatSheet: View {
                     reportDone = true
                 }
             }
+            Button("이 사용자 차단", role: .destructive) { blocks.block(reportTarget?.authorId) }
             Button("취소", role: .cancel) {}
-        } message: { msg in Text("‘\(msg.author ?? "사용자")’ 님을 신고합니다. 대화 내용이 운영자에게 증거로 전달돼요.") }
+        } message: { msg in Text("‘\(msg.author ?? "사용자")’ 님을 신고하거나 차단할 수 있어요. 차단하면 메시지가 보이지 않아요.") }
         .alert("신고 접수됐어요", isPresented: $reportDone) {
             Button("확인", role: .cancel) {}
         } message: { Text("운영자가 확인 후 조치합니다. 감사합니다.") }

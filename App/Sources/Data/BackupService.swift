@@ -30,7 +30,7 @@ enum BackupService {
     private static let maxStateBytes = 256_000_000    // 방어적 상한(상태 JSON)
     private static let maxNameBytes = 1024
 
-    private enum BackupError: Error { case malformed }
+    private enum BackupError: Error { case malformed, fileShrankDuringBackup }
 
     private static func stamp() -> String {
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmm"
@@ -99,12 +99,11 @@ enum BackupService {
             try out.write(contentsOf: chunk)
             written += UInt64(chunk.count)
         }
-        // 백업 도중 파일이 짧아진 희귀 케이스 — 프레이밍 정렬 유지 위해 0패딩
-        var pad = declared - written
-        while pad > 0 {
-            let n = Int(min(UInt64(chunkSize), pad))
-            try out.write(contentsOf: Data(count: n))
-            pad -= UInt64(n)
+        // 백업 도중 파일이 줄어든 희귀 케이스(백업 중 사진 삭제·교체 등): 0패딩으로 채우면
+        // '성공한 척' 손상된 JPEG가 백업에 섞인다(복원 시 깨진 사진). 정직하게 전체 백업을 실패시켜
+        // 재시도하게 한다 — 재시도 시 삭제된 파일은 목록에서 빠져 깨끗하게 백업된다.
+        if written < declared {
+            throw BackupError.fileShrankDuringBackup
         }
     }
 

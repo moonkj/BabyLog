@@ -51,6 +51,15 @@ Deno.serve(async (req) => {
   const { familyId, kind, ext, contentType } = body;
   if (!familyId || !kind || !ext) return json({ error: "missing_fields" }, 400);
   if (kind !== "photo" && kind !== "video") return json({ error: "bad_kind" }, 400);
+  // ⚠️ 경로탈출/저장형 XSS 방지 — familyId는 UUID, ext는 화이트리스트만 허용하고
+  //    kind와 정합(photo↔이미지, video↔영상)을 강제한다. 안 하면 ext에 '../other/x.html'
+  //    같은 값으로 가족 prefix 밖에 임의 콘텐츠를 쓸 수 있다.
+  if (!/^[0-9a-fA-F-]{36}$/.test(familyId)) return json({ error: "bad_family" }, 400);
+  const PHOTO_EXT = ["jpg", "jpeg", "png", "heic"];
+  const VIDEO_EXT = ["mp4", "mov"];
+  const e = String(ext).toLowerCase();
+  const allowed = kind === "video" ? VIDEO_EXT : PHOTO_EXT;
+  if (!allowed.includes(e)) return json({ error: "bad_ext" }, 400);
 
   // 3) 가족 쓰기 권한 (서버 권위 — 읽기 게이트 bl_is_family_member와 동일 기준):
   //    ① 승인된 멤버여야 함(approved) — 승인 대기자 업로드 차단.
@@ -86,7 +95,7 @@ Deno.serve(async (req) => {
   // 4) R2 presigned PUT URL (10분)
   const accountId = Deno.env.get("R2_ACCOUNT_ID")!;
   const bucket = Deno.env.get("R2_BUCKET")!;
-  const key = `${familyId}/${crypto.randomUUID()}.${ext}`;
+  const key = `${familyId}/${crypto.randomUUID()}.${e}`;   // 검증된 소문자 확장자만 사용
   const endpoint = `https://${accountId}.r2.cloudflarestorage.com/${bucket}/${key}`;
 
   const r2 = new AwsClient({

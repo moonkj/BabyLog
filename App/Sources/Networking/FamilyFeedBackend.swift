@@ -428,13 +428,13 @@ enum FamilyFeedBackend {
         // 2-1) 영상: 720p·60초 압축 → R2 업로드 + 포스터. 개수 상한은 서버(Edge)가 강제(video_cap).
         var videoMedia: (key: String, thumb: String?, durationS: Int, bytes: Int)? = nil
         if let vurl = videoURL, let v = await compressVideo(vurl) {
-            if let vdata = try? Data(contentsOf: v.url),
-               let vkey = await uploadToR2(familyId: familyId, data: vdata, ext: "mp4", contentType: "video/mp4", kind: "video") {
+            let vbytes = ((try? FileManager.default.attributesOfItem(atPath: v.url.path))?[.size] as? NSNumber)?.intValue ?? 0
+            if let vkey = await uploadToR2(familyId: familyId, fileURL: v.url, ext: "mp4", contentType: "video/mp4", kind: "video") {
                 var thumbKey: String? = nil
                 if let poster = v.poster {
                     thumbKey = await uploadToR2(familyId: familyId, data: poster, ext: "jpg", contentType: "image/jpeg")
                 }
-                videoMedia = (vkey, thumbKey, v.durationS, vdata.count)
+                videoMedia = (vkey, thumbKey, v.durationS, vbytes)
             }
             try? FileManager.default.removeItem(at: v.url)
         }
@@ -482,6 +482,9 @@ enum FamilyFeedBackend {
         export.outputFileType = .mp4
         export.timeRange = CMTimeRange(start: .zero, duration: CMTime(seconds: capped, preferredTimescale: 600))
         export.shouldOptimizeForNetworkUse = true
+        // 아동안전·프라이버시: 원본 영상의 위치(GPS)·기기·촬영시각 메타데이터가 R2/가족 웹으로
+        // 새어나가지 않도록 출력에서 전부 제거(빈 메타데이터). 사진 경로는 재인코딩으로 이미 제거됨.
+        export.metadata = []
         let ok = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
             export.exportAsynchronously { cont.resume(returning: export.status == .completed) }
         }
@@ -573,7 +576,8 @@ enum FamilyFeedBackend {
 
     // MARK: - R2 업로드 (Edge presigned → 직접 PUT)
 
-    private static func uploadToR2(familyId: String, data: Data, ext: String, contentType: String,
+    private static func uploadToR2(familyId: String, data: Data? = nil, fileURL: URL? = nil,
+                                   ext: String, contentType: String,
                                    kind: String = "photo") async -> String? {
         guard let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let url = URL(string: "\(base)/functions/v1/media-upload-url") else { lastError = "서버 미구성"; return nil }
@@ -604,10 +608,18 @@ enum FamilyFeedBackend {
         guard let obj = try? JSONSerialization.jsonObject(with: rdata) as? [String: Any],
               let uploadUrl = obj["uploadUrl"] as? String, let objKey = obj["key"] as? String,
               let put = URL(string: uploadUrl) else { lastError = "업로드 URL 응답 파싱 실패"; return nil }
-        // R2로 직접 PUT
+        // R2로 직접 PUT — 영상은 파일에서 직접 스트리밍(fromFile)해 큰 mp4를 RAM에 통째로 올리지 않는다.
         var preq = URLRequest(url: put); preq.httpMethod = "PUT"; preq.timeoutInterval = 60
         preq.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        guard let (_, presp) = try? await URLSession.shared.upload(for: preq, from: data),
+        let putResult: (Data, URLResponse)?
+        if let fileURL {
+            putResult = try? await URLSession.shared.upload(for: preq, fromFile: fileURL)
+        } else if let data {
+            putResult = try? await URLSession.shared.upload(for: preq, from: data)
+        } else {
+            lastError = "업로드 데이터 없음"; return nil
+        }
+        guard let (_, presp) = putResult,
               let phttp = presp as? HTTPURLResponse else { lastError = "R2 전송: 네트워크 오류"; return nil }
         guard (200...299).contains(phttp.statusCode) else { lastError = "R2 PUT 실패 HTTP \(phttp.statusCode)"; return nil }
         return objKey

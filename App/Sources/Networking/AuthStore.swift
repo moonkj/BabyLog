@@ -42,6 +42,7 @@ final class AuthStore: ObservableObject {
 
     /// 진행 중인 refresh 1개를 공유 — 동시 호출이 단일 사용(refresh token)을 두 번 쓰는 레이스 방지.
     private var refreshTask: Task<StoredSession?, Never>?
+    private var refreshGen = 0   // refresh 세대(Task는 값타입이라 ===불가 → 본인 task 식별용)
 
     // MARK: - 토큰 제공(CrewBackend가 호출)
 
@@ -51,12 +52,14 @@ final class AuthStore: ObservableObject {
         if s.expiresAt > Date().addingTimeInterval(60) { return s.accessToken }
         // 이미 refresh 진행 중이면 합류(coalesce). @MainActor라 체크-앤-셋이 원자적.
         if let task = refreshTask { return await task.value?.accessToken }
+        refreshGen &+= 1
+        let myGen = refreshGen
         let task = Task { await self.refresh() }
         refreshTask = task
         let result = await task.value
-        // @MainActor + 위의 early-return 합류(coalesce)로 동시 호출은 이 task에 합류하므로
-        // 두 번째 task가 생기지 않는다 → 완료 후 비우는 것이 안전.
-        refreshTask = nil
+        // @MainActor + 위의 early-return 합류(coalesce)로 동시 호출은 이 task에 합류한다.
+        // 완료 직후 다른 호출이 새 refresh를 시작했으면(gen 증가) 그 task를 지우지 않고, 본인 세대일 때만 비운다.
+        if myGen == refreshGen { refreshTask = nil }
         return result?.accessToken
     }
 

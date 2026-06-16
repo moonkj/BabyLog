@@ -688,6 +688,7 @@ struct SettingsScreen: View {
                 }
             }
             .buttonStyle(.plain)
+
         }
     }
 
@@ -786,11 +787,11 @@ struct SettingsScreen: View {
         let scheduler = UNPendingScheduler()
         if on {
             let entries = store.diaryEntries
-            let childName = store.selectedChild?.name ?? "우리 아이"
+            let names = Dictionary(store.children.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
             Task {
                 guard await scheduler.requestAuthorization() else { return }
                 let reqs = NotificationScheduler.memoryReminders(
-                    diaryEntries: entries, childName: childName, now: Date())
+                    diaryEntries: entries, childNames: names, now: Date())
                 scheduler.schedule(reqs)
             }
         } else {

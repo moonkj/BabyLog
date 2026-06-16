@@ -22,39 +22,42 @@ struct AnimatedTitleIcon: View {
             if reduceMotion {
                 canvas(Self.staticRest(kind))
             } else {
-                animator
+                // 5초마다 '한 번만' 재생(트리거) → 휴지 구간엔 정지 렌더(상시 60fps 리드로우 방지, 배터리).
+                TimelineView(.periodic(from: .now, by: 5)) { ctx in
+                    animator(trigger: ctx.date)
+                }
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 
-    @ViewBuilder private var animator: some View {
+    @ViewBuilder private func animator(trigger: Date) -> some View {
         switch kind {
         case .home:
-            KeyframeAnimator(initialValue: Self.animStart(.home), repeating: true) { v in canvas(v) } keyframes: { _ in
-                KeyframeTrack(\.roofDY)     { LinearKeyframe(0, duration: 0.0); CubicKeyframe(-2.5, duration: 0.2); CubicKeyframe(1, duration: 0.3); CubicKeyframe(0, duration: 0.25); LinearKeyframe(0, duration: 4.25) }
-                KeyframeTrack(\.roofScaleX) { LinearKeyframe(1, duration: 0.0); CubicKeyframe(0.93, duration: 0.2); CubicKeyframe(1.05, duration: 0.3); CubicKeyframe(1, duration: 0.25); LinearKeyframe(1, duration: 4.25) }
-                KeyframeTrack(\.winOpacity) { LinearKeyframe(1, duration: 0.3); LinearKeyframe(0.15, duration: 0.15); LinearKeyframe(1, duration: 0.2); LinearKeyframe(1, duration: 4.35) }
+            KeyframeAnimator(initialValue: Self.staticRest(.home), trigger: trigger) { v in canvas(v) } keyframes: { _ in
+                KeyframeTrack(\.roofDY)     { CubicKeyframe(-2.5, duration: 0.2); CubicKeyframe(1, duration: 0.3); CubicKeyframe(0, duration: 0.25) }
+                KeyframeTrack(\.roofScaleX) { CubicKeyframe(0.93, duration: 0.2); CubicKeyframe(1.05, duration: 0.3); CubicKeyframe(1, duration: 0.25) }
+                KeyframeTrack(\.winOpacity) { LinearKeyframe(1, duration: 0.3); LinearKeyframe(0.15, duration: 0.15); LinearKeyframe(1, duration: 0.2) }
             }
         case .record:
-            KeyframeAnimator(initialValue: Self.animStart(.record), repeating: true) { v in canvas(v) } keyframes: { _ in
-                KeyframeTrack(\.flipScaleX)   { LinearKeyframe(1, duration: 0.25); CubicKeyframe(-1, duration: 0.55); CubicKeyframe(1, duration: 0.4); LinearKeyframe(1, duration: 3.8) }
-                KeyframeTrack(\.sparkOpacity) { LinearKeyframe(0, duration: 0.6); LinearKeyframe(1, duration: 0.25); LinearKeyframe(0, duration: 0.35); LinearKeyframe(0, duration: 3.8) }
-                KeyframeTrack(\.sparkScale)   { LinearKeyframe(0.4, duration: 0.6); CubicKeyframe(1, duration: 0.25); CubicKeyframe(1.2, duration: 0.35); LinearKeyframe(1.2, duration: 3.8) }
+            KeyframeAnimator(initialValue: Self.staticRest(.record), trigger: trigger) { v in canvas(v) } keyframes: { _ in
+                KeyframeTrack(\.flipScaleX)   { LinearKeyframe(1, duration: 0.25); CubicKeyframe(-1, duration: 0.55); CubicKeyframe(1, duration: 0.4) }
+                KeyframeTrack(\.sparkOpacity) { LinearKeyframe(0, duration: 0.6); LinearKeyframe(1, duration: 0.25); LinearKeyframe(0, duration: 0.35) }
+                KeyframeTrack(\.sparkScale)   { LinearKeyframe(0.4, duration: 0.6); CubicKeyframe(1, duration: 0.25); CubicKeyframe(1.2, duration: 0.35) }
             }
         case .budget:
-            KeyframeAnimator(initialValue: Self.animStart(.budget), repeating: true) { v in canvas(v) } keyframes: { _ in
-                KeyframeTrack(\.coinDY)      { LinearKeyframe(-13, duration: 0.35); CubicKeyframe(2, duration: 0.4); CubicKeyframe(1, duration: 0.15); LinearKeyframe(1, duration: 4.1) }
-                KeyframeTrack(\.coinOpacity) { LinearKeyframe(0, duration: 0.3); LinearKeyframe(1, duration: 0.1); LinearKeyframe(1, duration: 4.6) }
-                KeyframeTrack(\.flapDY)      { LinearKeyframe(0, duration: 0.6); CubicKeyframe(-1.5, duration: 0.2); CubicKeyframe(0, duration: 0.2); LinearKeyframe(0, duration: 4.0) }
+            KeyframeAnimator(initialValue: Self.staticRest(.budget), trigger: trigger) { v in canvas(v) } keyframes: { _ in
+                KeyframeTrack(\.coinDY)      { LinearKeyframe(-13, duration: 0.001); CubicKeyframe(2, duration: 0.55); CubicKeyframe(1, duration: 0.15) }
+                KeyframeTrack(\.coinOpacity) { LinearKeyframe(0, duration: 0.001); LinearKeyframe(1, duration: 0.3); LinearKeyframe(1, duration: 0.4) }
+                KeyframeTrack(\.flapDY)      { LinearKeyframe(0, duration: 0.55); CubicKeyframe(-1.5, duration: 0.2); CubicKeyframe(0, duration: 0.2) }
             }
         case .profile:
-            KeyframeAnimator(initialValue: Self.animStart(.profile), repeating: true) { v in canvas(v) } keyframes: { _ in
-                KeyframeTrack(\.figDY)       { CubicKeyframe(-2, duration: 0.25); CubicKeyframe(-1, duration: 0.3); CubicKeyframe(0, duration: 0.25); LinearKeyframe(0, duration: 4.2) }
-                KeyframeTrack(\.figRot)      { CubicKeyframe(-5, duration: 0.25); CubicKeyframe(4, duration: 0.3); CubicKeyframe(0, duration: 0.25); LinearKeyframe(0, duration: 4.2) }
-                KeyframeTrack(\.ringScale)   { LinearKeyframe(0.7, duration: 0.15); CubicKeyframe(1.25, duration: 0.6); LinearKeyframe(1.25, duration: 4.25) }
-                KeyframeTrack(\.ringOpacity) { LinearKeyframe(0.55, duration: 0.15); CubicKeyframe(0, duration: 0.6); LinearKeyframe(0, duration: 4.25) }
+            KeyframeAnimator(initialValue: Self.staticRest(.profile), trigger: trigger) { v in canvas(v) } keyframes: { _ in
+                KeyframeTrack(\.figDY)       { CubicKeyframe(-2, duration: 0.25); CubicKeyframe(-1, duration: 0.3); CubicKeyframe(0, duration: 0.25) }
+                KeyframeTrack(\.figRot)      { CubicKeyframe(-5, duration: 0.25); CubicKeyframe(4, duration: 0.3); CubicKeyframe(0, duration: 0.25) }
+                KeyframeTrack(\.ringScale)   { CubicKeyframe(1.25, duration: 0.6); LinearKeyframe(0.7, duration: 0.001) }
+                KeyframeTrack(\.ringOpacity) { LinearKeyframe(0.55, duration: 0.1); CubicKeyframe(0, duration: 0.55) }
             }
         }
     }

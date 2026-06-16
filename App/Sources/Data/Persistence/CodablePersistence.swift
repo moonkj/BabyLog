@@ -295,7 +295,10 @@ struct LocalPersistence {
             attributes: nil
         )
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        // 저장 파일은 사람이 읽을 필요가 없다 — prettyPrinted를 빼서 대용량 사용자의
+        // 매 저장 인코딩/디스크 비용을 줄인다(공백·들여쓰기 제거). diff 안정성은 sortedKeys로 유지.
+        // (사람이 보는 표준 익스포트는 DataExport가 별도로 prettyPrinted 사용.)
+        encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(state)
         try data.write(to: url, options: .atomic)

@@ -9,6 +9,8 @@ enum AnalyticsBackend {
     /// 앱 포그라운드 진입 시 1회 호출. 같은 날(KST) 중복은 클라에서 skip(서버도 unique 이중 방지).
     static func ping() async {
         guard SupabaseConfig.isConfigured else { return }
+        // 익명 이용통계 옵트아웃(PIPA 거부권) — 설정에서 끄면 전송 안 함.
+        if UserDefaults.standard.bool(forKey: "bl_analytics_off") { return }
         let today = kstDayString()
         if UserDefaults.standard.string(forKey: "bl_last_ping_day") == today { return }
         guard let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,

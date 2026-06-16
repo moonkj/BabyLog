@@ -157,7 +157,6 @@ struct ProfileScreen: View {
                     tierProgressCard
                     myActivitySection
                     badgeCollectionSection
-                    privacySection
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.bottom, Spacing.s8)
@@ -244,7 +243,7 @@ struct ProfileScreen: View {
                 }
                 Spacer(minLength: Spacing.s2)
                 if pro {
-                    Text("Pro").font(.system(size: 12, weight: .heavy)).foregroundStyle(AppColors.gold)
+                    Text("Pro").font(.system(size: 12, weight: .heavy)).foregroundStyle(AppColors.goldText)
                         .padding(.horizontal, 10).frame(height: 26)
                         .background(AppColors.goldTint, in: Capsule())
                 } else {
@@ -465,9 +464,7 @@ struct ProfileScreen: View {
 
             BLSectionHead(
                 eyebrow: "컬렉션",
-                title: "내 뱃지 \(earnedCount)/\(totalCount)",
-                action: "전체",
-                onAction: { selectedBadgeCategory = nil }
+                title: "내 뱃지 \(earnedCount)/\(totalCount)"
             )
 
             // 카테고리 필터 칩
@@ -622,105 +619,6 @@ struct ProfileScreen: View {
         }
     }
 
-    private var privacySection: some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            BLSectionHead(eyebrow: "BABYLOG 원칙", title: "데이터 · 프라이버시")
-
-            BLCard(padding: 0) {
-                VStack(spacing: 0) {
-                    privacyRow(
-                        icon: "shield.fill",
-                        iconBg: AppColors.primarySoft,
-                        iconFg: AppColors.primary,
-                        title: "데이터는 절대 판매하지 않아요",
-                        subtitle: "아동 데이터 비매각 — 약속",
-                        showDivider: true,
-                        onTap: {
-                            infoAlert = "BabyLog는 아동 데이터를 절대 외부에 판매하지 않아요. 무료 사용자의 데이터도 영구 보존하며, 사진은 기기에 안전하게 보관됩니다."
-                        }
-                    )
-                    privacyRow(
-                        icon: "square.and.arrow.up.fill",
-                        iconBg: Color(hex: 0xEEEDFE),
-                        iconFg: Color(hex: 0x5B53B0),
-                        title: "내 데이터 내보내기",
-                        subtitle: "표준 포맷으로 언제든",
-                        showDivider: false,
-                        onTap: {
-                            let state = store.snapshot()
-                            do {
-                                // item 기반 — URL이 준비된 시점에 시트를 띄워 첫 탭 흰 화면 방지.
-                                profileSheet = .export(try DataExporter.exportToTemporaryFile(state))
-                            } catch {
-                                infoAlert = "데이터를 내보내지 못했어요. 잠시 후 다시 시도해 주세요."
-                            }
-                        }
-                    )
-                }
-            }
-
-            // 절대 원칙 고지 (CLAUDE.md — 무광고·데이터 비매각·영구 보존)
-            Text("BabyLog는 광고가 없어요. 데이터를 팔지 않고,\n무료 데이터도 영원히 보존합니다.")
-                .font(.system(size: 11.5, weight: .regular))
-                .foregroundStyle(AppColors.ink3)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.top, Spacing.s2)
-                .accessibilityLabel("BabyLog는 광고 없이, 데이터 비매각, 무료 데이터 영구 보존을 약속합니다.")
-        }
-    }
-
-    private func privacyRow(
-        icon: String,
-        iconBg: Color,
-        iconFg: Color,
-        title: String,
-        subtitle: String,
-        showDivider: Bool,
-        onTap: (() -> Void)? = nil
-    ) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: Spacing.s3) {
-                // 아이콘 컨테이너 (44pt — 접근성 최소 탭 영역)
-                ZStack {
-                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                        .fill(iconBg)
-                    Image(systemName: icon)
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(iconFg)
-                }
-                .frame(width: 38, height: 38)
-                .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(AppColors.ink)
-                    Text(subtitle)
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppColors.ink3)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.ink3)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, Spacing.s4)
-            .frame(minHeight: 64) // 44pt 이상 탭 영역 확보
-            .contentShape(Rectangle())
-            .onTapGesture { onTap?() }
-
-            if showDivider {
-                Divider()
-                    .overlay(AppColors.line)
-                    .padding(.leading, 66)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title). \(subtitle)")
-        .accessibilityAddTraits(.isButton)
-    }
 }
 
 // MARK: - BadgeTileView

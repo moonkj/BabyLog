@@ -602,9 +602,10 @@ struct PregnancyHomeView: View {
                         Spacer()
 
                         if let pct = monthOverMonthPct {
-                            BLBadge(tone: pct <= 0 ? .mint : .coral,
+                            // 0%(반올림 포함)는 '감소'로 오표기하지 않고 중립.
+                            BLBadge(tone: pct == 0 ? .grey : (pct < 0 ? .mint : .coral),
                                     text: "전월 \(pct > 0 ? "+" : "")\(pct)%",
-                                    systemIcon: pct <= 0 ? "arrow.down" : "arrow.up")
+                                    systemIcon: pct == 0 ? "equal" : (pct < 0 ? "arrow.down" : "arrow.up"))
                         }
                     }
 

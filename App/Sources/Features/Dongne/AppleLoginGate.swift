@@ -74,6 +74,12 @@ struct AppleLoginSheet: View {
                     .fixedSize(horizontal: false, vertical: true).padding(.horizontal, Spacing.s5)
                 AppleSignInButton { ok in if ok { advanceAfterLogin() } }
                     .frame(height: 52).padding(.horizontal, Spacing.s5)
+                // App Store 1.2(UGC): 참여 전 약관 동의 + 부적절 콘텐츠·악성 사용자 무관용 고지.
+                Text("로그인하고 참여하면 [이용약관(EULA)](https://www.apple.com/legal/internet-services/itunes/dev/stdeula/)에 동의하게 돼요. 부적절한 콘텐츠와 괴롭힘은 허용되지 않으며, 신고·차단·이용 제한될 수 있어요.")
+                    .font(.system(size: 11)).foregroundStyle(AppColors.ink3)
+                    .tint(AppColors.primary).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Spacing.s5).padding(.top, Spacing.s1)
             }
 
             Button("나중에") { dismiss() }
@@ -81,7 +87,7 @@ struct AppleLoginSheet: View {
             Spacer()
         }
         .frame(maxWidth: .infinity).background(AppColors.canvas.ignoresSafeArea())
-        .presentationDetents([.height(needsNickname ? 420 : 360)])
+        .presentationDetents([.height(needsNickname ? 420 : 440)])
         .onAppear { if auth.isLoggedIn && !LoginGate.nicknameSet() { needsNickname = true } }
     }
 

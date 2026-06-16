@@ -41,13 +41,21 @@ Deno.serve(async (req) => {
   const postId = body.postId;
   if (!postId) return json({ error: "missing_postId" }, 400);
 
-  // 3) 포스트 + 미디어 조회, 작성자 본인 확인
+  // 3) 포스트 + 미디어 조회, 권한 확인.
+  //    작성자 본인 OR 가족 주인(RLS bl_post_delete와 동일 기준) — 주인이 정리하면 R2 원본까지 지워야
+  //    고아 객체(공개 CDN로 열람 가능)가 안 남는다. 작성자만 허용하면 주인 삭제가 DB만 지워 원본 잔존.
   const { data: post } = await admin
     .from("bl_feed_post")
-    .select("author_uid, bl_post_media(r2_key, thumb_key)")
+    .select("author_uid, family_id, bl_post_media(r2_key, thumb_key)")
     .eq("id", postId).maybeSingle();
   if (!post) return json({ error: "not_found" }, 404);
-  if (post.author_uid !== uid) return json({ error: "not_author" }, 403);
+  let allowed = post.author_uid === uid;
+  if (!allowed && post.family_id) {
+    const { data: fam } = await admin.from("bl_family")
+      .select("owner_uid").eq("id", post.family_id).maybeSingle();
+    allowed = fam?.owner_uid === uid;
+  }
+  if (!allowed) return json({ error: "not_allowed" }, 403);
 
   // 4) R2 객체 삭제(원본 + 썸네일). 일부 실패해도 계속 진행(베스트에포트) — DB 삭제는 반드시 수행.
   const accountId = Deno.env.get("R2_ACCOUNT_ID");

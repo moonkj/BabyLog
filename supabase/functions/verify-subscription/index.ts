@@ -80,9 +80,13 @@ Deno.serve(async (req) => {
   // App Store Server API — 구독 상태 조회
   const host = Deno.env.get("APPLE_API_HOST") ?? "api.storekit.itunes.apple.com";
   const apiJwt = await appleApiJWT();
-  const res = await fetch(`https://${host}/inApps/v1/subscriptions/${txId}`, {
-    headers: { Authorization: `Bearer ${apiJwt}` },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`https://${host}/inApps/v1/subscriptions/${txId}`, {
+      headers: { Authorization: `Bearer ${apiJwt}` },
+      signal: AbortSignal.timeout(8000),   // Apple API 지연 시 무한 대기 방지
+    });
+  } catch { return json({ error: "apple_api_timeout" }, 504); }
   if (!res.ok) return json({ error: "apple_api", status: res.status }, 502);
 
   // 응답에서 '호출자 소유' 거래의 만료일만 추출.

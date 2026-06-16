@@ -51,6 +51,12 @@ Deno.serve(async (req) => {
     { table: "crew_group",          owner: "creator",   nameCol: "creator_name" },
     { table: "market_item",         owner: "seller",    nameCol: "seller_name" },
     { table: "market_chat_message", owner: "device_id", nameCol: "author_name" },
+    // 가족 피드 — 성함/표시명도 식별자이므로 함께 스크럽(방침 4항 "본인 식별 해제"와 정합).
+    //  사진·캡션·태명 본문은 보존(데이터 보존 원칙), 본인이 올린 사진 삭제는 앱에서 개별 수행.
+    { table: "bl_comment",          owner: "uid",       nameCol: "author_name" },
+    { table: "bl_family_member",    owner: "uid",       nameCol: "display_name" },
+    // 가족 피드 게시물의 아이 표시 이름(태명/이름)도 식별자 → '아이'로 스크럽(캡션·사진 본문은 보존).
+    { table: "bl_feed_post",        owner: "author_uid", nameCol: "child_label" },
   ];
   for (const t of scrubTargets) {
     // best-effort — 한 테이블 실패가 계정 삭제 자체를 막지 않도록 오류는 기록만.
