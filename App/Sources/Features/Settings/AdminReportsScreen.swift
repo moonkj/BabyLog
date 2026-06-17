@@ -506,6 +506,16 @@ struct AdminReportsScreen: View {
                             .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
                     }
                 }
+                Button {
+                    DummyBoardFactory.makeSampleRecords(in: store)
+                    dummyMadeTitle = "데모 기록(가계부·일기·성장)"
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("데모 기록 채우기 (가계부·일기·성장)").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.primary)
+                        Text("가계부 지출·성장 차트·일기(합성 사진)를 한 번에 채워 홈·기록·가계부 스크린샷이 풍성해 보이게 해요. 로컬에만 저장(서버 미전송). 가족 피드는 서버 기반이라 별도예요.")
+                            .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                    }
+                }
             }
             Section("내 운영자 ID (서버 ADMIN_UIDS에 등록)") {
                 VStack(alignment: .leading, spacing: 4) {

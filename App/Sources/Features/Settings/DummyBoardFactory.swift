@@ -15,17 +15,18 @@ enum DummyBoardFactory {
 
     /// 광고/데모용 성장 보드 1개 생성(사진·메모·스티커·연결선 포함). 대상 아이가 없으면 샘플 아이를 만든다.
     /// - Returns: 생성한 보드 id.
+    /// 대상 아이 — 선택/첫 아이가 있으면 그 아이, 없으면 데모용 샘플 아이(12개월 여아 "라온") 생성.
+    @discardableResult
+    static func ensureChildId(_ store: AppStore) -> UUID {
+        if let c = store.selectedChild ?? store.children.first { return c.id }
+        let birth = Calendar.current.date(byAdding: .month, value: -12, to: Date()) ?? Date()
+        store.completeBabyOnboarding(name: "라온", birthDate: birth, gender: .girl)
+        return store.children.first!.id
+    }
+
     @discardableResult
     static func makeSampleBoard(in store: AppStore) -> UUID {
-        // 1) 대상 아이 — 선택/첫 아이가 있으면 그 아이, 없으면 데모용 샘플 아이.
-        let childId: UUID
-        if let c = store.selectedChild ?? store.children.first {
-            childId = c.id
-        } else {
-            let birth = Calendar.current.date(byAdding: .month, value: -12, to: Date()) ?? Date()
-            store.completeBabyOnboarding(name: "라온", birthDate: birth, gender: .girl)
-            childId = store.children.first!.id
-        }
+        let childId = ensureChildId(store)
 
         // 2) 보드 생성(빈 보드 → 아래에서 카드 채워 업서트).
         var board = store.createBoard(childId: childId, title: "라온이의 첫 1년 🌸")
@@ -72,6 +73,53 @@ enum DummyBoardFactory {
 
         store.upsertBoard(board)
         return board.id
+    }
+
+    /// 광고/스크린샷용 로컬 데모 기록 — 가계부 지출·성장 기록·일기(합성 사진). 서버 미전송(로컬만).
+    static func makeSampleRecords(in store: AppStore) {
+        let childId = ensureChildId(store)
+        let cal = Calendar.current
+        let now = Date()
+
+        // 1) 가계부 — 최근 ~3개월, 카테고리별로 분산(한달·6개월 차트가 차도록).
+        let expenses: [(Int, ExpenseCategory, Int, String)] = [   // (며칠 전, 카테고리, 금액, 메모)
+            (2,  .diaper, 24900, "기저귀 박스"), (5,  .clothing, 38000, "내복 세트"),
+            (8,  .medical, 15000, "소아과 진료"), (12, .play, 42000, "문화센터 등록"),
+            (18, .diaper, 27000, "물티슈·기저귀"), (22, .education, 33000, "그림책 전집"),
+            (25, .transport, 12000, "택시(병원)"), (30, .etc, 9000, "잡화"),
+            (36, .diaper, 25900, "기저귀"), (43, .clothing, 21000, "여름옷"),
+            (49, .medical, 48000, "예방접종(유료)"), (57, .play, 16000, "키즈카페"),
+            (65, .diaper, 26900, "기저귀"), (74, .education, 29000, "보드북"),
+            (82, .medical, 18000, "소아과"), (90, .clothing, 35000, "신발"),
+        ]
+        for (ago, cat, amt, memo) in expenses {
+            let d = cal.date(byAdding: .day, value: -ago, to: now) ?? now
+            store.addExpense(amount: amt, category: cat, date: d, memo: memo)
+        }
+
+        // 2) 성장 기록 — 출생 후 월별(차트가 차도록). 아이 생일 기준.
+        let birth = store.children.first(where: { $0.id == childId })?.birthDate ?? cal.date(byAdding: .month, value: -12, to: now)!
+        let growth: [(Int, Double, Double)] = [   // (개월, 키cm, 몸무게kg)
+            (0, 50.0, 3.3), (2, 57.0, 5.2), (4, 62.0, 6.4),
+            (6, 66.0, 7.3), (9, 71.0, 8.5), (12, 75.0, 9.4),
+        ]
+        for (m, h, w) in growth {
+            guard let d = cal.date(byAdding: .month, value: m, to: birth), d <= now else { continue }
+            store.addGrowthRecord(childId: childId, heightCm: h, weightKg: w,
+                                  headCircumferenceCm: 34.0 + Double(m) * 0.8, date: d)
+        }
+
+        // 3) 일기 — 합성 사진 + 이정표(타임라인·홈이 차도록). 날짜는 addDiaryEntry가 오늘로 기록.
+        let diaries: [(String, String, String, UInt32, UInt32)] = [   // (본문, 이정표, 이모지, top, bottom)
+            ("처음으로 뒤집었어요! 온 가족이 박수쳤어요 👏", "첫 뒤집기", "🤸", 0xFFE9C2, 0xFFD089),
+            ("첫 이유식 — 호박죽을 오물오물 잘 먹네요 🥣", "첫 이유식", "🥣", 0xCFEFE0, 0x9FE0C4),
+            ("혼자 앉기 성공! 세상이 달라 보이나 봐요", "혼자 앉기", "🧸", 0xCFE3FF, 0xA6CBFF),
+            ("‘엄마’라고 불러준 날 — 눈물이 핑 돌았어요 🥰", "첫 옹알이", "💬", 0xFFD9E2, 0xFFB3C7),
+        ]
+        for (content, milestone, emoji, top, bottom) in diaries {
+            let ref = renderPhoto(emoji: emoji, top: top, bottom: bottom)
+            store.addDiaryEntry(childId: childId, content: content, milestone: milestone, photoRef: ref)
+        }
     }
 
     // MARK: - 사진 합성
