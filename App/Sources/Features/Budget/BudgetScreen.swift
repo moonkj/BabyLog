@@ -2,7 +2,7 @@
 // BabyLog — Features/Budget
 //
 // 가계부 탭 메인 화면.
-// 구성(위→아래): 지출 추이(기간 세그먼트 7일/30일/6개월/1년 + 막대 차트) →
+// 구성(위→아래): 지출 추이(기간 세그먼트 7일/한달(달 선택)/6개월/1년 + 막대 차트) →
 //                 카테고리별 지출 → 최근 지출 → 월령 가이드 → 정부지원금(받음 체크).
 // 모든 수치는 실데이터(store.expenses)만 사용 — 추측/가공 데이터 없음(정직 원칙).
 
@@ -64,16 +64,23 @@ struct BudgetScreen: View {
     private enum ExpenseSheet: Identifiable {
         case add                 // 새 지출
         case edit(Expense)       // 지출 행 탭 → 편집
+        case subsidy(SubsidyInfo) // 지원금 카드 탭 → 상세 설명 팝업
         var id: String {
             switch self {
             case .add:           return "add"
             case .edit(let e):   return "edit-\(e.id)"
+            case .subsidy(let s): return "subsidy-\(s.id)"
             }
         }
     }
     @State private var showAllExpenses = false
     /// '1년' 모드에서 보는 연도(연도별 탐색). 기본 = 올해.
     @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
+    /// '한달' 모드에서 보는 달(달별 탐색). 기본 = 이번 달의 1일.
+    @State private var monthAnchor: Date = {
+        let cal = Calendar.current
+        return cal.date(from: cal.dateComponents([.year, .month], from: Date())) ?? Date()
+    }()
 
     // MARK: Computed
 
@@ -99,14 +106,27 @@ struct BudgetScreen: View {
 
     /// '1년' 세그먼트에서 특정 연도(1~12월)를 보는 모드.
     private var isYearMode: Bool { period == .year }
+    /// '한달' 세그먼트에서 특정 달(1일~말일)을 보는 모드.
+    private var isMonthMode: Bool { period == .month }
 
-    /// 총액·차트 헤더 레이블 ('1년' 모드면 "2026년").
+    private var monthYear: Int { Calendar.current.component(.year, from: monthAnchor) }
+    private var monthMonth: Int { Calendar.current.component(.month, from: monthAnchor) }
+
+    /// 총액·차트 헤더 레이블 ('1년'→"2026년", '한달'→"2026년 6월").
     private var rangeLabel: String {
-        isYearMode ? "\(selectedYear)년" : period.rangeLabel
+        if isMonthMode { return "\(monthYear)년 \(monthMonth)월" }
+        if isYearMode { return "\(selectedYear)년" }
+        return period.rangeLabel
     }
 
     /// 선택 기간에 속하는 지출
     private var periodExpenses: [Expense] {
+        if isMonthMode {
+            let cal = Calendar.current
+            return allExpenses.filter {
+                cal.component(.year, from: $0.date) == monthYear && cal.component(.month, from: $0.date) == monthMonth
+            }
+        }
         if isYearMode {
             return allExpenses.filter { Calendar.current.component(.year, from: $0.date) == selectedYear }
         }
@@ -120,6 +140,15 @@ struct BudgetScreen: View {
     }
 
     private var previousPeriodTotal: Int {
+        if isMonthMode {
+            let cal = Calendar.current
+            guard let prev = cal.date(byAdding: .month, value: -1, to: monthAnchor) else { return 0 }
+            let py = cal.component(.year, from: prev), pm = cal.component(.month, from: prev)
+            // 이번 달(진행 중)은 지난달 같은 진행 일수와 비교, 지난 달들은 전월 전체와 비교.
+            return isCurrentMonth
+                ? BudgetSummary.monthToDateTotal(allExpenses, year: py, month: pm)
+                : BudgetSummary.monthTotal(allExpenses, year: py, month: pm)
+        }
         if isYearMode {
             // 올해(진행 중)를 보는 경우 — 작년 '전체'가 아니라 작년 같은 진행 기간(1/1~같은 날짜)과 비교.
             // (부분합 vs 전체 비교로 항상 큰 감소처럼 보이던 왜곡 수정. 과거 연도는 전년 전체와 비교 유지.)
@@ -138,6 +167,7 @@ struct BudgetScreen: View {
     }
 
     private var trendBuckets: [TrendBucket] {
+        if isMonthMode { return BudgetSummary.monthTrend(allExpenses, year: monthYear, month: monthMonth) }
         if isYearMode { return BudgetSummary.yearTrend(allExpenses, year: selectedYear) }
         return BudgetSummary.trend(allExpenses, period)
     }
@@ -151,6 +181,29 @@ struct BudgetScreen: View {
     }
     private var canGoPrevYear: Bool { selectedYear > earliestYear }
     private var canGoNextYear: Bool { selectedYear < currentYear }
+
+    /// 달별 탐색 — 미래로는 이동 불가, 과거는 데이터 최소달과 (이번달-10년) 중 더 이른 달까지.
+    private var currentMonthAnchor: Date {
+        let cal = Calendar.current
+        return cal.date(from: cal.dateComponents([.year, .month], from: Date())) ?? Date()
+    }
+    private var isCurrentMonth: Bool {
+        Calendar.current.isDate(monthAnchor, equalTo: currentMonthAnchor, toGranularity: .month)
+    }
+    private var earliestMonthAnchor: Date {
+        let cal = Calendar.current
+        let dataMin = allExpenses
+            .compactMap { cal.date(from: cal.dateComponents([.year, .month], from: $0.date)) }
+            .min() ?? currentMonthAnchor
+        let tenYrsAgo = cal.date(byAdding: .year, value: -10, to: currentMonthAnchor) ?? currentMonthAnchor
+        return min(dataMin, tenYrsAgo)
+    }
+    private var canGoPrevMonth: Bool { monthAnchor > earliestMonthAnchor }
+    private var canGoNextMonth: Bool { monthAnchor < currentMonthAnchor }
+    private func stepMonth(_ delta: Int) {
+        guard let d = Calendar.current.date(byAdding: .month, value: delta, to: monthAnchor) else { return }
+        monthAnchor = d
+    }
 
     private var categoryBreakdown: [(category: ExpenseCategory, amount: Int)] {
         let dict = BudgetSummary.byCategory(periodExpenses)
@@ -231,6 +284,7 @@ struct BudgetScreen: View {
             switch sheet {
             case .add:            AddExpenseSheet().environmentObject(store)
             case .edit(let exp):  AddExpenseSheet(editing: exp).environmentObject(store)
+            case .subsidy(let s): SubsidyDetailSheet(info: s)
             }
         }
     }
@@ -242,8 +296,9 @@ struct BudgetScreen: View {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 periodSegment
 
-                // '1년' 모드: 연도별 탐색 스텝퍼
-                if isYearMode { yearStepper }
+                // '한달'·'1년' 모드: 달별/연도별 탐색 스텝퍼
+                if isMonthMode { monthStepper }
+                else if isYearMode { yearStepper }
 
                 // 총액 + 전기 대비
                 VStack(alignment: .leading, spacing: 3) {
@@ -303,6 +358,53 @@ struct BudgetScreen: View {
             }
         }
         .padding(4)
+        .background(AppColors.surface2, in: Capsule())
+    }
+
+    /// 달별 탐색 — ◀ 2026년 6월 ▶ (미래·데이터 없는 과거로는 이동 제한)
+    private var monthStepper: some View {
+        HStack(spacing: Spacing.s2) {
+            Button {
+                guard canGoPrevMonth else { return }
+                Haptics.light()
+                withAnimation(.easeInOut(duration: 0.2)) { stepMonth(-1) }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(canGoPrevMonth ? AppColors.ink2 : AppColors.ink3.opacity(0.3))
+                    .frame(width: 40, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.9))
+            .disabled(!canGoPrevMonth)
+            .accessibilityLabel("이전 달 보기")
+
+            Text("\(String(monthYear))년 \(monthMonth)월")
+                .font(.system(size: 14, weight: .heavy))
+                .foregroundStyle(AppColors.ink)
+                .frame(maxWidth: .infinity)
+                .contentTransition(.numericText())
+                .accessibilityLabel("선택한 달 \(monthYear)년 \(monthMonth)월")
+                .accessibilityAddTraits(.isHeader)
+
+            Button {
+                guard canGoNextMonth else { return }
+                Haptics.light()
+                withAnimation(.easeInOut(duration: 0.2)) { stepMonth(1) }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(canGoNextMonth ? AppColors.ink2 : AppColors.ink3.opacity(0.3))
+                    .frame(width: 40, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(LiquidPressStyle(scale: 0.9))
+            .disabled(!canGoNextMonth)
+            .accessibilityLabel("다음 달 보기")
+            .accessibilityHint(canGoNextMonth ? "" : "이번 달 이후로는 이동할 수 없어요")
+        }
+        .padding(.horizontal, Spacing.s2)
+        .frame(height: 40)
         .background(AppColors.surface2, in: Capsule())
     }
 
@@ -741,7 +843,8 @@ struct BudgetScreen: View {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 store.toggleSubsidyClaimed(childId: subsidyChild?.id, id: subsidy.id)
                             }
-                        }
+                        },
+                        onTapDetail: { expenseSheet = .subsidy(subsidy) }
                     )
                 }
 
@@ -839,6 +942,7 @@ private struct SubsidyCard: View {
     let info: SubsidyInfo
     let claimed: Bool
     let onToggleClaim: () -> Void
+    var onTapDetail: () -> Void = {}
 
     var body: some View {
         BLCard(padding: Spacing.s4, flat: true) {
@@ -859,36 +963,39 @@ private struct SubsidyCard: View {
                 .accessibilityLabel(claimed ? "\(info.name) 받음 해제" : "\(info.name) 받았다고 체크")
                 .accessibilityAddTraits(claimed ? [.isSelected, .isButton] : .isButton)
 
-                iconBox
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(info.name)
-                        .font(.system(size: 15.5, weight: .bold))
-                        .foregroundStyle(claimed ? AppColors.ink3 : AppColors.ink)
-                        .strikethrough(claimed, color: AppColors.ink3)
-                        .lineLimit(1)
-
-                    HStack(spacing: Spacing.s2) {
-                        Text(amountStr(info.amountKRW))
-                            .font(AppFont.num(14, weight: .heavy))
-                            .foregroundStyle(claimed ? AppColors.ink3 : AppColors.primary)
-                            .lineLimit(1)
-                        Text(info.eligibility)
-                            .font(AppFont.caption)
-                            .foregroundStyle(AppColors.ink3)
-                            .lineLimit(2)
+                // 아이콘+내용 영역 탭 → 상세 설명 팝업(카드에선 설명이 잘리므로).
+                Button { Haptics.light(); onTapDetail() } label: {
+                    HStack(spacing: Spacing.s3) {
+                        iconBox
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(info.name)
+                                .font(.system(size: 15.5, weight: .bold))
+                                .foregroundStyle(claimed ? AppColors.ink3 : AppColors.ink)
+                                .strikethrough(claimed, color: AppColors.ink3)
+                                .lineLimit(1)
+                            HStack(spacing: Spacing.s2) {
+                                Text(amountStr(info.amountKRW))
+                                    .font(AppFont.num(14, weight: .heavy))
+                                    .foregroundStyle(claimed ? AppColors.ink3 : AppColors.primary)
+                                    .lineLimit(1)
+                                Text(info.eligibility)
+                                    .font(AppFont.caption)
+                                    .foregroundStyle(AppColors.ink3)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(info.name), \(amountStr(info.amountKRW)). \(info.eligibility)" + (claimed ? ", 받음 완료" : ""))
+                .accessibilityHint("탭하면 자세한 설명을 봐요")
 
                 trailingAction
             }
         }
         .opacity(claimed ? 0.7 : 1)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(info.name), \(amountStr(info.amountKRW)). \(info.eligibility)"
-            + (claimed ? ", 받음 완료" : ""))
     }
 
     @ViewBuilder
@@ -955,6 +1062,62 @@ private struct SubsidyCard: View {
             }
         }
         return "\(prefix) \(amount)원"
+    }
+}
+
+// MARK: - SubsidyDetailSheet
+
+/// 지원금 상세 — 카드에서 잘리는 설명을 전부 보여주고 신청으로 연결.
+private struct SubsidyDetailSheet: View {
+    let info: SubsidyInfo
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    HStack(spacing: Spacing.s3) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                                .fill(AppColors.primaryTint).frame(width: 56, height: 56)
+                            Image(systemName: "gift.fill").font(.system(size: 26, weight: .medium)).foregroundStyle(AppColors.primary)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(info.name).font(.system(size: 18, weight: .heavy)).foregroundStyle(AppColors.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(amountStr).font(AppFont.num(16, weight: .heavy)).foregroundStyle(AppColors.primary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    Text(info.eligibility)   // 전체 설명(잘림 없음)
+                        .font(AppFont.body).foregroundStyle(AppColors.ink2).lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        if let u = info.applyURL ?? URL(string: "https://www.bokjiro.go.kr") { UIApplication.shared.open(u) }
+                    } label: {
+                        Text("복지로에서 신청").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                            .frame(maxWidth: .infinity).frame(height: 52)
+                            .background(AppColors.ink, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    }.buttonStyle(LiquidPressStyle(scale: 0.98)).padding(.top, Spacing.s2)
+                    Text("금액·조건은 복지로에서 최종 확인하세요.")
+                        .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .padding(Spacing.s5)
+            }
+            .background(AppColors.surface)
+            .navigationTitle("지원금 안내").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("닫기") { dismiss() }.font(.system(size: 16, weight: .bold)) } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var amountStr: String {
+        let prefix = info.isLumpSum ? "총" : "월"
+        if info.amountKRW >= 10_000, info.amountKRW % 10_000 == 0 { return "\(prefix) \(info.amountKRW / 10_000)만원" }
+        let f = NumberFormatter(); f.numberStyle = .decimal
+        return "\(prefix) \(f.string(from: NSNumber(value: info.amountKRW)) ?? "\(info.amountKRW)")원"
     }
 }
 

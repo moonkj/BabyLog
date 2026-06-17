@@ -1,12 +1,12 @@
 # BabyLog 데이터 모델 & 영속화 가이드
 
-> 최종 업데이트: 2026-06-10 · 입력: `App/Sources/Data/Models.swift`, `App/Sources/Data/PregnancyTransition.swift`, `App/Sources/Data/AppStore.swift`, `App/Sources/Core/EventBus.swift`, `App/Sources/Notifications/NotificationService.swift`, `CLAUDE.md`, `team/debug/phase3-risk-audit.md`
+> 최종 업데이트: 2026-06-17 · 입력: `App/Sources/Data/Models.swift`, `App/Sources/Data/BoardModels.swift`, `App/Sources/Data/PregnancyTransition.swift`, `App/Sources/Data/AppStore.swift`, `App/Sources/Data/CloudSyncService.swift`, `App/Sources/Core/EventBus.swift`, `App/Sources/Notifications/NotificationService.swift`, `CLAUDE.md`, `team/debug/phase3-risk-audit.md`
 
 ---
 
 ## 1. 도메인 모델 개요
 
-BabyLog의 핵심 데이터는 다섯 개 엔티티로 구성됩니다. 모든 엔티티는 `App/Sources/Data/Models.swift`에 정의되어 있으며, `Identifiable · Codable · Equatable`을 준수합니다.
+BabyLog의 핵심 데이터는 다섯 개 엔티티(`App/Sources/Data/Models.swift`) + 성장 보드 2개(`BoardModels.swift`)로 구성됩니다. 모든 엔티티는 `Identifiable · Codable · Equatable`을 준수합니다.
 
 ### 엔티티 일람
 
@@ -17,6 +17,10 @@ BabyLog의 핵심 데이터는 다섯 개 엔티티로 구성됩니다. 모든 �
 | `GrowthRecord` | 신장·체중·두위 기록 | `id · childId · date · heightCm · weightKg · headCircumferenceCm` | `childId → Child.id` |
 | `DiaryEntry` | 사진·이정표·메모 다이어리 | `id · childId · date · recordType · content · milestone` | `childId → Child.id` |
 | `VaccineRecord` | 예방접종 일정·완료 이력 | `id · childId · vaccineId · scheduledDate · completedDate · hospital` | `childId → Child.id` |
+| `GrowthBoard` | 성장 보드 (자유 캔버스) | `id · childId · title · isPrimary · cards · connections · stickers · updatedAt` | `childId → Child.id` |
+| `BoardCard` | 보드 내 사진/메모 카드 | `id · kind(photo/memo) · photoRef · sourceEntryId · title · 위치·회전` | `sourceEntryId → DiaryEntry.id`(참조 시) |
+
+> **성장 보드**(`App/Sources/Data/BoardModels.swift`)는 위 핵심 5개와 별도 파일에 정의. 모든 필드 `decodeIfPresent` 하위호환. 등급제: 무료 1개·Pro 최대 100개(`GrowthBoard.maxPerChild = 100`), 대표(`isPrimary`) 1개는 무료도 편집·나머지는 Pro 전용(`AppStore.isBoardEditable`). 카드 사진은 `sourceEntryId`로 소유/참조를 구분(ref-count) — 기록 삭제 시 참조 카드는 사진을 승계해 유실을 막는다. 보드는 **로컬/개인 iCloud(CloudKit)만**, 우리 서버에 올리지 않는다.
 
 ### Pregnancy 상태 머신
 
@@ -193,45 +197,43 @@ UNUserNotificationCenter.getPendingNotificationRequests { ... }
 
 ---
 
-## 6. 현재 영속화 현황 — 인메모리 스토어
+## 6. 현재 영속화 현황 — JSON 디스크 + 개인 iCloud 백업
 
-`AppStore`는 현재 **런타임 메모리 전용**입니다. 앱을 재시작하면 모든 데이터가 초기화됩니다.
+`AppStore`(`@MainActor ObservableObject`)는 전체 상태를 `PersistableState`로 묶어 **JSON으로 디스크에 영속화**합니다(`CodablePersistence`, App Group 컨테이너). `objectWillChange` 기반 autoPersist로 변경 시 자동 저장되고, 앱 재시작·기기 재설치 후에도 유지됩니다.
 
-```swift
-// AppStore 주석 원문
-// CoreData + CloudKit 영속화는 후속 인프라 단계에서 추가 예정.
-// 현재는 런타임 메모리 전용이므로 앱 재시작 시 초기화된다.
-final class AppStore: ObservableObject {
-    @Published private(set) var pregnancies: [Pregnancy]
-    @Published private(set) var children: [Child]
-}
-```
+| 계층 | 구현 | 비고 |
+|---|---|---|
+| 로컬 디스크 | `CodablePersistence` → `PersistableState`(임신·아이·성장·다이어리·접종·가계부·**성장 보드**·prefs) | App Group, JSON. 모든 디코딩 `decodeIfPresent` 하위호환 |
+| 개인 iCloud 백업 | `CloudSyncService`(`BL_CLOUDKIT`, 컨테이너 `iCloud.com.vibelab.babylog`) | `CKContainer.default().privateCloudDatabase` — **사용자 개인 iCloud, 우리 서버 X** |
+| 사진 백업 | 보드 전용 사진 등 `allPhotoRefs`를 iCloud로 push | 아동 기록 원본은 로컬/개인 iCloud만 |
 
-현재 단계에서 유효한 용도: 전환 로직 검증, UI 프로토타이핑, 단위 테스트.
+**CloudKit 저장 정책**: `push()`는 `modifyRecords(saving:deleting:savePolicy: .allKeys)`(last-writer-wins)를 사용합니다. 기본 `database.save()`(`.ifServerRecordUnchanged`)는 "serverRecordChanged / client oplock error"를 일으켜 백업이 실패하므로 쓰지 않습니다. push 성공 시 `bl_last_cloud_backup_at`에 시각을 기록(설정 화면 "마지막 백업" 표시). 자동 백업은 `.background` scenePhase + `BGProcessingTask` 캐치업으로 수행하며, 로그인 안 됨(`accountStatus() != .available`)이면 앱 진입 1회 알림 + 설정 경고로 안내합니다.
+
+> 참고: 앱 로그인(가족 피드·크루, Supabase)과 기기 iCloud 백업(Apple ID·CloudKit)은 **별개**입니다 — 백업은 후자만 사용합니다.
 
 ---
 
-## 7. 향후 영속화 계획 — CoreData + CloudKit
+## 7. 향후 영속화 계획 — CoreData 마이그레이션 + CKShare
 
-`CLAUDE.md` 기술 스택과 `DESIGN_REVIEW.md` Phase 3 계획에 따라 아래와 같이 영속화를 추가합니다.
+현재 영속화는 JSON 디스크 + 개인 iCloud(CloudKit) 백업이 라이브입니다(§6). 아래는 그 위에 더할 후속 단계입니다.
 
-### CoreData (로컬 영속화)
+### CoreData 마이그레이션 (후속)
 
 | 항목 | 내용 |
 |---|---|
-| 대상 엔티티 | `Pregnancy`, `Child`, `GrowthRecord`, `DiaryEntry`, `VaccineRecord` |
+| 대상 엔티티 | `Pregnancy`, `Child`, `GrowthRecord`, `DiaryEntry`, `VaccineRecord`, `GrowthBoard` |
 | 전환 트랜잭션 | `AppStore.commitBirthTransition`을 `NSManagedObjectContext` 단일 `save()`로 래핑 |
 | 불완전 전환 복구 | 앱 시작 시 `(status == .delivered) && (pregnancyId를 가진 Child 없음)` 감지 → 복구 플로우 |
 | 시간대 정규화 | 날짜 저장 시 UTC 기준으로 정규화, 표시 시에만 현지 시간대 변환 (A-1 리스크 대응) |
 
-### CloudKit (가족 동기화)
+### CloudKit 백업 — 현황 및 다음
 
 | 항목 | 내용 |
 |---|---|
-| 동기화 범위 | 임신·아이·성장·다이어리·접종 기록 |
-| 사진 정책 | 무료: 로컬/iCloud Drive 저장. Pro: 서버 백업 (CLAUDE.md 절대 원칙) |
+| 현황(라이브) | `CloudSyncService`가 `PersistableState` 전체를 개인 iCloud private DB에 백업·복원(§6). 저장 정책 `.allKeys`(last-writer-wins). |
+| 사진 정책 | **아동 기록 원본(성장·일기·접종·가계부·성장 보드)은 로컬/개인 iCloud만, 우리 서버 X.** 우리 서버(R2)는 **가족 사진 공유**에 한해 사용(무료 2인·Pro 8명). — `CLAUDE.md` 절대 원칙 |
+| 부부 전체데이터 공유 (v2) | CKShare 기반 부부 간 앱 전체 데이터 동기화(개인 iCloud, 우리 서버 X). 2번째 Apple ID 필요로 보류 중. |
 | 상실 상태 전파 | `pregnancyEndedInLoss` 상태를 CloudKit 알림으로 가족 기기에 먼저 전파 → 나머지 임신 알림 일시 중단 (C-2 리스크 대응) |
-| 충돌 해결 | 최신 타임스탬프 우선 (last-write-wins). 전환 상태는 서버 기준 우선. |
 
 ---
 

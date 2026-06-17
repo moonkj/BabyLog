@@ -4,6 +4,7 @@
 import XCTest
 @testable import BabyLog
 
+@MainActor
 final class AppStoreDeleteCascadeTests: XCTestCase {
 
     private func newStore() -> AppStore {

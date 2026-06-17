@@ -19,6 +19,7 @@ struct MainTabView: View {
     @State private var showAddPregnancy = false
     /// 멈춤/상실 임신만 있는 경우 — 새 임신 등록을 권하지 않고 부드러운 안내(민감영역)
     @State private var showPausedNotice = false
+    @State private var showICloudBackupWarn = false   // 앱 진입 1회 — 데이터 있는데 iCloud 미로그인 안내
     @State private var showSplash = true
     // FAB 자유 위치(길게 눌러 드래그) — 기준 위치에서의 오프셋 영속
     @AppStorage("bl_fab_dx") private var fabDX: Double = 0
@@ -68,7 +69,9 @@ struct MainTabView: View {
 
     var body: some View {
         Group {
-            if onboarded || store.hasContent {
+            // 안내(온보딩)는 항상 먼저 — iCloud 백업으로 복원된 데이터가 있어도 건너뛰지 않는다.
+            // 복원은 온보딩 완료 후 본화면 진입 시점에 수행(BabyLogApp의 onChange(onboarded)).
+            if onboarded {
                 mainUI
             } else {
                 OnboardingView { withAnimation(.easeOut) { onboarded = true } }
@@ -86,6 +89,12 @@ struct MainTabView: View {
         // (.overlay는 UIKit 시트 뒤로 가려지고 스크림도 잘렸음 → BadgeOverlayWindow로 이전)
         .onChange(of: store.pendingBadgeAward?.id) { _, _ in presentBadgeIfNeeded() }
         .onAppear { presentBadgeIfNeeded() }
+        .task { await checkICloudBackupStatus() }   // 앱 진입 1회 — 미로그인 시 자동백업 경고
+        .alert("iCloud 백업이 꺼져 있어요", isPresented: $showICloudBackupWarn) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("지금 iCloud에 로그인되어 있지 않아 소중한 기록이 자동 백업되지 않아요. 기기 ‘설정 > 사용자 이름 > iCloud’에서 로그인하면 안전하게 보관돼요.")
+        }
         // 저장 실패 안내(정직 — 무음 실패 금지). 디스크 오류 시 사용자에게 즉시 알림.
         .alert("저장 실패", isPresented: Binding(
             get: { store.lastPersistError != nil },
@@ -102,6 +111,19 @@ struct MainTabView: View {
     }
 
     /// pendingBadgeAward 변화에 맞춰 윈도우 카드를 띄우거나 내린다.
+    /// 앱 진입 1회 안내 — 백업할 데이터가 있는데 iCloud 미로그인이면 자동백업이 조용히 실패하므로 부드럽게 알림.
+    /// (.task는 실행당 1회 → 매 실행 1번만 뜨고 세션 중 반복 안 함. 미로그인이 계속되면 다음 실행에 다시 안내.)
+    private func checkICloudBackupStatus() async {
+        guard onboarded,
+              CloudSyncService.isAvailableInBuild,
+              CloudSyncService.isEnabled,
+              !store.isEffectivelyEmpty else { return }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)   // 스플래시·온보딩 정리 후 표시
+        guard !Task.isCancelled else { return }
+        let available = await CloudSyncService.shared.accountAvailable()
+        if !available { showICloudBackupWarn = true }
+    }
+
     private func presentBadgeIfNeeded() {
         if let badge = store.pendingBadgeAward {
             BadgeOverlayWindow.show(badge) { store.pendingBadgeAward = nil }

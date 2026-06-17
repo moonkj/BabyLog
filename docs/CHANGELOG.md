@@ -1,8 +1,8 @@
 # BabyLog 변경 이력 (CHANGELOG)
 
-> 마지막 갱신: 2026-06-15  
-> 입력 기준: `process.md` 실행 로그 + `Tasklist.md` 라운드 보드  
-> git log 미참조 — process.md 단일 소스 기준
+> 마지막 갱신: 2026-06-17  
+> 입력 기준: `process.md` 실행 로그 + `Tasklist.md` 라운드 보드 + 세션 작업 로그  
+> 2026-06-16~17 항목은 git log + 세션 작업 기준(process.md는 06-10에서 정지)
 
 ---
 
@@ -10,8 +10,10 @@
 
 | 항목 | 현황 |
 |---|---|
-| **화면** | 5탭 전부 실화면 완성 (홈·기록·동네·가계부·내정보) |
-| **테스트** | 239개 (PASS 100% 유지) |
+| **화면** | 5탭 전부 실화면 완성 (홈·기록·동네·가계부·내정보) + **성장 보드**(자유 캔버스 에디터) |
+| **테스트** | 362개 (PASS 100% 유지) |
+| **구독** | StoreKit 2 실결제(월 ₩990·연 ₩9,900) + 서버 영수증 검증(운영→샌드박스 폴백) |
+| **백업** | 개인 iCloud(CloudKit) 자동 백업 — last-writer-wins(.allKeys)로 oplock 해소, 마지막 백업 시각 표시, 미로그인 경고 |
 | **실데이터 CRUD** | 가계부·접종완료·임신(태동/체중)·프로필·홈 전 영역 store 영속 연결 |
 | **모션 시스템** | DESIGN §8 시그니처 모션 4계층(생애시계·이정표축하·성장링·레이더·하트비트·체크드로우·햅틱) |
 | **커밋** | main 브랜치 지속 증가 |
@@ -35,6 +37,46 @@
 - **App Group 위젯 실데이터** — WidgetKit 타깃과 앱 간 App Group 컨테이너 공유 실영속화
 - **SPM 모듈화** — BLCore·BLData·BLGrowth 등 패키지 분리
 - **다크 모드 재정비** — 인디고·골드 팔레트 기반 다크 토큰 전면 재조정
+
+---
+
+## 세션 — 성장 보드 + 구독·백업 신뢰성 + 가계부·접종 UX (완료 · 2026-06-16~17)
+
+기간: 2026-06-16~17. 커밋 `c8ef9ce`→`98ebbcf`(06-16) + 06-17 작업트리. 테스트 239→**362**.
+
+### 1) 성장 보드(Growth Board) — 신규 기능
+
+아이 사진·메모·스티커를 자유 캔버스에 배치하는 보드 에디터. 신규 파일 `App/Sources/Data/BoardModels.swift`, `App/Sources/Features/GrowthBoard/`(GrowthBoardScreen·GrowthBoardCard), 스티커 에셋 `App/Resources/Assets.xcassets/Stickers/`.
+
+- **데이터 모델**(`BoardModels.swift`): `GrowthBoard`(cards·connections·stickers·`isPrimary`·`updatedAt`) + `BoardCard`(photo/memo, `sourceEntryId`=기록 참조 여부). 모든 필드 `decodeIfPresent` 하위호환. `maxPerChild = 100`.
+- **카드 참조 카운팅**: `sourceEntryId==nil` = 보드 소유 사진(ref-count 정리 대상), `!=nil` = 일기 기록 참조(원본 보존). 기록 삭제 시 보드가 사진을 **승계**(빈 카드/유실 방지).
+- **에디터 폴리시**(사용자 피드백 반영): 스티커 탭→회전 핸들(크기조절 팝업 제거), 메모 줄맞춤·높이 2/3 축소, 사진 placeholder "사진", 카드 삭제 버튼 좌상단+확인 팝업, 플로팅 툴바 우측 세로+롱프레스로 위치 이동(미니맵과 dodge), 전체화면 몰입 모드(미니맵·툴바 숨김), 캡션 기본값 제거, 사진 추가 시 상세 입력 팝업 자동 오픈.
+- **제목 편집 2종**: 보드별 제목 + 홈 "○○의 성장 보드" 섹션 제목(아이별 `bl_board_section_*` prefs, 백업 snapshot/restore 포함, 아이 삭제 시 키 제거).
+- **멀티보드 등급제**: 무료 **1개**·Pro **최대 100개**. 무료는 전체 보드 **열람 가능**, **대표(primary) 보드 1개만 편집**. 대표 변경은 **Pro 전용**. Pro→무료 다운그레이드해도 보드 전부 보존(데이터 인질극 금지). `isBoardEditable(_:childId:)`는 라이브 계산 — Pro 만료 시 비대표 보드 편집 즉시 차단(`including: editable ? .all : .none`).
+- **AppStore 보드 CRUD**: `boards(for:)`·`board(id:)`·`createBoard`(첫 보드 대표)·`deleteBoard`·`upsertBoard`(id 키잉, 삭제된 아이 보드 부활 방지)·`primaryBoardId`·`setPrimaryBoard`(Pro만)·`canCreateBoard`·`pruneOrphanBoards`(아이 비었을 때 전체 삭제 가드)·`cleanupBoardCardPhoto`(ref-count)·`adoptBoardPhotos`.
+- **백업 포함**: 보드는 로컬/개인 iCloud만(우리 서버 X). `PersistableState.growthBoards` snapshot/restore + iCloud `allPhotoRefs`(보드 전용 사진) + BackupService 아카이브에 포함됨을 코드 추적으로 확인.
+- **UX 버그 수정**: 저장/삭제 2번 눌러야 되던 문제(제스처·키보드 포커스), 콜드런치 시 히어로 홈 노출, 전체 보드 보이도록 줌아웃 범위 확장, 카드 상세에서 회전 버튼 제거.
+- **3차 병렬 심층 코드리뷰**(R1–R10 → MR1–MR5 → D1–D10): 데이터 유실급 버그 수정 — `pruneOrphanBoards` 부분 디코딩 시 사진 보존, Pro 만료 중 편집 차단, 보드 부활 방지, 공유 사진 ref-count 삭제 보정 등.
+- **테스트**: `AppStoreGrowthBoardTests` 11개(멀티보드·대표·편집권한·한도·삭제 정리·기록사진 승계).
+
+### 2) iCloud 백업 신뢰성·UX (커밋 `98ebbcf` + 06-17)
+
+- **oplock 해소**: `CloudSyncService.push()`를 `database.save()`(기본 `.ifServerRecordUnchanged`)→`modifyRecords(saving:deleting:savePolicy: .allKeys)`(last-writer-wins)로 변경 — "client oplock error / serverRecordChanged" 제거.
+- **마지막 백업 시각 표시**: push 성공 시 `bl_last_cloud_backup_at` 기록, 설정 '지금 백업' 아래 "마지막 백업: yyyy.M.d a h:mm" 표시(`cloudLastBackupAt`/`cloudLastBackupText` — 기존 로컬 전체백업 `bl_last_backup`과 별개).
+- **미로그인 경고**: 앱 진입 1회 알림(`MainTabView`) + 설정 경고 배너(`iCloudSignedIn==false`). `accountAvailable()` = `CKContainer.accountStatus()==.available`.
+- **로그인 구분 카피**: 앱 로그인(가족 피드·크루, Supabase)과 기기 iCloud 백업(Apple ID·CloudKit)이 서로 다름을 설정 양쪽 섹션에 명시.
+
+### 3) 가계부·접종 UX (06-17)
+
+- **지원금 상세 팝업**(`BudgetScreen`): 첫만남이용권·부모급여 등 카드 설명이 상자에서 잘리던 문제 → 카드 탭 시 `SubsidyDetailSheet`(전체 설명·금액·복지로 신청). 토글/신청 버튼은 분리 유지.
+- **접종 행 정리**(`RecordVaccineSection`): 단일 접종 원형 체크 표시 제거, 다회 접종은 원형 도트 묶음 제거하고 "0/5" 카운트만 표시, B형간염·DTaP 등 시기(기간) 텍스트 잘림 수정(`lineLimit(2).fixedSize`).
+
+### 4) StoreKit 구독·출시 준비 (커밋 `c8ef9ce`·`96e235b`·`771ced4`·`f057a1c`)
+
+- **StoreKit 2 구독**(`c8ef9ce`): 내정보 구독 카드 + 실결제. 월 ₩990·연 ₩9,900. 보안·회귀 수정 묶음.
+- **출시 준비**(`96e235b`): 보안·심사 차단급 수정, 키보드/날짜 UX, 빠른기록 전환 FAB 위치 이동, 제목 애니메이션 아이콘.
+- **5라운드 반복 코드리뷰 + 내정보·설정 정리**(`771ced4`).
+- **영수증 검증 폴백**(`f057a1c`): `verify-subscription` Edge가 운영 호스트 실패 시 샌드박스 호스트로 자동 폴백.
 
 ---
 

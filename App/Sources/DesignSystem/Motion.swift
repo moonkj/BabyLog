@@ -37,6 +37,12 @@ enum Haptics {
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         #endif
     }
+    /// 집어듦·길게 눌러 잡기 등 또렷한 피드백
+    static func medium() {
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
+    }
     /// 저장·달성 등 긍정 완료
     static func success() {
         #if canImport(UIKit)

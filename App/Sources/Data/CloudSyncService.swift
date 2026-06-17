@@ -28,9 +28,13 @@ final class CloudSyncService {
     static let shared = CloudSyncService()
     private init() {}
 
+    /// 자동 복원 재진입 가드 — .task와 onChange(onboarded)가 같은 런치에서 겹쳐 호출돼도 1회만 실행.
+    static var autoRestoreInFlight = false
+
     /// 사용자가 설정에서 켰는지 (엔타이틀먼트 없으면 켜지지 않음).
     @MainActor static var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "bl_cloud_sync")
+        // 기본 ON — 키가 설정되기 전(첫 실행)에도 자동 백업이 켜져 있도록(데이터 안전 우선).
+        (UserDefaults.standard.object(forKey: "bl_cloud_sync") as? Bool) ?? true
     }
 
     private let recordType = "BabyLogState"
@@ -106,7 +110,12 @@ final class CloudSyncService {
         record["jsonAsset"] = CKAsset(fileURL: tmp)
         record["json"] = nil          // 레거시 inline 필드 제거(1MB 한계에 합산되지 않게)
         record["updatedAt"] = Date() as CKRecordValue
-        _ = try await database.save(record)
+        // last-write-wins로 강제 덮어쓰기 — database.save()의 기본 .ifServerRecordUnchanged는
+        // 자동/수동 백업이 겹치거나 changeTag가 어긋나면 'serverRecordChanged(client oplock)'로 실패한다.
+        // 백업 레코드는 사용자당 1개(main)이고 항상 최신본으로 덮는 게 맞으므로 .allKeys 사용.
+        let result = try await database.modifyRecords(saving: [record], deleting: [], savePolicy: .allKeys)
+        for (_, r) in result.saveResults { if case .failure(let e) = r { throw e } }
+        UserDefaults.standard.set(Date(), forKey: Self.lastBackupKey)   // 백업 성공 시각 기록(설정에 '마지막 백업' 표시)
         #else
         throw CloudSyncError.notEnabled
         #endif
@@ -151,6 +160,12 @@ final class CloudSyncService {
     private static let photoRecordType = "BabyLogPhoto"
     private static let uploadedKey = "bl_ck_uploaded_photos"   // 이미 올린 파일명(증분)
     private static let tombstoneKey = "bl_ck_deleted_photos"   // 로컬에서 지운 파일명 — CK에서도 지우고 복원 시 부활 차단
+    private static let lastBackupKey = "bl_last_cloud_backup_at"   // 이 기기에서 마지막으로 백업 성공한 시각(표시용)
+
+    /// 이 기기에서 마지막으로 iCloud 백업(상태 업로드)에 성공한 시각. 없으면 nil.
+    nonisolated static func lastBackupAt() -> Date? {
+        UserDefaults.standard.object(forKey: lastBackupKey) as? Date
+    }
 
     /// iCloud에 아직 안 올라간 로컬 사진·영상 수(원장 기준, 네트워크 없이 계산). 0이면 모두 백업됨.
     nonisolated static func pendingUploadCount() -> Int {
@@ -180,8 +195,20 @@ final class CloudSyncService {
             var remaining = tombstones
             for batch in Array(tombstones).chunked(into: 40) {
                 let ids = batch.map { CKRecord.ID(recordName: "photo-\($0)") }
-                if (try? await database.modifyRecords(saving: [], deleting: ids, savePolicy: .allKeys)) != nil {
-                    for n in batch { up.remove(n); remaining.remove(n) }
+                // 배치 반환을 무조건 성공으로 보지 않고 레코드별 결과를 확인 — 실패분은 툼스톤에 남겨
+                // 다음 백업에서 재시도(민감영역: 지운 사진이 부활하면 안 됨). 이미 없는 레코드는 정리.
+                if let result = try? await database.modifyRecords(saving: [], deleting: ids, savePolicy: .allKeys) {
+                    for (rid, res) in result.deleteResults {
+                        let name = String(rid.recordName.dropFirst("photo-".count))
+                        switch res {
+                        case .success:
+                            up.remove(name); remaining.remove(name)
+                        case .failure(let err):
+                            if let ck = err as? CKError, ck.code == .unknownItem {
+                                up.remove(name); remaining.remove(name)   // CK에 이미 없음 → 툼스톤 유지 불필요
+                            }   // 그 외 실패는 remaining 유지 → 다음 백업 재시도
+                        }
+                    }
                 }
             }
             UserDefaults.standard.set(Array(up), forKey: Self.uploadedKey)
@@ -248,6 +275,7 @@ final class CloudSyncService {
         guard !needed.isEmpty else { return (0, 0, 0, nil) }
         var found = 0, copied = 0
         var firstError: String? = nil
+        var confirmedInCloud: [String] = []   // 클라우드에 존재 확인된 파일 — 복원 직후 '미백업 N장' 오인 방지(원장 반영)
         for batch in needed.chunked(into: 100) {           // records(for:) 일괄 조회(쿼리 인덱스 불필요)
             let ids = batch.map { CKRecord.ID(recordName: "photo-\($0)") }
             let results: [CKRecord.ID: Result<CKRecord, Error>]
@@ -264,8 +292,20 @@ final class CloudSyncService {
                       let asset = rec["asset"] as? CKAsset, let src = asset.fileURL,
                       let dest = PhotoStore.safeRestoreURL(for: name),
                       !FileManager.default.fileExists(atPath: dest.path) else { continue }
-                if (try? FileManager.default.copyItem(at: src, to: dest)) != nil { copied += 1 }
+                if (try? FileManager.default.copyItem(at: src, to: dest)) != nil {
+                    copied += 1
+                    confirmedInCloud.append(name)   // 클라우드→로컬 복사 성공: 이미 백업된 파일
+                    // 온디바이스 저장과 동일 보호 클래스 적용(복원본도 잠금 시 보호 — 아동 사진).
+                    try? FileManager.default.setAttributes(
+                        [.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: dest.path)
+                }
             }
+        }
+        // 클라우드에서 받은 사진은 이미 백업돼 있는 것 → 업로드 원장에 합쳐, 복원 직후 가짜 '미백업 N장' 경고를 막는다.
+        if !confirmedInCloud.isEmpty {
+            var up = Set(UserDefaults.standard.stringArray(forKey: Self.uploadedKey) ?? [])
+            up.formUnion(confirmedInCloud)
+            UserDefaults.standard.set(Array(up), forKey: Self.uploadedKey)
         }
         return (needed.count, found, copied, firstError)
         #else
@@ -287,6 +327,8 @@ extension PersistableState {
         }
         for c in children { if let r = c.profileImageRef, !r.isEmpty { refs.append(r) } }
         for m in marketItems { refs.append(contentsOf: m.photoRefs) }
+        // 성장 보드 전용 사진(기록 참조분은 diaryEntries에서 이미 포함) — 재설치 복원 시 빈 카드 방지.
+        for b in growthBoards { for card in b.cards { if let r = card.photoRef, !r.isEmpty { refs.append(r) } } }
         return Array(Set(refs.filter { !$0.isEmpty }))
     }
 }

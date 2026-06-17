@@ -111,6 +111,8 @@ struct PersistableState: Codable, Equatable {
     var claimedSubsidyIds: Set<String>
     /// 현재 선택된 아이 — 다자녀 가정이 매 실행 첫 아이로 리셋되지 않도록 영속.
     var selectedChildId: UUID?
+    /// 성장 보드(아이당 1개) — 폴라로이드 카드 레이아웃·연결·스티커(작은 JSON). 사진은 PhotoStore 재사용.
+    var growthBoards: [GrowthBoard]
     /// UserDefaults 기반 사용자 설정 백업(닉네임·검진알림·내동네·본 뱃지 등).
     /// 백업/복원(iCloud·익스포트)에서 누락되지 않도록 문자열 사전으로 직렬화해 담는다.
     /// 키 규약은 AppStore.snapshot()/restore() 참조. isPro(권한)는 사용자 데이터가 아니므로 제외.
@@ -145,6 +147,7 @@ struct PersistableState: Codable, Equatable {
         tradeReports: [TradeReport] = [],
         claimedSubsidyIds: Set<String> = [],
         selectedChildId: UUID? = nil,
+        growthBoards: [GrowthBoard] = [],
         prefs: [String: String]? = nil
     ) {
         self.pregnancies = pregnancies
@@ -175,6 +178,7 @@ struct PersistableState: Codable, Equatable {
         self.tradeReports = tradeReports
         self.claimedSubsidyIds = claimedSubsidyIds
         self.selectedChildId = selectedChildId
+        self.growthBoards = growthBoards
         self.prefs = prefs
     }
 
@@ -190,6 +194,7 @@ struct PersistableState: Codable, Equatable {
         case vaccineHospitals, checkupDoneKeys
         case crewPosts, crewPostComments, crewChats, crewPostSeeded
         case tradeReports, claimedSubsidyIds, selectedChildId
+        case growthBoards
         case prefs
     }
 
@@ -225,6 +230,7 @@ struct PersistableState: Codable, Equatable {
         tradeReports       = try container.decodeIfPresent([TradeReport].self, forKey: .tradeReports) ?? []
         claimedSubsidyIds  = try container.decodeIfPresent(Set<String>.self, forKey: .claimedSubsidyIds) ?? []
         selectedChildId    = try container.decodeIfPresent(UUID.self, forKey: .selectedChildId)
+        growthBoards       = try container.decodeIfPresent([GrowthBoard].self, forKey: .growthBoards) ?? []
         prefs              = try container.decodeIfPresent([String: String].self, forKey: .prefs)
     }
 }

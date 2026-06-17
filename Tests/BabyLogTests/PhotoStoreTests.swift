@@ -5,6 +5,7 @@ import XCTest
 import UIKit
 @testable import BabyLog
 
+@MainActor
 final class PhotoStoreTests: XCTestCase {
 
     func test_saveAndLoad_roundTrip() throws {

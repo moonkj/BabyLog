@@ -21,8 +21,9 @@ struct OnboardingView: View {
     @State private var step: Int = 0
     @State private var showLogin = false
 
-    // 2단계: 기록 밀도
-    @State private var density: RecordDensity? = nil
+    // iCloud 백업 복원 안내(있을 때만)
+    @State private var showRestorePrompt = false
+    @State private var restoring = false
 
     // 3단계: 임신/출산 분기
     @State private var phase: BabyPhase = .baby
@@ -87,7 +88,7 @@ struct OnboardingView: View {
                     switch step {
                     case 0: splashStep
                     case 1: previewStep
-                    case 2: densityStep
+                    case 2: featuresStep
                     case 3: registerStep
                     case 4: permissionStep
                     default: EmptyView()
@@ -100,6 +101,45 @@ struct OnboardingView: View {
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: step)
             }
         }
+        // 이전 iCloud 백업이 있으면 안내 — 복원하거나 새로 시작.
+        .task {
+            guard CloudSyncService.isAvailableInBuild else { return }
+            if await CloudSyncService.shared.backupDate() != nil { showRestorePrompt = true }
+        }
+        .alert("이전 백업을 찾았어요", isPresented: $showRestorePrompt) {
+            Button("복원하기") { restoreFromBackup() }
+            Button("새로 시작하기", role: .cancel) {}
+        } message: {
+            Text("이전에 저장한 사진과 기록을 불러올 수 있어요. ‘새로 시작하기’를 누르면 안내를 계속 진행해요.")
+        }
+        .overlay { if restoring { restoringOverlay } }
+    }
+
+    /// 온보딩 중 '복원하기' — iCloud 백업을 불러온 뒤 바로 본화면으로.
+    private func restoreFromBackup() {
+        restoring = true
+        Task {
+            if let state = try? await CloudSyncService.shared.pull() {
+                await CloudSyncService.shared.pullPhotos(refs: state.allPhotoRefs)
+                await MainActor.run { store.restore(state) }
+            }
+            await MainActor.run { restoring = false; onComplete() }
+        }
+    }
+
+    private var restoringOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.25).ignoresSafeArea()
+            VStack(spacing: Spacing.s3) {
+                ProgressView()
+                Text("백업을 불러오는 중…")
+                    .font(AppFont.callout).foregroundStyle(AppColors.ink2)
+            }
+            .padding(Spacing.s6)
+            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            .blShadow(.sheet)
+        }
+        .accessibilityLabel("백업을 불러오는 중")
     }
 
     // MARK: - 진행바
@@ -184,7 +224,7 @@ struct OnboardingView: View {
                     }
                     .accessibilityLabel("BabyLog")
 
-                    Text("우리 동네 육아의\n모든 것")
+                    Text("아이의 모든 순간을\n담다")
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(AppColors.ink2)
                         .multilineTextAlignment(.center)
@@ -275,7 +315,7 @@ struct OnboardingView: View {
 
                 // CTA
                 VStack(spacing: Spacing.s2) {
-                    nextButton(title: "좋아요, 시작할게요") { advance() }
+                    nextButton(title: "다음") { advance() }
                     skipButton(title: "나중에 할게요") { onComplete() }
                 }
                 .padding(.top, Spacing.s5)
@@ -318,116 +358,76 @@ struct OnboardingView: View {
         .accessibilityLabel("\(name), \(distance), \(isNight ? "야간진료 가능" : "진료중"), 현재 영업중")
     }
 
-    // MARK: - 스텝 2: 기록 밀도
+    // MARK: - 스텝 2: 핵심 기능·요금 안내 (밀도 선택 대신 '도움되는 정보'로 리디자인)
 
-    private var densityStep: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // 타이틀
-            VStack(alignment: .leading, spacing: Spacing.s2) {
-                Text("기록은 어떻게 할까요?")
-                    .font(.system(size: 25, weight: .heavy))
-                    .foregroundStyle(AppColors.ink)
+    private var featuresStep: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    Text("베이비로그로\n할 수 있는 것")
+                        .font(.system(size: 25, weight: .heavy))
+                        .foregroundStyle(AppColors.ink)
+                        .lineSpacing(3)
+                    Text("임신부터 육아까지, 우리 가족의 모든 순간")
+                        .font(AppFont.callout)
+                        .foregroundStyle(AppColors.ink2)
+                }
+                .padding(.top, Spacing.s6)
 
-                Text("나중에 언제든 바꿀 수 있어요")
-                    .font(AppFont.callout)
-                    .foregroundStyle(AppColors.ink2)
+                VStack(spacing: Spacing.s3) {
+                    featureRow(icon: "photo.stack.fill", tone: .mint,
+                               title: "임신부터 육아까지 한 타임라인",
+                               desc: "배 사진이 성장 사진으로, 태명이 아이 이름으로 — 끊김 없이 이어져요.")
+                    featureRow(icon: "person.2.fill", tone: .purple,
+                               title: "가족과 사진 공유",
+                               desc: "무료는 배우자와 둘이서, Pro는 조부모·친척까지 최대 8명. 안드로이드 가족도 웹으로 함께 봐요.")
+                    featureRow(icon: "mappin.and.ellipse", tone: .coral,
+                               title: "우리 동네",
+                               desc: "지금 문 연 소아과·약국, 동네 중고 거래, 또래 부모 크루까지.")
+                    featureRow(icon: "icloud.fill", tone: .blue,
+                               title: "iCloud 자동 백업",
+                               desc: "사진·기록을 내 iCloud에 자동 백업 — 기기를 바꿔도 안전해요. 아이 기록은 우리 서버에 올리지 않아요.")
+                }
+                .padding(.top, Spacing.s5)
+
+                VStack(spacing: Spacing.s2) {
+                    nextButton(title: "다음") { advance() }
+                    skipButton(title: "나중에 할게요") { onComplete() }
+                }
+                .padding(.top, Spacing.s5)
+                .padding(.bottom, Spacing.s8)
             }
-            .padding(.top, Spacing.s6)
-
-            // 밀도 선택 카드
-            VStack(spacing: Spacing.s3) {
-                densityCard(
-                    kind: .light,
-                    icon: "camera.fill",
-                    iconColor: density == .light ? AppColors.onPrimary : AppColors.primary,
-                    title: "가볍게",
-                    description: "사진 한 장이면 충분해요. 바쁜 날도 부담 없이."
-                )
-                densityCard(
-                    kind: .rich,
-                    icon: "book.fill",
-                    iconColor: density == .rich ? AppColors.onPrimary : AppColors.primary,
-                    title: "꼼꼼히",
-                    description: "키·몸무게·이정표까지 풍부하게 남길래요."
-                )
-            }
-            .padding(.top, Spacing.s5)
-
-            Spacer()
-
-            // CTA
-            VStack(spacing: Spacing.s2) {
-                nextButton(
-                    title: "다음",
-                    disabled: density == nil
-                ) { advance() }
-                skipButton { advance() }
-            }
-            .padding(.bottom, Spacing.s8)
+            .padding(.horizontal, Spacing.s5)
         }
-        .padding(.horizontal, Spacing.s5)
     }
 
-    private func densityCard(kind: RecordDensity, icon: String, iconColor: Color, title: String, description: String) -> some View {
-        let isOn = density == kind
-        return Button {
-            density = kind
-        } label: {
-            HStack(spacing: 14) {
-                // 아이콘 셀
+    private func featureRow(icon: String, tone: BadgeTone, title: String, desc: String) -> some View {
+        BLCard(padding: 16, flat: true) {
+            HStack(alignment: .top, spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .fill(isOn ? AppColors.primary : AppColors.primaryTint)
-                        .frame(width: 52, height: 52)
-                        .animation(.easeInOut(duration: 0.2), value: isOn)
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(tone.bg)
+                        .frame(width: 46, height: 46)
                     Image(systemName: icon)
-                        .font(.system(size: 22))
-                        .foregroundStyle(iconColor)
+                        .font(.system(size: 21))
+                        .foregroundStyle(tone.ink)
                 }
                 .accessibilityHidden(true)
-
-                // 텍스트
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 17, weight: .heavy))
+                        .font(.system(size: 16, weight: .heavy))
                         .foregroundStyle(AppColors.ink)
-                    Text(description)
+                    Text(desc)
                         .font(AppFont.caption)
                         .foregroundStyle(AppColors.ink2)
                         .lineSpacing(2)
-                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                // 라디오 인디케이터 (색+아이콘 2중 인코딩)
-                ZStack {
-                    Circle()
-                        .fill(isOn ? AppColors.primary : Color.clear)
-                        .frame(width: 24, height: 24)
-                    Circle()
-                        .stroke(isOn ? AppColors.primary : AppColors.line2, lineWidth: 2)
-                        .frame(width: 24, height: 24)
-                    if isOn {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(AppColors.onPrimary)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: isOn)
-                .accessibilityHidden(true)
+                Spacer(minLength: 0)
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                    .stroke(isOn ? AppColors.primary : Color.clear, lineWidth: 2)
-            )
-            .blShadow(.card)
         }
-        .buttonStyle(LiquidPressStyle(scale: 0.97))
-        .accessibilityLabel("\(title) — \(description)")
-        .accessibilityAddTraits(isOn ? [.isSelected] : [])
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(desc)")
     }
 
     // MARK: - 스텝 3: 임신/출산 등록
@@ -561,9 +561,12 @@ struct OnboardingView: View {
             .padding(.horizontal, Spacing.s5)
         }
         // 임신/출산 전환 시, 다른 단계의 "날짜 입력됨" 안내 카드가 남지 않도록 리셋
-        .onChange(of: phase) { _, _ in
+        .onChange(of: phase) { _, newPhase in
             dateEntered = false
             skipRegistration = false
+            // 예정일 기본값을 '오늘'로 두면 손 안 댄 채 등록 시 '출산 임박(0주 남음)'이라는 거짓 주차가 만들어진다(민감영역).
+            // 임신 전환 시엔 중간값(약 20주 남음)을 기본으로 — 휠에 보이는 값이라 사용자가 바로 조정 가능.
+            dueOrBirthDate = newPhase == .pregnancy ? Date().addingTimeInterval(140 * 86_400) : Date()
         }
     }
 
@@ -852,10 +855,6 @@ private final class LocationPermissionCoordinator: NSObject, ObservableObject, C
             self.authorization = manager.authorizationStatus
         }
     }
-}
-
-private enum RecordDensity: Equatable {
-    case light, rich
 }
 
 private enum BabyPhase: Equatable {

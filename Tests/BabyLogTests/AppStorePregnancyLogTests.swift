@@ -4,6 +4,7 @@
 import XCTest
 @testable import BabyLog
 
+@MainActor
 final class AppStorePregnancyLogTests: XCTestCase {
 
     func test_movementCount_upsertSameDay() {

@@ -37,6 +37,7 @@ struct AdminReportsScreen: View {
     @State private var pendingDelete: PendingDelete?
     @State private var deleteFailed = false
     @State private var scrollTarget: String?     // 신고 → '대상 보기'로 이동·강조할 콘텐츠 id
+    @State private var dummyMadeTitle: String?    // 더미 성장 보드 생성 결과 안내
 
     private struct PendingDelete: Identifiable {
         let id = UUID()
@@ -494,6 +495,18 @@ struct AdminReportsScreen: View {
                 .tint(AppColors.primary)
                 // (제거됨) 서버 is_pro 동기화 — bl_dev_set_pro 백도어 제거(출시 보안). 로컬 토글은 클라 게이트 검증 전용.
             }
+            Section("광고 · 데모") {
+                Button {
+                    let id = DummyBoardFactory.makeSampleBoard(in: store)
+                    dummyMadeTitle = store.board(id: id)?.title ?? "샘플 보드"
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("성장 보드 더미데이터 생성").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.primary)
+                        Text("사진·메모·스티커가 예쁘게 채워진 샘플 성장 보드를 만들어요(광고/스크린샷용). 사진은 즉석 합성돼 실제 아동 사진을 쓰지 않습니다. 누를 때마다 1개 생성 — 기록 탭 > 성장 보드에서 열어 확인·삭제하세요.")
+                            .font(.system(size: 12)).foregroundStyle(AppColors.ink3)
+                    }
+                }
+            }
             Section("내 운영자 ID (서버 ADMIN_UIDS에 등록)") {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(AuthStore.shared.userId ?? "로그인 필요")
@@ -510,6 +523,13 @@ struct AdminReportsScreen: View {
             }
         }
         .listStyle(.insetGrouped)
+        .alert("샘플 보드 생성됨", isPresented: Binding(
+            get: { dummyMadeTitle != nil }, set: { if !$0 { dummyMadeTitle = nil } }
+        )) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("‘\(dummyMadeTitle ?? "")’가 만들어졌어요. 기록 탭 > 성장 보드에서 열어 보세요.")
+        }
     }
 
     // MARK: - 삭제

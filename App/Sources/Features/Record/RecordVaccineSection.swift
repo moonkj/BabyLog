@@ -365,11 +365,12 @@ struct VaccineSection: View {
                     Text(ageLabel(for: v, birthDate: child.birthDate))
                         .font(AppFont.caption)
                         .foregroundStyle(AppColors.ink3)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)   // 기간이 잘리지 않게
                 }
 
                 Spacer(minLength: 0)
 
-                // 상태 배지
+                // 상태 배지(완료/지남/예정) — 별도 체크 원은 제거(행 전체가 토글). 상태는 배지·아이콘으로 표시.
                 if done {
                     BLBadge(tone: .mint, text: "완료", systemIcon: "checkmark").fixedSize()
                 } else if let d = dDayLabel(for: v) {
@@ -379,15 +380,6 @@ struct VaccineSection: View {
                 } else {
                     BLBadge(tone: .grey, text: "예정", systemIcon: "clock").fixedSize()
                 }
-
-                // 체크 인디케이터(행 전체가 토글)
-                ZStack {
-                    Circle().strokeBorder(done ? AppColors.primary : AppColors.line2, lineWidth: 2)
-                        .frame(width: 24, height: 24)
-                    CheckDrawView(isOn: done, size: 14, color: AppColors.primary)
-                }
-                .frame(width: 32, height: 32)
-                .accessibilityHidden(true)
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.vertical, Spacing.s3)
@@ -435,7 +427,7 @@ struct VaccineSection: View {
                         Text(groupAgeSummary(g, birthDate: child.birthDate))
                             .font(AppFont.caption)
                             .foregroundStyle(AppColors.ink3)
-                            .lineLimit(1)
+                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)   // 기간이 잘리지 않게
                     }
 
                     Spacer(minLength: 0)
@@ -494,22 +486,13 @@ struct VaccineSection: View {
         return (.grey, "예정", "clock")
     }
 
-    /// 회차 진행 도트(채움=완료, 외곽=미완, 금색 링=다음 차례) + "N/M" 텍스트.
+    /// 회차 진행 — "N/M" 텍스트만(원형 도트 제거: 화면이 잘리고 중복돼 숫자만 유지).
     @ViewBuilder
     private func doseDots(_ g: VaccineGroup) -> some View {
-        let nextId = g.doses.first(where: { !isDone($0) })?.id
         HStack(spacing: 4) {
-            ForEach(g.doses) { v in
-                let done = isDone(v)
-                Circle()
-                    .strokeBorder(done ? Color.clear : (v.id == nextId ? AppColors.gold : AppColors.line2),
-                                  lineWidth: 1.5)
-                    .background(Circle().fill(done ? AppColors.primary : Color.clear))
-                    .frame(width: 8, height: 8)
-            }
             Text("\(g.doses.filter { isDone($0) }.count)/\(g.doses.count)")
-                .font(AppFont.num(11.5, weight: .bold))
-                .foregroundStyle(AppColors.ink3)
+                .font(AppFont.num(13, weight: .bold))
+                .foregroundStyle(AppColors.ink2)
                 .lineLimit(1)
                 .fixedSize()   // "0/5"가 좁아질 때 "0/\n5"로 줄바꿈되던 문제 방지
         }

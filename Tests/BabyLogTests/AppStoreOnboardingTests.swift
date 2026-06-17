@@ -51,6 +51,7 @@ import Combine
 
 // MARK: - AppStoreOnboardingTests
 
+@MainActor
 final class AppStoreOnboardingTests: XCTestCase {
 
     // MARK: - Properties

@@ -22,6 +22,7 @@ import Combine
 
 // MARK: - Tests
 
+@MainActor
 final class AppStoreTransitionTests: XCTestCase {
 
     // MARK: - Helpers

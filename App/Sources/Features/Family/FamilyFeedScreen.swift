@@ -128,7 +128,7 @@ struct FamilyFeedScreen: View {
             } else {
                 inviteRow         // 승인된 멤버: 조부모 초대 링크만
             }
-            if let n = videoCount, n > 0 { videoCounterChip(n) }   // 0개일 땐 '영상 0/N' 노이즈 숨김
+            if let n = videoCount { videoCounterChip(n) }   // 0개여도 한도(0/N)를 보여줘 사용량 투명하게
             if posts.isEmpty {
                 BLEmptyState(icon: "photo.on.rectangle.angled", title: "기록하면 여기 모여요",
                              message: "기록 탭에서 사진을 올리면 가족 보관함에 자동으로 공유돼요. 가족이 하트·댓글로 함께해요.")
@@ -416,6 +416,17 @@ struct FamilyFeedScreen: View {
         }
     }
 
+    /// 좋아요 누른 사람의 표시 이름 — 내 uid는 "나", 그 외엔 가족 멤버 이름(최신) 우선,
+    /// 없으면 좋아요에 저장된 author_name, 그것도 없으면 "가족". (구·신 데이터 모두 이름 노출)
+    private func likerNames(_ post: BLFeedPost) -> [String] {
+        post.reactions.map { r -> String in
+            if let me = myUid, r.uid == me { return "나" }
+            if let m = members.first(where: { $0.uid == r.uid })?.displayName, !m.isEmpty { return m }
+            let n = r.authorName?.trimmingCharacters(in: .whitespaces)
+            return (n?.isEmpty == false) ? n! : "가족"
+        }
+    }
+
     private func postCard(_ post: BLFeedPost) -> some View {
         let liked = myUid != nil && post.reactions.contains { $0.uid == myUid }
         return BLCard(padding: 0) {
@@ -507,6 +518,22 @@ struct FamilyFeedScreen: View {
                             .accessibilityLabel("사진 옵션")
                         }
                     }
+                    // 좋아요 누른 사람 표시 — 이름 최대 3명 + 나머지 "외 N명"(이름을 못 찾은 멤버 포함).
+                    if !post.reactions.isEmpty {
+                        let names = likerNames(post)
+                        if !names.isEmpty {
+                            let head = Array(names.prefix(3))
+                            let remaining = post.reactions.count - head.count
+                            let line = head.joined(separator: ", ") + (remaining > 0 ? " 외 \(remaining)명" : "")
+                            HStack(spacing: 4) {
+                                Image(systemName: "heart.fill").font(.system(size: 11)).foregroundStyle(Color(hex: 0xE8607A))
+                                Text(line).font(AppFont.caption).foregroundStyle(AppColors.ink2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("좋아요 누른 사람: \(line)")
+                        }
+                    }
                     if let cap = post.caption, !cap.isEmpty {
                         Text(cap).font(.system(size: 14)).foregroundStyle(AppColors.ink).fixedSize(horizontal: false, vertical: true)
                     }
@@ -541,6 +568,8 @@ struct FamilyFeedScreen: View {
                 if approved {
                     blockedByExpiry = !(await FamilyFeedBackend.canViewFeed(familyId: f.id))
                     posts = blockedByExpiry ? [] : await FamilyFeedBackend.fetchFeed(familyId: f.id)
+                    // 좋아요 누른 사람 이름 표시용 — uid→표시이름 매핑(권한 없으면 빈 배열, 이름 생략).
+                    if !blockedByExpiry { members = await FamilyFeedBackend.fetchMembers(familyId: f.id) }
                 } else {
                     blockedByExpiry = false
                     posts = []

@@ -62,6 +62,7 @@ import XCTest
 import Combine
 @testable import BabyLog
 
+@MainActor
 final class AppStoreRecordsTests: XCTestCase {
 
     // MARK: - Helpers

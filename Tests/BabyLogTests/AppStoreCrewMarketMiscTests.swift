@@ -4,6 +4,7 @@
 import XCTest
 @testable import BabyLog
 
+@MainActor
 final class AppStoreCrewMarketMiscTests: XCTestCase {
 
     private func newStore() -> AppStore {

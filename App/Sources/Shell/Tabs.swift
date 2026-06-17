@@ -87,6 +87,12 @@ struct HomeLayoutGlyph: Shape {
                 p.addRoundedRect(in: CGRect(x: x * s, y: y * s, width: 7 * s, height: 7 * s),
                                  cornerSize: CGSize(width: 2 * s, height: 2 * s))
             }
+        case .board:
+            // 폴라로이드 두 장(살짝 겹침)
+            p.addRoundedRect(in: CGRect(x: 4 * s, y: 6 * s, width: 9 * s, height: 11 * s),
+                             cornerSize: CGSize(width: 1.5 * s, height: 1.5 * s))
+            p.addRoundedRect(in: CGRect(x: 12 * s, y: 8 * s, width: 9 * s, height: 11 * s),
+                             cornerSize: CGSize(width: 1.5 * s, height: 1.5 * s))
         }
         return p
     }
@@ -109,12 +115,14 @@ struct HomeLayoutIcon: View {
 enum HomeLayout: String, CaseIterable {
     case hero      = "hero"
     case dashboard = "dashboard"
+    case board     = "board"      // 성장 보드(폴라로이드 캔버스)
     // 타임라인 레이아웃 제거 — 기록 탭에 동일 타임라인이 있어 중복이었다.
 
     var label: String {
         switch self {
         case .hero:      return "히어로"
         case .dashboard: return "대시보드"
+        case .board:     return "성장 보드"
         }
     }
 
@@ -123,6 +131,7 @@ enum HomeLayout: String, CaseIterable {
         switch self {
         case .hero:      return "person.crop.rectangle"
         case .dashboard: return "square.grid.2x2"
+        case .board:     return "rectangle.on.rectangle.angled"
         }
     }
 }
@@ -140,6 +149,12 @@ struct HomeTab: View {
     @State private var showEmergency = false
     @State private var showAddChild = false
     @State private var showLayoutMenu = false
+    @State private var openBoard: GrowthBoard? = nil   // 열어볼 성장 보드(아이당 여러 개)
+    @State private var deleteBoardCandidate: GrowthBoard? = nil   // 삭제 확인 대기
+    @State private var editSectionChildId: UUID? = nil   // 홈 성장보드 섹션 제목 편집
+    @State private var sectionTitleText = ""
+    @State private var showBoardProUpsell = false        // 무료 보드 1개 초과 → Pro 안내
+    @State private var boardRefresh = 0                  // 섹션 제목(UserDefaults) 변경 후 갱신 트리거
     @State private var editingChild: Child? = nil
     @State private var showPeerTip = false
     @State private var showNoMemory = false
@@ -245,7 +260,7 @@ struct HomeTab: View {
         )
     }
 
-    // MARK: 레이아웃 상태 — AppStorage로 앱 재시작 후에도 보존
+    // MARK: 레이아웃 상태 — 세션 중 전환은 유지되지만, 콜드 런치 시 BabyLogApp.init()이 히어로로 리셋(제품 결정).
     @AppStorage("home_layout") private var layoutRaw: String = HomeLayout.hero.rawValue
 
     private var currentLayout: HomeLayout {
@@ -324,7 +339,204 @@ struct HomeTab: View {
             heroLayout
         case .dashboard:
             dashboardLayout
+        case .board:
+            boardLayout
         }
+    }
+
+    // MARK: - 성장 보드 진입(레이아웃) — 요약 카드 + 풀스크린 캔버스
+    @ViewBuilder
+    private var boardLayout: some View {
+        if let child = store.selectedChild {
+            let _ = boardRefresh   // 섹션 제목 변경 시 재렌더 의존
+            let boards = store.boards(for: child.id)
+            let primaryId = store.primaryBoardId(for: child.id)
+            let canAdd = store.canCreateBoard(for: child.id)   // 무료=대표1개만 / Pro=최대 100개
+            let atProMax = store.isPro && !canAdd              // Pro가 100개 상한 도달
+            BLCard {
+                VStack(alignment: .leading, spacing: Spacing.s3) {
+                    // 섹션 제목 — 탭하면 수정.
+                    Button {
+                        sectionTitleText = boardSectionTitle(child)
+                        editSectionChildId = child.id
+                    } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: "rectangle.on.rectangle.angled")
+                                .font(.system(size: 18, weight: .semibold)).foregroundStyle(AppColors.primary)
+                            Text(boardSectionTitle(child))
+                                .font(.system(size: 18, weight: .heavy)).foregroundStyle(AppColors.ink).lineLimit(1)
+                            Image(systemName: "pencil").font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                            Spacer()
+                            if !boards.isEmpty {
+                                Text("\(boards.count)개").font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(boardSectionTitle(child)), 보드 \(boards.count)개")
+                    .accessibilityHint("탭하면 제목을 편집해요")
+
+                    if boards.isEmpty {
+                        Text("사진 카드를 흰 캔버스에 자유롭게 붙여 아이의 성장을 한 장에 담아요.")
+                            .font(AppFont.callout).foregroundStyle(AppColors.ink2).lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        boardCreateButton(title: "첫 보드 만들기") { openBoard = store.createBoard(childId: child.id) }
+                        if !store.isPro {   // 한도를 만들기 '전에' 미리 안내(나중에 막혀 당황하지 않게).
+                            Text("보드는 아이마다 1개 무료 · 여러 개는 Pro")
+                                .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                        }
+                    } else {
+                        ForEach(boards) { b in
+                            let editable = store.isBoardEditable(b.id, childId: child.id)
+                            Button { Haptics.light(); openBoard = b }
+                                label: { boardRow(b, childName: child.name, isPrimary: b.id == primaryId, editable: editable) }
+                                .buttonStyle(LiquidPressStyle(scale: 0.98))
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("\(b.title.isEmpty ? "\(child.name)의 성장 보드" : b.title)\(b.id == primaryId ? ", 대표 보드" : "")\(editable ? "" : ", 보기 전용"), 카드 \(b.cards.count)장")
+                                .accessibilityHint(editable ? "탭하면 보드를 열어요" : "탭하면 보기 전용으로 열려요")
+                                .contextMenu {
+                                    if store.isPro && b.id != primaryId {   // 대표 변경은 Pro만
+                                        Button { store.setPrimaryBoard(childId: child.id, boardId: b.id) } label: {
+                                            Label("대표 보드로 설정", systemImage: "star")   // @Published growthBoards 변경이 재렌더
+                                        }
+                                    }
+                                    Button(role: .destructive) { deleteBoardCandidate = b } label: {
+                                        Label("보드 삭제", systemImage: "trash")
+                                    }
+                                }
+                        }
+                        if canAdd {
+                            boardCreateButton(title: "새 보드 만들기") { openBoard = store.createBoard(childId: child.id) }
+                        } else if !store.isPro {
+                            boardCreateButton(title: "새 보드 만들기 (Pro)", locked: true) { showBoardProUpsell = true }
+                            Text("무료는 대표 보드 1개만 편집할 수 있어요 · 여러 개는 Pro (지금 보드는 그대로 보관돼요)")
+                                .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if atProMax {
+                            Text("보드는 아이마다 최대 \(GrowthBoard.maxPerChild)개까지 만들 수 있어요.")
+                                .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        // 대표 보드 설정 안내 — 보드가 2개 이상인 Pro에게만(대표 변경은 Pro 전용).
+                        if boards.count > 1 && store.isPro {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "hand.tap")
+                                    .font(.system(size: 11, weight: .bold)).foregroundStyle(AppColors.ink3)
+                                    .padding(.top, 1)
+                                Text("보드를 길게 누르면 ‘대표 보드’로 설정할 수 있어요. 대표 보드는 무료로 바뀌어도 계속 편집할 수 있는 1개예요.")
+                                    .font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showBoardProUpsell) { ProUpsellSheet().environmentObject(store) }
+            .sheet(isPresented: Binding(get: { editSectionChildId != nil },
+                                        set: { if !$0 { editSectionChildId = nil } })) {
+                BoardTextInputSheet(
+                    title: "성장 보드 제목",
+                    message: "홈에 표시할 제목이에요. 비우면 '\(child.name)의 성장 보드'로 돌아가요.",
+                    placeholder: "예: 우리 아이의 성장 기록",
+                    secondaryLabel: "기본값으로",
+                    initial: sectionTitleText,
+                    onSave: { saveSectionTitle($0, for: child.id) },
+                    onSecondary: { saveSectionTitle("", for: child.id) }
+                )
+            }
+            .fullScreenCover(item: $openBoard) { b in
+                GrowthBoardScreen(childId: b.childId, boardId: b.id,
+                                  childName: store.children.first(where: { $0.id == b.childId })?.name ?? "") {
+                    openBoard = nil
+                }
+                .environmentObject(store)
+            }
+            .confirmationDialog("이 보드를 삭제할까요?", isPresented: Binding(
+                get: { deleteBoardCandidate != nil }, set: { if !$0 { deleteBoardCandidate = nil } }
+            ), titleVisibility: .visible) {
+                Button("삭제", role: .destructive) {
+                    if let b = deleteBoardCandidate { store.deleteBoard(id: b.id) }
+                    deleteBoardCandidate = nil
+                }
+                Button("취소", role: .cancel) { deleteBoardCandidate = nil }
+            } message: {
+                Text("보드와 보드 전용 사진이 삭제돼요. 기록에서 가져온 원본 사진은 그대로 남아요.")
+            }
+        } else {
+            BLEmptyState(icon: "rectangle.on.rectangle.angled", title: "아이를 먼저 등록해요",
+                         message: "아이를 등록하면 성장 보드를 시작할 수 있어요.")
+        }
+    }
+
+    /// 보드 목록 행 — 이름 + 카드 수 + 대표/보기전용 표시.
+    private func boardRow(_ b: GrowthBoard, childName: String, isPrimary: Bool, editable: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "rectangle.on.rectangle.angled")
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(AppColors.primary)
+                .frame(width: 36, height: 36)
+                .background(AppColors.primarySoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(b.title.isEmpty ? "\(childName)의 성장 보드" : b.title)
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(AppColors.ink)
+                        .lineLimit(1).minimumScaleFactor(0.85)
+                    if isPrimary {   // 대표 보드 — 아이콘+글자(색3중)
+                        Label("대표", systemImage: "star.fill")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: 10, weight: .bold)).foregroundStyle(AppColors.gold)
+                    }
+                }
+                Text(b.cards.isEmpty ? "비어 있어요 · 탭해서 시작"
+                     : (editable ? "카드 \(b.cards.count)장" : "카드 \(b.cards.count)장 · 보기 전용"))
+                    .font(AppFont.caption).foregroundStyle(AppColors.ink2)
+            }
+            Spacer()
+            Image(systemName: editable ? "chevron.right" : "eye")
+                .font(.system(size: 13, weight: .bold)).foregroundStyle(AppColors.ink3)
+                .accessibilityHidden(true)   // 상태는 행 라벨에 포함됨(장식 아이콘)
+        }
+        .padding(.vertical, 8).padding(.horizontal, 10)
+        .background(AppColors.surface2, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .contentShape(Rectangle())
+    }
+
+    private func boardCreateButton(title: String, locked: Bool = false, action: @escaping () -> Void) -> some View {
+        Button { Haptics.light(); action() } label: {
+            Label(title, systemImage: locked ? "lock.fill" : "plus")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(locked ? AppColors.ink2 : .white)
+                .frame(maxWidth: .infinity).frame(height: 50)
+                .background {
+                    // 잠금 버튼은 hero CTA처럼 보이지 않게 — 은은한 테두리(미끼 인상 방지). 일반은 초록 채움.
+                    if locked {
+                        RoundedRectangle(cornerRadius: Radius.md, style: .continuous).fill(AppColors.surface2)
+                            .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                                .stroke(AppColors.gold.opacity(0.55), lineWidth: 1.5))
+                    } else {
+                        RoundedRectangle(cornerRadius: Radius.md, style: .continuous).fill(AppColors.primary)
+                    }
+                }
+        }
+        .buttonStyle(LiquidPressStyle(scale: 0.98))
+        .accessibilityLabel(locked ? "\(title), Pro 잠금" : title)
+        .accessibilityHint(locked ? "탭하면 Pro 안내가 열려요" : "")
+    }
+
+    // MARK: 성장 보드 섹션 제목(아이별, 로컬 표시 라벨)
+    private func sectionTitleKey(_ childId: UUID) -> String { "bl_board_section_\(childId.uuidString)" }
+
+    private func boardSectionTitle(_ child: Child) -> String {
+        let custom = UserDefaults.standard.string(forKey: sectionTitleKey(child.id)) ?? ""
+        return custom.isEmpty ? "\(child.name)의 성장 보드" : custom
+    }
+
+    private func saveSectionTitle(_ text: String, for childId: UUID) {
+        var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.count > 24 { t = String(t.prefix(24)) }
+        UserDefaults.standard.set(t, forKey: sectionTitleKey(childId))
+        boardRefresh += 1
+        editSectionChildId = nil
     }
 
     // MARK: - 공통 헤더

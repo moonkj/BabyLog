@@ -20,7 +20,7 @@ struct SettingsScreen: View {
     @AppStorage("bl_fab_side")         private var fabSide: String         = "right"
     @AppStorage("bl_caregiver_title")  private var caregiverTitle: String  = "양육자"
     @AppStorage("bl_nickname")         private var nickname: String        = "양육자님"
-    @AppStorage("bl_cloud_sync")       private var cloudSync: Bool         = false
+    @AppStorage("bl_cloud_sync")       private var cloudSync: Bool         = true   // 기본 ON(데이터 안전 우선)
     @AppStorage("bl_memory_notif")     private var memoryNotif: Bool       = true
     @ObservedObject private var auth = AuthStore.shared
     @State private var showDeleteAccount = false
@@ -30,6 +30,8 @@ struct SettingsScreen: View {
     @State private var showCloudRestoreConfirm = false
     @State private var cloudBackupAt: Date? = nil   // 복원 확인창에 보여줄 '최신 백업' 시각
     @State private var pendingUploads: Int = 0      // iCloud에 아직 안 올라간 사진 수(미백업 안내)
+    @State private var iCloudSignedIn: Bool? = nil  // iCloud 로그인 여부(미로그인 시 자동백업 경고)
+    @State private var cloudLastBackupAt: Date? = CloudSyncService.lastBackupAt()   // iCloud 마지막 백업 성공 시각(표시)
 
     // MARK: Environment
 
@@ -81,7 +83,13 @@ struct SettingsScreen: View {
         .background(AppColors.canvas.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         // 설정 변경 미세 피드백 (§8.5)
-        .onAppear { pendingUploads = CloudSyncService.pendingUploadCount() }
+        .onAppear {
+            pendingUploads = CloudSyncService.pendingUploadCount()
+            // iCloud 로그인 상태 확인 — 미로그인이면 자동백업이 조용히 실패하므로 사용자에게 경고.
+            if CloudSyncService.isAvailableInBuild {
+                Task { iCloudSignedIn = await CloudSyncService.shared.accountAvailable() }
+            }
+        }
         .sensoryFeedback(.selection, trigger: fabSide)
         .sensoryFeedback(.selection, trigger: caregiverTitle)
         .sensoryFeedback(.impact(weight: .light), trigger: nightDim)
@@ -152,7 +160,7 @@ struct SettingsScreen: View {
     @ViewBuilder
     private var accountSection: some View {
         if SupabaseConfig.isConfigured {
-            settingsSection(eyebrow: "계정", title: "로그인") {
+            settingsSection(eyebrow: "가족 피드·크루 계정", title: "로그인") {
                 if auth.isLoggedIn {
                     settingsRow(icon: "checkmark.seal.fill",
                                 iconBg: AppColors.primarySoft, iconFg: AppColors.primary) {
@@ -189,8 +197,11 @@ struct SettingsScreen: View {
                     .accessibilityLabel("계정 삭제")
                 } else {
                     VStack(alignment: .leading, spacing: Spacing.s3) {
-                        Text("로그인하면 기기를 바꿔도 내 글·모임이 유지되고, 본인 글만 수정·삭제할 수 있어요. 크루는 로그인 없이도 익명으로 참여할 수 있어요.")
+                        Text("가족 피드·크루에서 쓰는 로그인이에요. 로그인하면 기기를 바꿔도 내 글·모임이 유지되고, 본인 글만 수정·삭제할 수 있어요. 크루는 로그인 없이도 익명으로 참여할 수 있어요.")
                             .font(.system(size: 12.5)).foregroundStyle(AppColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("※ iCloud 백업과는 별개예요 — 백업은 기기 iCloud(Apple ID)로 자동돼요.")
+                            .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(AppColors.ink2)
                             .fixedSize(horizontal: false, vertical: true)
                         AppleSignInButton { ok in
                             authAlert = ok ? "로그인했어요 🌿" : "로그인에 실패했어요. 잠시 후 다시 시도해 주세요."
@@ -420,12 +431,29 @@ struct SettingsScreen: View {
                         Text("켜두면 앱을 닫을 때 기록을 내 iCloud에 자동 백업해요. 새 기기에서도 같은 iCloud 계정으로 복원할 수 있어요.")
                             .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
                             .fixedSize(horizontal: false, vertical: true)
+                        Text("※ 기기 iCloud(Apple ID)를 사용해요 — 위 ‘가족 피드·크루 로그인’과 별개예요.")
+                            .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(AppColors.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        // 미로그인 경고 — 자동백업이 조용히 실패하는 상황을 명확히 알림(데이터 유실 방지).
+                        if cloudSync, iCloudSignedIn == false {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12, weight: .bold))
+                                Text("iCloud에 로그인되어 있지 않아 자동 백업이 안 돼요. 기기 ‘설정 > 사용자 이름 > iCloud’에서 로그인해 주세요.")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .foregroundStyle(AppColors.danger)
+                            .padding(.top, 2)
+                        }
                     }
                 }
                 Divider().overlay(AppColors.line).padding(.leading, 62)
                 Button { Task { await runCloud(.backup) } } label: {
                     settingsRow(icon: "arrow.up.circle.fill", iconBg: AppColors.primarySoft, iconFg: AppColors.primary, showChevron: true) {
-                        Text(cloudBusy ? "처리 중…" : "지금 백업").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(cloudBusy ? "처리 중…" : "지금 백업").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(AppColors.ink)
+                            Text(cloudLastBackupText).font(AppFont.caption).foregroundStyle(AppColors.ink3)
+                        }
                     }
                 }.buttonStyle(.plain).disabled(cloudBusy).opacity(cloudBusy ? 0.5 : 1)
                 Divider().overlay(AppColors.line).padding(.leading, 62)
@@ -462,6 +490,15 @@ struct SettingsScreen: View {
     }
 
     /// 복원 확인창 문구 — '가장 최근 백업'임을 명시하고, 가능하면 그 백업 시각을 보여준다.
+    /// '지금 백업' 아래 표시 — 이 기기에서 마지막으로 iCloud 백업 성공한 시각.
+    private var cloudLastBackupText: String {
+        guard let d = cloudLastBackupAt else { return "아직 백업한 적 없어요" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "yyyy.M.d a h:mm"
+        return "마지막 백업: \(f.string(from: d))"
+    }
+
     private var cloudRestoreMessage: String {
         if let d = cloudBackupAt {
             let f = DateFormatter()
@@ -484,11 +521,18 @@ struct SettingsScreen: View {
         defer {
             cloudBusy = false
             pendingUploads = CloudSyncService.pendingUploadCount()   // 미백업 수 갱신
+            cloudLastBackupAt = CloudSyncService.lastBackupAt()      // iCloud 마지막 백업 시각 갱신
             if bgId != .invalid { app.endBackgroundTask(bgId); bgId = .invalid }
         }
         do {
             switch op {
             case .backup:
+                // 빈 상태는 백업 안 함 — 클라우드의 기존 백업을 빈 데이터로 덮어쓰는 사고 방지.
+                guard !store.isEffectivelyEmpty else {
+                    cloudStatus = "백업할 기록이 없어요. (빈 상태로 덮어쓰지 않아요)"
+                    Haptics.warning()
+                    return
+                }
                 try await CloudSyncService.shared.push(store.snapshot())
                 let up = await CloudSyncService.shared.pushPhotos()       // 사진도 함께 백업
                 if let e = up.error {
@@ -500,14 +544,19 @@ struct SettingsScreen: View {
                 }
             case .restore:
                 if let remote = try await CloudSyncService.shared.pull() {
-                    let r = await CloudSyncService.shared.pullPhotos(refs: remote.allPhotoRefs)  // 사진 먼저 내려받고 상태 적용
-                    store.restore(remote)
-                    if let e = r.error {
-                        cloudStatus = r.copied > 0
-                            ? "복원 완료 · 사진 \(r.copied)장. 일부는 못 받았어요 — \(e.prefix(120))"
-                            : "복원했지만 사진을 받지 못했어요 — \(e.prefix(120))"
+                    // 백업이 비어 있으면(아이·기록 0) 정직하게 안내 — '복원 완료'로 오인 방지.
+                    if remote.children.isEmpty && remote.diaryEntries.isEmpty
+                        && remote.pregnancies.isEmpty && remote.growthRecords.isEmpty {
+                        cloudStatus = "iCloud 백업이 비어 있어요. 복원할 기록이 없습니다."
                     } else {
-                        cloudStatus = r.copied > 0 ? "복원 완료 · 사진 \(r.copied)장" : "복원 완료"
+                        let r = await CloudSyncService.shared.pullPhotos(refs: remote.allPhotoRefs)  // 사진 먼저 내려받고 상태 적용
+                        store.restore(remote)
+                        let kids = remote.children.count, recs = remote.diaryEntries.count
+                        if let e = r.error {
+                            cloudStatus = "복원 · 아이 \(kids), 기록 \(recs), 사진 \(r.copied)/\(r.requested) — \(e.prefix(100))"
+                        } else {
+                            cloudStatus = "복원 완료 · 아이 \(kids), 기록 \(recs), 사진 \(r.copied)장"
+                        }
                     }
                 } else {
                     cloudStatus = "iCloud에 백업이 없어요."

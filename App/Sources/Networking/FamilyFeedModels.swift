@@ -59,6 +59,16 @@ struct BLPostMedia: Identifiable, Codable, Equatable {
 
 struct BLReaction: Codable, Equatable {
     let uid: String
+    let authorName: String?   // 좋아요 누른 사람 표시이름(댓글과 동일). 구 데이터는 nil/'가족'.
+    enum CodingKeys: String, CodingKey { case uid, authorName = "author_name" }
+
+    init(uid: String, authorName: String? = nil) { self.uid = uid; self.authorName = authorName }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        uid = try c.decode(String.self, forKey: .uid)
+        authorName = try? c.decodeIfPresent(String.self, forKey: .authorName)
+    }
 }
 
 struct BLComment: Identifiable, Codable, Equatable {

@@ -163,7 +163,7 @@ enum BudgetSummary {
 
 // MARK: - BudgetPeriod (지출 추이 기간 세그먼트)
 
-/// 지출 추이를 보는 기간 단위. 7일/30일은 일별 막대, 6개월/1년은 월별 막대.
+/// 지출 추이를 보는 기간 단위. 7일/한달은 일별 막대(한달=선택한 달 1~말일), 6개월/1년은 월별 막대.
 enum BudgetPeriod: String, CaseIterable, Identifiable {
     case week, month, sixMonths, year
 
@@ -173,17 +173,17 @@ enum BudgetPeriod: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .week:      return "7일"
-        case .month:     return "30일"
+        case .month:     return "한달"
         case .sixMonths: return "6개월"
         case .year:      return "1년"
         }
     }
 
-    /// 총액 헤더용 레이블
+    /// 총액 헤더용 레이블 ('한달'·'1년'은 화면에서 선택한 달/연도로 동적 치환)
     var rangeLabel: String {
         switch self {
         case .week:      return "최근 7일"
-        case .month:     return "최근 30일"
+        case .month:     return "이번 달"
         case .sixMonths: return "최근 6개월"
         case .year:      return "최근 1년"
         }
@@ -289,6 +289,47 @@ extension BudgetSummary {
         return expenses
             .filter { cal.component(.year, from: $0.date) == year && $0.date <= cutoff }
             .reduce(0) { $0 + $1.amount }
+    }
+
+    /// 특정 달(year/month)의 지출 합계.
+    static func monthTotal(
+        _ expenses: [Expense], year: Int, month: Int, calendar cal: Calendar = .current
+    ) -> Int {
+        expenses
+            .filter { cal.component(.year, from: $0.date) == year && cal.component(.month, from: $0.date) == month }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    /// 진행 달 비교용 — 대상 달 1일부터, `asOf`의 '일'까지(말일로 클램프)의 합계.
+    /// (이번 달 부분합을 지난달 '전체'와 비교하면 항상 큰 감소처럼 왜곡되므로 같은 진행 일수만 비교)
+    static func monthToDateTotal(
+        _ expenses: [Expense], year: Int, month: Int, asOf now: Date = Date(), calendar cal: Calendar = .current
+    ) -> Int {
+        guard let monthStart = cal.date(from: DateComponents(year: year, month: month, day: 1)),
+              let lastDay = cal.range(of: .day, in: .month, for: monthStart)?.count else {
+            return monthTotal(expenses, year: year, month: month, calendar: cal)
+        }
+        let day = min(cal.component(.day, from: now), lastDay)
+        guard let dayStart = cal.date(from: DateComponents(year: year, month: month, day: day)),
+              let cutoff = cal.date(byAdding: DateComponents(day: 1, second: -1), to: dayStart) else {
+            return monthTotal(expenses, year: year, month: month, calendar: cal)
+        }
+        return expenses
+            .filter { cal.component(.year, from: $0.date) == year && cal.component(.month, from: $0.date) == month && $0.date <= cutoff }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    /// 특정 달의 일별 추이 버킷(1일~말일, 지출 0인 날도 포함).
+    static func monthTrend(
+        _ expenses: [Expense], year: Int, month: Int, calendar cal: Calendar = .current
+    ) -> [TrendBucket] {
+        guard let monthStart = cal.date(from: DateComponents(year: year, month: month, day: 1)),
+              let range = cal.range(of: .day, in: .month, for: monthStart) else { return [] }
+        return range.compactMap { d -> TrendBucket? in
+            guard let day = cal.date(from: DateComponents(year: year, month: month, day: d)) else { return nil }
+            let amt = expenses.filter { cal.isDate($0.date, inSameDayAs: day) }.reduce(0) { $0 + $1.amount }
+            return TrendBucket(date: day, amount: amt)
+        }
     }
 
     /// 특정 연도의 1~12월 월별 추이 버킷(지출 0인 달도 포함).

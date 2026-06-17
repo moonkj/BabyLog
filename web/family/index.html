@@ -55,6 +55,7 @@
   .like .heart{ font-size:1.4rem; line-height:1; transition:transform .15s; }
   .like.on{ color:var(--pink); } .like.on .heart{ transform:scale(1.12); }
   .cmeta{ display:flex; align-items:center; gap:6px; color:var(--ink3); font-size:.9rem; font-weight:700; }
+  .likers{ padding:0 16px 10px; margin-top:-4px; color:var(--ink2); font-size:.88rem; }
   .comments{ border-top:1px solid var(--line); padding:10px 16px; }
   .comment{ font-size:.95rem; margin:6px 0; }
   .comment b{ color:var(--ink); } .comment span{ color:var(--ink2); }
@@ -187,7 +188,7 @@ async function resolveFamily(){
 // ───────── 피드 ─────────
 async function loadFeed(){
   const { data: posts, error } = await sb.from("bl_feed_post")
-    .select("*, bl_post_media(*), bl_reaction(uid,kind), bl_comment(*)")
+    .select("*, bl_post_media(*), bl_reaction(uid,kind,author_name), bl_comment(*)")
     .eq("family_id", familyId).order("created_at", { ascending:false }).limit(100);
   if (error){ setState("불러오지 못했어요. 잠시 후 다시 시도해 주세요."); return; }
   if (!posts || !posts.length){ setState("아직 공유된 사진이 없어요.\n부모님이 사진을 올리면 여기에 보여요."); return; }
@@ -208,7 +209,13 @@ function cardEl(p){
   }).join("");
   const reactions = p.bl_reaction || [];
   const liked = reactions.some(r => r.uid === me && (r.kind||"heart")==="heart");
-  const hearts = reactions.filter(r => (r.kind||"heart")==="heart").length;
+  const heartReactions = reactions.filter(r => (r.kind||"heart")==="heart");
+  const hearts = heartReactions.length;
+  // 좋아요 누른 사람 이름 — 내 uid는 "나", 그 외엔 저장된 author_name(없으면 "가족").
+  const likerNames = heartReactions.map(r => r.uid===me ? "나" : (r.author_name||"가족"));
+  const likerLine = likerNames.length
+    ? `❤️ ${esc(likerNames.slice(0,3).join(", "))}${likerNames.length>3?` 외 ${likerNames.length-3}명`:""}`
+    : "";
   const comments = (p.bl_comment||[]).sort((a,b)=> new Date(a.created_at)-new Date(b.created_at));
 
   const el = document.createElement("div");
@@ -221,6 +228,7 @@ function cardEl(p){
       <button class="like ${liked?"on":""}" data-id="${p.id}"><span class="heart">${liked?"❤️":"🤍"}</span><span class="lc">${hearts||""}</span></button>
       <span class="cmeta">💬 <span class="cc">${comments.length||0}</span></span>
     </div>
+    ${likerLine ? `<div class="likers">${likerLine}</div>` : ""}
     <div class="comments">
       <div class="clist">${comments.map(c=>`<div class="comment"><b>${esc(c.author_name||"가족")}</b> <span>${esc(c.text)}</span></div>`).join("")}</div>
       <div class="crow"><input placeholder="따뜻한 한마디…" maxlength="1000"><button class="btn">남기기</button></div>
@@ -242,7 +250,7 @@ async function toggleLike(p, btn){
   lc.textContent = Math.max(0, (parseInt(lc.textContent||"0",10)||0) + (on?1:-1)) || "";
   if (on){
     const { error } = await sb.from("bl_reaction")
-      .insert({ post_id:p.id, family_id:familyId, uid:me, kind:"heart" });
+      .insert({ post_id:p.id, family_id:familyId, uid:me, kind:"heart", author_name:myName });
     if (error && error.code !== "23505"){   // 23505=이미 누름(중복) → 성공 취급
       toast("좋아요 실패"); btn.classList.remove("on");
       btn.querySelector(".heart").textContent = "🤍";

@@ -49,6 +49,7 @@ import XCTest
 import Combine
 @testable import BabyLog
 
+@MainActor
 final class AppStorePersistenceWireTests: XCTestCase {
 
     // MARK: - Properties

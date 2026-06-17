@@ -137,6 +137,8 @@ final class AppStore: ObservableObject {
     @Published private(set) var tradeReports: [TradeReport] = []
     /// 사용자가 '받았다'고 체크한 정부지원금 id 집합 (가계부 지원금 완료 표시, 영속).
     @Published private(set) var claimedSubsidyIds: Set<String> = []
+    /// 성장 보드(아이당 1개). 폴라로이드 카드 레이아웃·연결·스티커.
+    @Published private(set) var growthBoards: [GrowthBoard] = []
     private var crewSeeded: Bool = false
     private var crewPostSeeded: Bool = false
     /// 저장 파일 디코딩 실패 여부 — true면 자동저장으로 원본을 덮어쓰지 않는다(데이터 보존).
@@ -285,6 +287,9 @@ final class AppStore: ObservableObject {
                     self.crewPostSeeded     = saved.crewPostSeeded
                     self.tradeReports       = saved.tradeReports
                     self.claimedSubsidyIds  = saved.claimedSubsidyIds
+                    self.growthBoards       = saved.growthBoards
+                    self.pruneOrphanBoards()   // 아이가 없는 보드(부분/옛 백업) 정리 — 백업·메모리참조 오염 방지
+                    self.normalizePrimaryFlags()   // 대표 보드 영속 고정(레거시·복원 순서 의존 제거)
                     // 저장된 선택 아이가 아직 있으면 복원(다자녀 선택 유지)
                     self.selectedChildId    = saved.selectedChildId.flatMap { id in saved.children.contains(where: { $0.id == id }) ? id : nil }
                 }
@@ -604,11 +609,18 @@ final class AppStore: ObservableObject {
         let ud = UserDefaults.standard
         if let nick = ud.string(forKey: "bl_nickname"), !nick.isEmpty { prefs["nickname"] = nick }
         prefs["checkupRemindersOn"] = checkupRemindersOn ? "1" : "0"
+        // 추억('N년 전 오늘') 알림 토글 — 상실·민감 시기에 끈 사용자가 복원 후 다시 켜져 닦달받지 않게 백업(민감영역).
+        if let m = ud.object(forKey: "bl_memory_notif") as? Bool { prefs["memoryNotifOn"] = m ? "1" : "0" }
         prefs["selectedHoodIndex"]  = String(selectedHoodIndex)
         if let hoods = ud.data(forKey: "bl_my_hoods_v2") { prefs["myHoods"] = hoods.base64EncodedString() }
         let badges = ud.stringArray(forKey: "bl_seen_badges") ?? []
         if !badges.isEmpty, let d = try? JSONEncoder().encode(badges),
            let s = String(data: d, encoding: .utf8) { prefs["seenBadges"] = s }
+        // 성장 보드 홈 섹션 제목(아이별 라벨) — 백업/복원·익스포트에 포함(데이터 주권).
+        for child in children {
+            let key = "bl_board_section_\(child.id.uuidString)"
+            if let t = ud.string(forKey: key), !t.isEmpty { prefs[key] = t }
+        }
 
         return PersistableState(
             pregnancies:   pregnancies,
@@ -639,6 +651,7 @@ final class AppStore: ObservableObject {
             tradeReports: tradeReports,
             claimedSubsidyIds: claimedSubsidyIds,
             selectedChildId: selectedChildId,
+            growthBoards: growthBoards,
             prefs: prefs.isEmpty ? nil : prefs
         )
     }
@@ -672,6 +685,11 @@ final class AppStore: ObservableObject {
         crewPostSeeded     = state.crewPostSeeded
         tradeReports       = state.tradeReports
         claimedSubsidyIds  = state.claimedSubsidyIds
+        growthBoards       = state.growthBoards
+        pruneOrphanBoards()   // 아이 없는 보드(부분 백업) 정리
+        normalizePrimaryFlags()   // 대표 보드 영속 고정
+        // 주의: 복원 시 툼스톤을 해제하지 않는다 — '지운 사진 부활 금지'(민감영역·절대원칙)가
+        // 옛 백업 복원으로 빈 카드가 생기는 불편보다 우선. 의도적으로 지운 사진은 복원으로도 되살리지 않는다.
         // 저장된 선택 아이가 아직 존재하면 복원, 아니면 첫 아이로 폴백.
         selectedChildId    = state.selectedChildId.flatMap { id in children.contains(where: { $0.id == id }) ? id : nil }
         // UserDefaults 설정 복원 — restore()는 매 실행마다 호출되므로, 해당 키가 '없을 때만' 적용한다.
@@ -685,6 +703,10 @@ final class AppStore: ObservableObject {
             if ud.object(forKey: "bl_checkup_reminders") == nil, let c = prefs["checkupRemindersOn"] {
                 checkupRemindersOn = (c == "1")
             }
+            // 추억 알림 토글 — 라이브 값이 없을 때만(신규 기기·복구). 민감 시기에 끈 설정을 존중.
+            if ud.object(forKey: "bl_memory_notif") == nil, let m = prefs["memoryNotifOn"] {
+                ud.set(m == "1", forKey: "bl_memory_notif")
+            }
             if ud.object(forKey: "bl_selected_hood") == nil, let s = prefs["selectedHoodIndex"], let i = Int(s) {
                 selectedHoodIndex = i
             }
@@ -695,6 +717,10 @@ final class AppStore: ObservableObject {
             if ud.object(forKey: "bl_seen_badges") == nil, let s = prefs["seenBadges"],
                let d = s.data(using: .utf8), let arr = try? JSONDecoder().decode([String].self, from: d) {
                 ud.set(arr, forKey: "bl_seen_badges")
+            }
+            // 성장 보드 섹션 제목 복원(아이별 키) — 라이브 값이 없을 때만.
+            for (key, value) in prefs where key.hasPrefix("bl_board_section_") {
+                if ud.string(forKey: key) == nil, !value.isEmpty { ud.set(value, forKey: key) }
             }
         }
         seedMarketIfNeeded()
@@ -733,6 +759,8 @@ final class AppStore: ObservableObject {
         children.isEmpty && pregnancies.isEmpty && diaryEntries.isEmpty
             && growthRecords.isEmpty && expenses.isEmpty && pregnancyLogs.isEmpty
             && vaccineCompletions.isEmpty && claimedSubsidyIds.isEmpty
+            // 성장 보드만 만든 사용자도 '비어있지 않음' — 백업 제외/복원 덮어쓰기 방지.
+            && growthBoards.allSatisfy { $0.cards.isEmpty && $0.stickers.isEmpty }
     }
 
     /// 출산 온보딩 — 아이 생성·추가·선택. 빈 이름은 무시.
@@ -793,6 +821,12 @@ final class AppStore: ObservableObject {
         let prefix = "\(id.uuidString)|"
         vaccineCompletions = vaccineCompletions.filter { !$0.hasPrefix(prefix) }
         vaccineHospitals = vaccineHospitals.filter { !$0.key.hasPrefix(prefix) }
+        // 성장 보드도 정리 — 먼저 레코드를 제거한 뒤 보드 전용 사진(고아)을 ref-count로 삭제(공유 사진 보존).
+        // 기록 참조 사진(sourceEntryId)은 위 다이어리 삭제에서 이미 정리됨.
+        let removedBoardCards = growthBoards.filter { $0.childId == id }.flatMap { $0.cards }
+        growthBoards.removeAll { $0.childId == id }
+        for card in removedBoardCards { cleanupBoardCardPhoto(card) }
+        UserDefaults.standard.removeObject(forKey: "bl_board_section_\(id.uuidString)")   // 홈 섹션 제목 라벨 정리(좀비 부활·누적 방지)
         children.removeAll { $0.id == id }
         if selectedChildId == id { selectedChildId = children.first?.id }
         persistNow()   // 민감영역 — 지운 기록이 다음 실행에 부활하지 않도록 즉시 저장
@@ -1162,14 +1196,167 @@ final class AppStore: ObservableObject {
         for e in diaryEntries { refs.append(contentsOf: e.photoRefList) }
         for log in pregnancyLogs where log.kind == .belly { if let r = log.photoRef, !r.isEmpty { refs.append(r) } }
         for c in children { if let r = c.profileImageRef, !r.isEmpty { refs.append(r) } }
+        for b in growthBoards { for card in b.cards where card.sourceEntryId == nil {
+            if let r = card.photoRef, !r.isEmpty { refs.append(r) }   // 보드 전용 사진만(참조분은 위에서 이미 포함)
+        }}
         return refs
+    }
+
+    // MARK: - 성장 보드 CRUD (무료 1개 / Pro 최대 100개 — UI에서 게이팅)
+
+    /// 아이의 모든 보드(최근 수정 순). 없으면 빈 배열.
+    func boards(for childId: UUID) -> [GrowthBoard] {
+        growthBoards.filter { $0.childId == childId }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// 보드 id로 조회(없으면 nil).
+    func board(id: UUID) -> GrowthBoard? {
+        growthBoards.first(where: { $0.id == id })
+    }
+
+    /// 아이의 대표 보드 id — isPrimary 우선, 미설정(레거시/다운그레이드)이면 가장 먼저 만든 보드.
+    func primaryBoardId(for childId: UUID) -> UUID? {
+        let cb = growthBoards.filter { $0.childId == childId }   // 삽입(생성) 순서 보존
+        return cb.first(where: { $0.isPrimary })?.id ?? cb.first?.id
+    }
+
+    /// 이 보드를 편집할 수 있는가 — Pro면 모두, 무료면 대표 보드만.
+    func isBoardEditable(_ boardId: UUID, childId: UUID) -> Bool {
+        isPro || primaryBoardId(for: childId) == boardId
+    }
+
+    /// 새 보드를 더 만들 수 있는가 — 무료는 0개일 때만(대표 1개), Pro는 최대 100개.
+    func canCreateBoard(for childId: UUID) -> Bool {
+        let count = growthBoards.filter { $0.childId == childId }.count
+        return isPro ? count < GrowthBoard.maxPerChild : count == 0
+    }
+
+    /// 대표 보드 변경 — Pro 전용. 같은 아이의 다른 보드 isPrimary를 모두 끄고 대상만 켠다.
+    func setPrimaryBoard(childId: UUID, boardId: UUID) {
+        guard isPro else { return }
+        guard growthBoards.contains(where: { $0.id == boardId && $0.childId == childId }) else { return }
+        for i in growthBoards.indices where growthBoards[i].childId == childId {
+            growthBoards[i].isPrimary = (growthBoards[i].id == boardId)
+        }
+        persistNow()
+    }
+
+    /// 새 보드를 만들어 저장하고 반환. 기본 이름은 "성장 보드 N"(이미 있는 개수+1) — 사용자가 변경 가능.
+    @discardableResult
+    func createBoard(childId: UUID, title: String = "") -> GrowthBoard {
+        var t = title
+        if t.isEmpty {   // 삭제 후 재생성에도 이름이 겹치지 않게 빈 번호를 찾는다.
+            let existing = Set(growthBoards.filter { $0.childId == childId }.map { $0.title })
+            var n = existing.count + 1
+            while existing.contains("성장 보드 \(n)") { n += 1 }
+            t = "성장 보드 \(n)"
+        }
+        // 그 아이의 첫 보드는 대표(무료 편집 가능 보드)로 지정.
+        let isFirst = growthBoards.allSatisfy { $0.childId != childId }
+        let b = GrowthBoard(childId: childId, title: t, isPrimary: isFirst)
+        growthBoards.append(b)
+        persistNow()
+        return b
+    }
+
+    /// 보드 1개 삭제 — 먼저 제거한 뒤 보드 전용 사진 정리(공유 사진은 ref-count로 보존).
+    func deleteBoard(id: UUID) {
+        guard let i = growthBoards.firstIndex(where: { $0.id == id }) else { return }
+        let removed = growthBoards.remove(at: i)
+        for card in removed.cards { cleanupBoardCardPhoto(card) }
+        // 대표를 지웠고 남은 보드가 있으면, 가장 먼저 만든 보드를 새 대표로 '고정'(순서 의존 아닌 영속 플래그).
+        if removed.isPrimary, let n = growthBoards.firstIndex(where: { $0.childId == removed.childId }) {
+            growthBoards[n].isPrimary = true
+        }
+        persistNow()
+    }
+
+    /// 보드 저장 — 보드 자체 id로 업서트(아이당 여러 개 가능). 드래그 등은 화면 로컬 상태로 처리하고 커밋 시 호출.
+    /// `immediate`=true(기본)는 추가·삭제·내용편집처럼 유실되면 안 되는 변경용(즉시 저장).
+    /// 드래그·회전 등 초당 수십 번 일어나는 기하 변경은 `immediate:false`로 호출 — @Published 변경이
+    /// 0.5s debounce 자동저장에 위임돼, 매 제스처마다 전체 상태를 동기 직렬화하던 쓰기 폭주를 막는다.
+    func upsertBoard(_ board: GrowthBoard, immediate: Bool = true) {
+        guard !loadDidFail else { return }
+        var b = board; b.updatedAt = Date()
+        if let i = growthBoards.firstIndex(where: { $0.id == b.id }) { growthBoards[i] = b }
+        else {
+            // 없던 보드를 새로 추가(create) — 단, 아이가 존재할 때만. 삭제된 보드가 뒤늦은 커밋으로 부활하는 것 방지.
+            guard children.contains(where: { $0.id == b.childId }) else { return }
+            growthBoards.append(b)
+        }
+        if immediate { persistNow() }
+    }
+
+    /// 보드 전용 사진만 정리(기록 참조 카드의 사진은 원본 소유라 보존). 카드/보드 삭제 시 호출.
+    /// ⚠️ 호출 전에 대상 카드는 이미 growthBoards에서 제거돼 있어야 한다 — 같은 사진을 다른 보드/카드가
+    /// 아직 참조하면(같은 기록 사진을 여러 보드에 넣은 뒤 기록 삭제로 승계된 경우 등) 삭제하지 않는다(공유 사진 보호).
+    func cleanupBoardCardPhoto(_ card: BoardCard) {
+        guard let ref = card.photoRef, !ref.isEmpty, card.sourceEntryId == nil else { return }
+        let inBoards  = growthBoards.contains { $0.cards.contains { $0.photoRef == ref } }
+        // 같은 파일을 기록(일기)·아이 프로필이 아직 쓰고 있으면 삭제 금지 — 정상 경로엔 없지만
+        // 익스포트/병합·승계 엣지에서 살아있는 사진을 지우지 않도록 방어(데이터 보존 우선).
+        let inDiary   = diaryEntries.contains { $0.photoRefList.contains(ref) || $0.photoRef == ref }
+        let inProfile = children.contains { $0.profileImageRef == ref }
+        if !inBoards && !inDiary && !inProfile { PhotoStore.delete(ref) }
+    }
+
+    /// children에 없는 childId의 보드(부분/옛 백업 복원 등으로 생긴 고아)를 제거하고 보드전용 사진도 정리.
+    /// 로드·복원 직후 호출 — 보이지 않는 고아 보드가 백업·메모리참조·익스포트를 오염시키지 않게.
+    private func pruneOrphanBoards() {
+        // 안전장치: children가 비었는데 보드가 있으면 '부분/실패 디코드' 신호일 수 있다 →
+        // 사진을 지우지 않는다(아이 전체 삭제는 deleteChild가 이미 보드까지 정리하므로 정상 경로에선 도달 안 함).
+        guard !children.isEmpty else { return }
+        let liveIds = Set(children.map { $0.id })
+        let orphans = growthBoards.filter { !liveIds.contains($0.childId) }
+        guard !orphans.isEmpty else { return }
+        for b in orphans { for c in b.cards { cleanupBoardCardPhoto(c) } }
+        growthBoards.removeAll { !liveIds.contains($0.childId) }
+    }
+
+    /// 대표 플래그 정규화 — 보드가 있는데 대표(isPrimary)가 하나도 없는 아이는 가장 먼저 만든 보드를 대표로 고정.
+    /// 레거시(플래그 없던 시절)·복원 시 배열 순서에 의존하지 않고 '편집 가능 보드 1개'를 영속 보장한다.
+    private func normalizePrimaryFlags() {
+        for cid in Set(growthBoards.map { $0.childId }) {
+            let idxs = growthBoards.indices.filter { growthBoards[$0].childId == cid }
+            guard let first = idxs.first else { continue }
+            let primaries = idxs.filter { growthBoards[$0].isPrimary }
+            if primaries.isEmpty {
+                growthBoards[first].isPrimary = true                 // 대표 없음 → 첫(가장 먼저 만든) 보드를 대표로
+            } else if primaries.count > 1 {
+                // 대표가 둘 이상(손상·병합 백업) → 첫 대표만 남기고 나머지 해제(불변식: 아이당 대표 1개).
+                for j in primaries.dropFirst() { growthBoards[j].isPrimary = false }
+            }
+        }
+    }
+
+    /// 삭제되는 기록(entryId)의 사진 중, 성장 보드 카드가 참조 중인 것을 보드 소유로 승계한다.
+    /// 승계된 카드는 sourceEntryId를 비워 보드가 파일을 소유(이후 보드 카드 삭제 시 정상 정리)하게 하고,
+    /// 호출부는 해당 ref를 삭제·툼스톤하지 않는다. 반환값 = 승계되어 보존해야 하는 ref 집합.
+    private func adoptBoardPhotos(referencing entryId: UUID, refs: [String]) -> Set<String> {
+        guard !refs.isEmpty else { return [] }
+        let eid = entryId.uuidString
+        let refSet = Set(refs)
+        var adopted = Set<String>()
+        for bi in growthBoards.indices {
+            for ci in growthBoards[bi].cards.indices {
+                let card = growthBoards[bi].cards[ci]
+                guard card.sourceEntryId == eid, let r = card.photoRef, !r.isEmpty, refSet.contains(r) else { continue }
+                growthBoards[bi].cards[ci].sourceEntryId = nil   // 보드가 파일 소유 → 원본 삭제/툼스톤 금지
+                adopted.insert(r)
+            }
+        }
+        return adopted
     }
 
     /// 다이어리 항목을 삭제한다. 연결된 로컬 사진도 함께 정리한다.
     func deleteDiaryEntry(id: UUID) {
         if let entry = diaryEntries.first(where: { $0.id == id }) {
-            for ref in entry.photoRefList { PhotoStore.delete(ref) }
-            if entry.photoRefList.isEmpty { PhotoStore.delete(entry.photoRef) }
+            var refs = entry.photoRefList
+            if refs.isEmpty, let r = entry.photoRef, !r.isEmpty { refs = [r] }
+            // 성장 보드가 이 기록 사진을 참조 중이면, 파일을 보드 소유로 승계하고 삭제·툼스톤하지 않는다.
+            // (안 하면 보드 카드가 빈칸이 되고, 툼스톤 때문에 복원으로도 되살아나지 못함 — 데이터 유실.)
+            let adopted = adoptBoardPhotos(referencing: id, refs: refs)
+            for ref in refs where !adopted.contains(ref) { PhotoStore.delete(ref) }
             PhotoStore.delete(entry.videoRef)
         }
         diaryEntries.removeAll { $0.id == id }
@@ -1181,6 +1368,8 @@ final class AppStore: ObservableObject {
         UNUserNotificationCenter.current().removePendingNotificationRequests(
             withIdentifiers: ["memory-\(id.uuidString)"]
         )
+        // 민감영역 — 지운 기록이 강제종료(0.5s debounce 이전)로 부활하지 않게, 보드 사진 승계와 함께 즉시 저장.
+        persistNow()
     }
 
     /// 삭제되는 기록 중 가족 피드(서버 R2)에 공유된 것을 함께 제거 — 지운 사진이 가족/서버에 남지 않게.

@@ -6,6 +6,7 @@
 import XCTest
 @testable import BabyLog
 
+@MainActor
 final class AppStoreBudgetVaccineTests: XCTestCase {
 
     // MARK: - 지출 CRUD

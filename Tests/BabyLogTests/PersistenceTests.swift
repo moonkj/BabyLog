@@ -15,6 +15,7 @@
 import XCTest
 @testable import BabyLog
 
+@MainActor
 final class PersistenceTests: XCTestCase {
 
     // MARK: - 프로퍼티

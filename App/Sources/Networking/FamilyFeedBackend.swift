@@ -290,7 +290,7 @@ enum FamilyFeedBackend {
     // MARK: - 피드
 
     static func fetchFeed(familyId: String) async -> [BLFeedPost] {
-        let sel = "select=*,bl_post_media(*),bl_reaction(uid),bl_comment(*)"
+        let sel = "select=*,bl_post_media(*),bl_reaction(uid,author_name),bl_comment(*)"
         let path = "/bl_feed_post?family_id=eq.\(familyId)&\(sel)&order=created_at.desc&limit=100"
         guard let req = await rest(path, method: "GET"),
               let (data, resp) = try? await URLSession.shared.data(for: req),
@@ -302,7 +302,7 @@ enum FamilyFeedBackend {
     /// 타임라인 매칭용 — 내가 볼 수 있는 모든 포스트를 post.id로 색인(가족 무관).
     /// RLS가 내 가족(소유/멤버)만 보여주므로, 고아 가족이 여러 개여도 흩어진 포스트를 모두 찾는다.
     static func fetchFamilySocial() async -> [String: BLFeedPost] {
-        let sel = "select=*,bl_post_media(*),bl_reaction(uid),bl_comment(*)"
+        let sel = "select=*,bl_post_media(*),bl_reaction(uid,author_name),bl_comment(*)"
         let path = "/bl_feed_post?\(sel)&order=created_at.desc&limit=200"
         guard let req = await rest(path, method: "GET"),
               let (data, resp) = try? await URLSession.shared.data(for: req),
@@ -315,7 +315,7 @@ enum FamilyFeedBackend {
 
     /// 단일 포스트(하트·댓글 포함) 재조회 — 카드에서 반응/댓글 직후 갱신용.
     static func fetchPost(postId: String) async -> BLFeedPost? {
-        let sel = "select=*,bl_post_media(*),bl_reaction(uid),bl_comment(*)"
+        let sel = "select=*,bl_post_media(*),bl_reaction(uid,author_name),bl_comment(*)"
         let path = "/bl_feed_post?id=eq.\(postId)&\(sel)&limit=1"
         guard let req = await rest(path, method: "GET"),
               let (data, resp) = try? await URLSession.shared.data(for: req),
@@ -532,24 +532,31 @@ enum FamilyFeedBackend {
 
     // MARK: - 하트 / 댓글
 
+    /// bl_reaction INSERT 1회. 409(이미 누름)는 성공 취급. 컬럼 미적용 등 4xx는 false(상위에서 폴백).
+    private static func insertReaction(_ body: [String: Any]) async -> Bool {
+        guard var req = await rest("/bl_reaction", method: "POST") else { return false }
+        req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse else { return false }
+        if http.statusCode == 409 { return true }   // 이미 누름 = 성공
+        if !(200...299).contains(http.statusCode) {
+            lastError = "하트 실패 HTTP \(http.statusCode): \(String(data: data, encoding: .utf8)?.prefix(120) ?? "")"
+            return false
+        }
+        return true
+    }
+
     @discardableResult
     static func setHeart(post: BLFeedPost, on: Bool) async -> Bool {
         guard let uid = await AuthStore.shared.userId else { return false }
         if on {
-            // 평이한 INSERT(댓글과 동일 경로). on_conflict 업서트가 복합키에서 실패하던 문제 회피.
-            guard var req = await rest("/bl_reaction", method: "POST") else { return false }
-            req.setValue("return=minimal", forHTTPHeaderField: "Prefer")
-            req.httpBody = try? JSONSerialization.data(withJSONObject: [
-                "post_id": post.id, "family_id": post.familyId, "uid": uid, "kind": "heart",
-            ])
-            guard let (data, resp) = try? await URLSession.shared.data(for: req),
-                  let http = resp as? HTTPURLResponse else { return false }
-            if http.statusCode == 409 { return true }   // 이미 누름 = 성공
-            if !(200...299).contains(http.statusCode) {
-                lastError = "하트 실패 HTTP \(http.statusCode): \(String(data: data, encoding: .utf8)?.prefix(120) ?? "")"
-                return false
-            }
-            return true
+            // author_name 포함 INSERT 우선(누가 눌렀는지 표시). author_name 컬럼이 아직 없는
+            // 구 스키마에서도 좋아요가 깨지지 않게, 실패하면 author_name 없이 1회 재시도(점진 배포 안전장치).
+            let nickname = String((UserDefaults.standard.string(forKey: "bl_nickname") ?? "가족").prefix(40))
+            let base: [String: Any] = ["post_id": post.id, "family_id": post.familyId, "uid": uid, "kind": "heart"]
+            if await insertReaction(base.merging(["author_name": nickname]) { $1 }) { return true }
+            return await insertReaction(base)
         } else {
             let path = "/bl_reaction?post_id=eq.\(post.id)&uid=eq.\(uid)&kind=eq.heart"
             guard let req = await rest(path, method: "DELETE"),
