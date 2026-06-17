@@ -97,16 +97,18 @@ enum DummyBoardFactory {
             store.addExpense(amount: amt, category: cat, date: d, memo: memo)
         }
 
-        // 2) 성장 기록 — 출생 후 월별(차트가 차도록). 아이 생일 기준.
+        // 2) 성장 기록 — 출생~오늘 사이에 6포인트를 고르게 배치(아이 나이와 무관하게 차트가 항상 차도록).
+        //    (이전: 생후 0·2·…12개월 고정 → 12개월 미만 아이는 점이 거의 안 생겨 '안 채워짐' 발생)
         let birth = store.children.first(where: { $0.id == childId })?.birthDate ?? cal.date(byAdding: .month, value: -12, to: now)!
-        let growth: [(Int, Double, Double)] = [   // (개월, 키cm, 몸무게kg)
-            (0, 50.0, 3.3), (2, 57.0, 5.2), (4, 62.0, 6.4),
-            (6, 66.0, 7.3), (9, 71.0, 8.5), (12, 75.0, 9.4),
+        let curve: [(Double, Double)] = [   // 오래된→최근 (키cm, 몸무게kg)
+            (50.0, 3.3), (57.0, 5.2), (62.0, 6.4), (66.0, 7.3), (71.0, 8.5), (75.0, 9.4),
         ]
-        for (m, h, w) in growth {
-            guard let d = cal.date(byAdding: .month, value: m, to: birth), d <= now else { continue }
-            store.addGrowthRecord(childId: childId, heightCm: h, weightKg: w,
-                                  headCircumferenceCm: 34.0 + Double(m) * 0.8, date: d)
+        let span = max(0, now.timeIntervalSince(birth))   // 출생~오늘
+        for (i, hw) in curve.enumerated() {
+            let frac = curve.count > 1 ? Double(i) / Double(curve.count - 1) : 1.0   // 0…1
+            let d = birth.addingTimeInterval(span * frac)
+            store.addGrowthRecord(childId: childId, heightCm: hw.0, weightKg: hw.1,
+                                  headCircumferenceCm: 34.0 + Double(i) * 1.4, date: d)
         }
 
         // 3) 일기 — 합성 사진 + 이정표(타임라인·홈이 차도록). 날짜는 addDiaryEntry가 오늘로 기록.

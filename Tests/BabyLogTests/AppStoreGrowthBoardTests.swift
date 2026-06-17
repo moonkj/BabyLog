@@ -214,6 +214,20 @@ final class AppStoreGrowthBoardTests: XCTestCase {
         XCTAssertFalse(store.canCreateBoard(for: cid), "100개(상한) → 추가 불가")
     }
 
+    // MARK: 데모 데이터 생성 — 가계부·성장·일기 채움(스크린샷용)
+
+    func test_makeSampleRecords_fillsGrowthExpensesDiary() {
+        let store = newStore()
+        store.completeBabyOnboarding(name: "라온", birthDate: Calendar.current.date(byAdding: .month, value: -12, to: Date())!, gender: .girl)
+        let cid = store.children[0].id
+
+        DummyBoardFactory.makeSampleRecords(in: store)
+
+        XCTAssertGreaterThanOrEqual(store.growthRecords(for: cid).count, 6, "성장 기록(키·몸무게)이 채워져야 함")
+        XCTAssertGreaterThan(store.expenses.count, 0, "가계부 지출이 채워져야 함")
+        XCTAssertGreaterThan(store.diaryEntries(for: cid).count, 0, "일기가 채워져야 함")
+    }
+
     // MARK: 보드 전용(참조 아님) 카드는 기록 삭제와 무관
 
     func test_deleteDiaryEntry_doesNotTouchBoardOwnedCard() {
