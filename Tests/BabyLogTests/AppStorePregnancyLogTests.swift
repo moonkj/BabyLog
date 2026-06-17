@@ -1,39 +1,12 @@
 // AppStorePregnancyLogTests.swift
-// BabyLogTests — 임신 태동·체중 영속 회귀 방지
+// BabyLogTests — 임신 체중·기록 영속 회귀 방지
+// (태동 카운트 기능은 제거됨 — 관련 테스트 삭제. PregnancyLog.kind의 .movement 값은 영속 호환을 위해 유지.)
 
 import XCTest
 @testable import BabyLog
 
 @MainActor
 final class AppStorePregnancyLogTests: XCTestCase {
-
-    func test_movementCount_upsertSameDay() {
-        let store = AppStore()
-        let pid = UUID()
-        XCTAssertEqual(store.todayMovementCount(pregnancyId: pid), 0)
-        store.setMovementCount(pregnancyId: pid, count: 3)
-        XCTAssertEqual(store.todayMovementCount(pregnancyId: pid), 3)
-        store.setMovementCount(pregnancyId: pid, count: 7)   // upsert, 새 로그 생성 X
-        XCTAssertEqual(store.todayMovementCount(pregnancyId: pid), 7)
-        XCTAssertEqual(store.pregnancyLogs.filter { $0.kind == .movement }.count, 1)
-    }
-
-    func test_movementCount_zeroRemovesLog() {
-        let store = AppStore()
-        let pid = UUID()
-        store.setMovementCount(pregnancyId: pid, count: 5)
-        store.setMovementCount(pregnancyId: pid, count: 0)
-        XCTAssertEqual(store.todayMovementCount(pregnancyId: pid), 0)
-        XCTAssertTrue(store.pregnancyLogs.isEmpty)
-    }
-
-    func test_movementCount_isScopedPerPregnancy() {
-        let store = AppStore()
-        let a = UUID(); let b = UUID()
-        store.setMovementCount(pregnancyId: a, count: 4)
-        XCTAssertEqual(store.todayMovementCount(pregnancyId: a), 4)
-        XCTAssertEqual(store.todayMovementCount(pregnancyId: b), 0)
-    }
 
     func test_addWeight_appendsAndSortsAndIgnoresNonPositive() {
         let store = AppStore()

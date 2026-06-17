@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>베이비로그 · 개인정보처리방침</title>
+<meta name="description" content="BabyLog(베이비로그) 개인정보처리방침 — 아이의 기록을 가장 소중히 다룹니다.">
+<style>
+  :root{ --ink:#1A1B2E; --ink2:#3A3A4A; --ink3:#737380; --canvas:#FAFAF7; --card:#fff;
+         --sage:#4E8268; --sage-soft:#E7F0EA; --pink:#B5478A; --line:#EDEDE9; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+        background:var(--canvas); color:var(--ink); -webkit-font-smoothing:antialiased; line-height:1.62; }
+  header{ position:sticky; top:0; background:rgba(250,250,247,.93); backdrop-filter:blur(8px);
+          padding:14px 20px; border-bottom:1px solid var(--line); z-index:10; }
+  header b{ font-size:1.05rem; } header b span{ color:var(--sage); }
+  header small{ display:block; font-weight:600; font-size:.72rem; color:var(--ink3); margin-top:1px; }
+  main{ max-width:720px; margin:0 auto; padding:28px 20px 80px; }
+  h1{ font-size:1.5rem; margin-bottom:6px; }
+  .lead{ color:var(--ink2); font-size:.96rem; margin:10px 0 24px; }
+  h2{ font-size:1.08rem; margin:28px 0 10px; }
+  ul{ padding-left:18px; } li{ margin:7px 0; color:var(--ink2); font-size:.94rem; }
+  .muted{ color:var(--ink3); font-size:.84rem; margin-top:8px; }
+  .date{ color:var(--ink3); font-size:.82rem; font-weight:700; margin-top:24px; }
+  a{ color:var(--sage); }
+  .biz{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-top:14px; }
+  .biz div{ font-size:.9rem; color:var(--ink2); margin:4px 0; }
+  .biz b{ color:var(--ink); }
+  footer{ text-align:center; color:var(--ink3); font-size:.8rem; padding:24px; border-top:1px solid var(--line); }
+</style>
+</head>
+<body>
+  <header><b>Baby<span>Log</span></b><small>개인정보처리방침</small></header>
+  <main>
+    <h1>개인정보처리방침</h1>
+    <p class="lead">BabyLog(베이비로그)는 아이의 기록을 가장 소중한 자산으로 여깁니다. 우리는 꼭 필요한 정보만 다루고, 아이의 데이터를 절대 외부에 판매하지 않습니다. 본 방침은 어떤 정보가 어떻게 다뤄지는지 투명하게 설명합니다.</p>
+
+    <h2>1. 가장 중요한 약속</h2>
+    <ul>
+      <li>성장·일기·접종·가계부 등 핵심 기록과 그 원본 사진·영상은 회사 서버로 전송하지 않고, 사용자의 기기와 사용자 본인의 iCloud에만 저장합니다.</li>
+      <li>예외는 하나입니다 — 사용자가 직접 ‘가족과 공유’를 선택한 사진·영상과, 그 기록에 입력한 설명(메모)·아이의 표시 이름(태명/이름)만, 초대한 가족이 함께 볼 수 있도록 가족 보관함(클라우드)에 올라갑니다.</li>
+      <li>아동과 관련된 어떤 데이터도 외부에 판매하거나 광고 목적으로 제공하지 않습니다.</li>
+      <li>무료 사용자의 데이터도 삭제하지 않습니다. ‘데이터 인질극’은 없습니다.</li>
+    </ul>
+
+    <h2>2. 수집하는 정보</h2>
+    <ul>
+      <li>기기·개인 iCloud에만 저장(회사 서버 전송 없음): 아이·임신 기록, 사진·영상 원본, 성장·접종 기록, 일기, 성장 보드, 가계부 지출 내역.</li>
+      <li>가족과 사진 공유(선택 기능): 사용자가 공유하기로 한 사진·영상과 그에 입력한 설명(메모)·아이의 표시 이름(태명/이름)이 가족 보관함 서버(Cloudflare R2·Supabase)에 저장되어, 초대·승인된 가족 구성원만 볼 수 있습니다. 가족이 남긴 하트·댓글과 가족 구성원의 표시 이름(성함)도 함께 저장됩니다.</li>
+      <li>동네 기능(중고 마켓·동네 크루): 사용자가 정한 닉네임, 작성한 글·댓글·채팅, 동네 이름(예: ○○동), 기기·계정 식별자가 백엔드(Supabase)에 저장됩니다. 글쓰기·매물 등록·모임 만들기·채팅·좋아요·댓글 등 ‘참여’ 기능은 거래 안전을 위해 Apple 로그인이 필요합니다(둘러보기는 로그인 없이 가능).</li>
+      <li>로그인: Apple이 제공하는 로그인 식별자만 보관하며, 실명·이메일을 닉네임으로 자동 저장하지 않습니다.</li>
+      <li>알림: 푸시 알림(크루·마켓·가족 소식)을 보내기 위해 기기의 푸시 토큰을 저장합니다. 알림은 설정에서 끌 수 있습니다.</li>
+      <li>위치: 주변 병원·약국·시설 검색 시 기기의 현재 위치를 검색 그 순간에만 사용하고 저장하지 않습니다. 다만 동네 기능에서는 글을 올린 동네 이름(대략적 지역)이 위와 같이 서버에 저장됩니다.</li>
+      <li>신고·안전: 신고가 접수되면 처리를 위해 신고 대상 채팅·게시물의 사본을 보관할 수 있습니다.</li>
+      <li>구독(Pro): 결제는 Apple App Store(StoreKit)를 통해 이뤄지며, 카드 등 결제수단 정보는 회사가 보관하지 않습니다. 구독 권한 확인을 위해 Apple이 발급한 거래 식별자만 백엔드(Supabase)에 저장됩니다.</li>
+      <li>이용 통계: 서비스 개선을 위해 하루 1회 익명 접속 집계(기기 식별자·앱/OS 버전)를 저장합니다. 광고·추적 목적이 아니며 아동 정보는 포함하지 않습니다.</li>
+    </ul>
+
+    <h2>3. 제3자 서비스 및 인프라</h2>
+    <ul>
+      <li>주변 정보·지원금 조회를 위해 검색어 또는 좌표가 다음 공공·지도 서비스로 전달될 수 있습니다: 건강보험심사평가원(병원·약국), 질병관리청 예방접종도우미, 국립중앙의료원 응급의료포털, 복지로(정부지원금), Apple 지도(주변 장소 검색).</li>
+      <li>서비스 운영 인프라: 동네·가족 공유 백엔드는 Supabase, 가족 사진·영상 저장과 가족용 웹 페이지는 Cloudflare(R2·Pages), 푸시 알림은 Apple APNs, 구독 결제는 Apple App Store, 개인 백업은 사용자 본인의 Apple iCloud를 이용합니다.</li>
+      <li>중고 거래에서 카시트 등 ‘리콜’ 표시는 KATSA·KERI 공개 리콜 정보를 참고용으로 안내하는 것입니다.</li>
+      <li>위 외부 서비스에는 아이를 식별할 수 있는 개인정보를 전송하지 않습니다. 일부 인프라 제공사는 대한민국 외에 서버를 둘 수 있습니다.</li>
+    </ul>
+
+    <h2>4. 보유와 파기</h2>
+    <ul>
+      <li>기기 데이터는 사용자가 삭제하거나 앱을 삭제하기 전까지 보관됩니다. 앱을 삭제하면 기기 내 데이터가 사라지므로, 설정의 ‘데이터 백업’을 권장합니다.</li>
+      <li>동네 기능에 올린 글은 직접 삭제할 수 있습니다. 무료 매물은 등록 후 약 30일, 모임은 약 10일 뒤 자동으로 정리됩니다.</li>
+      <li>가족 보관함의 사진·영상은 올린 본인이 삭제할 수 있으며, 삭제하면 가족 모두의 보관함에서 사라집니다. Pro 구독이 끝나면 조부모·친척의 열람은 중단되지만(부부 2인은 계속 열람) 데이터는 보존됩니다.</li>
+      <li>계정을 삭제하면 본인 식별이 해제되며 남은 글은 익명으로 처리됩니다. 만료된 푸시 토큰은 자동으로 정리됩니다.</li>
+    </ul>
+
+    <h2>5. 이용자의 권리</h2>
+    <ul>
+      <li>데이터 내보내기: 설정 &gt; 내 데이터 내보내기에서 표준 JSON 포맷으로 언제든 내려받을 수 있습니다.</li>
+      <li>전체 백업: 사진을 포함한 전체 데이터를 파일 하나로 백업·복원할 수 있습니다.</li>
+      <li>계정 삭제: 설정에서 직접 계정을 삭제할 수 있습니다.</li>
+    </ul>
+
+    <h2>6. 아동에 관하여</h2>
+    <ul>
+      <li>본 서비스는 아동이 직접 가입·이용하는 서비스가 아니라, 양육자(보호자)가 아이의 기록을 남기기 위해 사용하는 서비스입니다.</li>
+    </ul>
+
+    <h2>7. 문의</h2>
+    <ul>
+      <li>개인정보 보호책임자: 문경주</li>
+      <li>이메일: <a href="mailto:imurmkj@naver.com">imurmkj@naver.com</a></li>
+    </ul>
+    <div class="biz">
+      <div><b>상호</b> 바이브랩</div>
+      <div><b>대표자</b> 문경주</div>
+      <div><b>사업자등록번호</b> 874-04-03594</div>
+      <div><b>통신판매업 신고</b> 제2026-충북청주-0608호</div>
+    </div>
+
+    <p class="muted">본 방침은 관련 법령 및 서비스 변경에 따라 개정될 수 있으며, 중요한 변경은 앱 내에서 공지합니다.</p>
+    <p class="date">시행일: 2026년 6월 15일</p>
+  </main>
+  <footer>© 2026 바이브랩 · BabyLog</footer>
+</body>
+</html>
