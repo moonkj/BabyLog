@@ -34,6 +34,7 @@ struct FamilyFeedScreen: View {
     @State private var loadingMembers = false
     @State private var heartsInFlight: Set<String> = []  // 하트 토글 진행 중인 post id — 연타 중복요청 방지
     @State private var pendingRemove: BLFamilyMember?  // 멤버 내보내기 확인
+    @State private var pendingCommentDelete: BLComment?  // 댓글 삭제 확인(작성자·주인)
     @State private var pendingMembers: [BLFamilyMember] = []  // 승인 대기(주인) 목록
     @State private var myApproved: Bool? = nil          // 비주인 본인 승인 상태(nil=확인 전)
     @State private var blockedByExpiry = false          // 승인됐지만 구독 만료로 지금은 볼 수 없음
@@ -67,6 +68,14 @@ struct FamilyFeedScreen: View {
             Button("취소", role: .cancel) {}
         } message: { _ in
             Text("가족 모두의 보관함에서 사라지고 하트·댓글도 함께 삭제돼요. 되돌릴 수 없어요.")
+        }
+        .alert("이 댓글을 삭제할까요?", isPresented: Binding(
+            get: { pendingCommentDelete != nil }, set: { if !$0 { pendingCommentDelete = nil } }
+        ), presenting: pendingCommentDelete) { c in
+            Button("삭제", role: .destructive) { Task { await deleteFamilyComment(c) } }
+            Button("취소", role: .cancel) {}
+        } message: { _ in
+            Text("댓글이 가족 모두의 보관함에서 사라져요.")
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
@@ -541,6 +550,16 @@ struct FamilyFeedScreen: View {
                         (Text(c.authorName).font(.system(size: 13, weight: .bold))
                          + Text("  ") + Text(c.text).font(.system(size: 13)))
                             .foregroundStyle(AppColors.ink2).fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            // 부적절한 댓글 모더레이션 — 작성자 본인 또는 가족 보관함 주인이 삭제(1.2).
+                            .contextMenu {
+                                if c.uid == myUid || family?.ownerUid == myUid {
+                                    Button(role: .destructive) { pendingCommentDelete = c } label: {
+                                        Label("댓글 삭제", systemImage: "trash")
+                                    }
+                                }
+                            }
                     }
                     CommentField { text in Task { await addComment(post, text) } }
                 }
@@ -622,6 +641,14 @@ struct FamilyFeedScreen: View {
     private func addComment(_ post: BLFeedPost, _ text: String) async {
         if await FamilyFeedBackend.addComment(post: post, text: text), let f = family {
             posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
+        }
+    }
+
+    private func deleteFamilyComment(_ c: BLComment) async {
+        if await FamilyFeedBackend.deleteComment(commentId: c.id), let f = family {
+            posts = await FamilyFeedBackend.fetchFeed(familyId: f.id)
+        } else {
+            errorMsg = "댓글을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요."
         }
     }
 

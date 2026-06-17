@@ -1090,11 +1090,13 @@ final class AppStore: ObservableObject {
         e.date = date
         e.memo = (trimmed?.isEmpty ?? true) ? nil : trimmed
         expenses[idx] = e
+        persistNow()   // 수정 즉시 저장 — 디바운스 대기 중 종료에도 유실 방지
     }
 
     /// 지출 항목을 삭제한다.
     func deleteExpense(id: UUID) {
         expenses.removeAll { $0.id == id }
+        persistNow()   // 지운 지출이 종료 후 부활하지 않도록 즉시 저장
     }
 
     // MARK: - 정부지원금 '받음' 체크 (영속)
@@ -1388,11 +1390,13 @@ final class AppStore: ObservableObject {
         diaryEntries[idx].content = content
         diaryEntries[idx].milestone = milestone
         bus.publish(.recordSaved(childId: childId))
+        persistNow()   // 수정 즉시 저장 — 디바운스 대기 중 종료에도 유실 방지
     }
 
     /// 성장 기록을 삭제한다.
     func deleteGrowthRecord(id: UUID) {
         growthRecords.removeAll { $0.id == id }
+        persistNow()   // 지운 성장기록이 종료 후 부활하지 않도록 즉시 저장
     }
 
     // MARK: - 접종 병원 / 산전검진 완료

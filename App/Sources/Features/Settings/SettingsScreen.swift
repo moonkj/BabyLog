@@ -45,6 +45,7 @@ struct SettingsScreen: View {
     // 전체 백업(사진 포함)
     @AppStorage("bl_last_backup") private var lastBackupAt: Double = 0
     @State private var showBackupImporter = false
+    @State private var pendingRestoreURL: URL? = nil   // 파일 복원 전 덮어쓰기 확인 대기
     @State private var backupBusy = false
     @State private var backupAlert: String? = nil
     // 사진 앱 자동 저장(본인 iCloud 사진으로 보존)
@@ -108,20 +109,24 @@ struct SettingsScreen: View {
                       allowedContentTypes: [UTType(filenameExtension: BackupService.fileExtension) ?? .data, .data, .item]) { result in
             switch result {
             case .success(let url):
-                // 큰 백업은 복원이 길어질 수 있어 "준비 중…" 표시가 먼저 그려지도록
-                // 한 번 양보한 뒤 복원을 수행한다. restore는 @MainActor라 메인에서 실행.
-                backupBusy = true
-                Task { @MainActor in
-                    // 어떤 경로(성공·실패·예외)에서도 버튼이 영구 비활성화되지 않도록 항상 리셋
-                    defer { backupBusy = false }
-                    await Task.yield()   // SwiftUI가 backupBusy=true 상태를 먼저 렌더
-                    let ok = await BackupService.restore(from: url, into: store)
-                    backupAlert = ok ? "백업에서 복원했어요. 사진과 기록이 돌아왔습니다 🤍" : "이 파일을 복원하지 못했어요. 올바른 백업 파일인지 확인해 주세요."
-                }
+                // 현재 기록이 있으면 덮어쓰기 확인을 먼저 받는다(실수로 옛 백업 선택 → 신규 기록 유실 방지).
+                // 비어 있으면(신규 기기 복원) 바로 진행.
+                if store.isEffectivelyEmpty { startFileRestore(url) }
+                else { pendingRestoreURL = url }
             case .failure:
                 backupBusy = false
                 backupAlert = "파일을 열지 못했어요."
             }
+        }
+        .confirmationDialog("백업 파일로 덮어쓸까요?", isPresented: Binding(
+            get: { pendingRestoreURL != nil }, set: { if !$0 { pendingRestoreURL = nil } }
+        ), titleVisibility: .visible) {
+            Button("복원(덮어쓰기)", role: .destructive) {
+                if let url = pendingRestoreURL { pendingRestoreURL = nil; startFileRestore(url) }
+            }
+            Button("취소", role: .cancel) { pendingRestoreURL = nil }
+        } message: {
+            Text("현재 기록을 이 백업 파일 내용으로 덮어씁니다. 이 백업 이후에 추가한 기록은 사라질 수 있어요.")
         }
         .alert("백업", isPresented: Binding(get: { backupAlert != nil }, set: { if !$0 { backupAlert = nil } })) {
             Button("확인", role: .cancel) {}
@@ -507,6 +512,17 @@ struct SettingsScreen: View {
             return "가장 최근 iCloud 백업(\(f.string(from: d)))으로 이 기기의 현재 기록을 덮어씁니다. 이 백업 이후에 추가한 기록은 사라질 수 있어요."
         }
         return "가장 최근 iCloud 백업으로 이 기기의 현재 기록을 덮어씁니다. 이 백업 이후에 추가한 기록은 사라질 수 있어요."
+    }
+
+    /// 파일 백업에서 복원 — 확인 후(또는 빈 상태면 바로) 실행. restore는 @MainActor라 메인에서 수행.
+    private func startFileRestore(_ url: URL) {
+        backupBusy = true
+        Task { @MainActor in
+            defer { backupBusy = false }   // 성공·실패·예외 어떤 경로에서도 버튼 복구
+            await Task.yield()             // "준비 중…" 표시가 먼저 그려지도록 한 번 양보
+            let ok = await BackupService.restore(from: url, into: store)
+            backupAlert = ok ? "백업에서 복원했어요. 사진과 기록이 돌아왔습니다 🤍" : "이 파일을 복원하지 못했어요. 올바른 백업 파일인지 확인해 주세요."
+        }
     }
 
     private enum CloudOp { case backup, restore }

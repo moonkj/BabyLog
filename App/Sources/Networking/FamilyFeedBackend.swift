@@ -581,6 +581,15 @@ enum FamilyFeedBackend {
         return true
     }
 
+    /// 댓글 삭제 — 작성자 본인 또는 가족 보관함 주인(RLS가 강제). 부적절한 댓글 모더레이션(App Store 1.2).
+    @discardableResult
+    static func deleteComment(commentId: String) async -> Bool {
+        guard let req = await rest("/bl_comment?id=eq.\(commentId)", method: "DELETE"),
+              let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+        return true
+    }
+
     // MARK: - R2 업로드 (Edge presigned → 직접 PUT)
 
     private static func uploadToR2(familyId: String, data: Data? = nil, fileURL: URL? = nil,

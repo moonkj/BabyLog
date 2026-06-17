@@ -36,6 +36,10 @@ struct MarketItemDetail: View {
     @State private var showLogin = false                 // 로그인 게이트(채팅·구매)
     @State private var pendingBuyerAction: BuyerAction?   // 로그인 게이트 통과 후 이어서 할 동작
     @State private var showMineAlert = false              // 본인 매물 구매/채팅 차단 안내
+    @State private var showItemReport = false             // 구매자: 매물 신고
+    @State private var showSellerBlock = false            // 구매자: 판매자 차단
+    @State private var reportDoneAlert = false            // 신고 접수 안내
+    @ObservedObject private var blocks = BlockStore.shared
     @Environment(\.dismiss) private var dismiss
 
     private enum BuyerAction { case chat, buy }
@@ -130,6 +134,33 @@ struct MarketItemDetail: View {
         }
     }
 
+    /// 구매자용 신고·차단 메뉴(타입체크 부담 분리).
+    @ViewBuilder private var buyerReportMenu: some View {
+        Menu {
+            Button(role: .destructive) { showItemReport = true } label: {
+                Label("매물 신고하기", systemImage: "exclamationmark.triangle")
+            }
+            if let sid = liveItem.sellerId, !sid.isEmpty {
+                Button(role: .destructive) { showSellerBlock = true } label: {
+                    Label("판매자 차단", systemImage: "hand.raised")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("매물 신고·차단")
+    }
+
+    /// 매물 신고 — surface=market_item으로 서버 접수(운영자 검토). 채팅 진입 없이도 신고 가능(1.2).
+    private func submitItemReport(_ reason: String) {
+        let it = liveItem
+        Task {
+            await ReportBackend.submit(surface: "market_item", contextId: it.id,
+                                       reportedName: it.sellerName, reportedId: it.sellerId, reason: reason)
+            reportDoneAlert = true
+        }
+    }
+
     /// 매물 삭제 — 로컬 우선 삭제 + (구성 시) 서버 동기화. 서버 실패 시 복원 후 안내, 화면 유지.
     private func deleteItem() {
         guard !deleteBusy else { return }
@@ -217,8 +248,14 @@ struct MarketItemDetail: View {
                     }
                     .accessibilityLabel("내 매물 관리")
                 }
+            } else {
+                // 구매자 — 부적절한 매물 신고 / 판매자 차단(App Store 1.2 UGC 요건).
+                ToolbarItem(placement: .topBarTrailing) { buyerReportMenu }
             }
         }
+        .modifier(MarketModerationDialogs(
+            showItemReport: $showItemReport, showSellerBlock: $showSellerBlock, reportDoneAlert: $reportDoneAlert,
+            onReport: submitItemReport, onBlock: { blocks.block(liveItem.sellerId); dismiss() }))
         .sheet(isPresented: $showChatSheet) {
             // 구매자 화면 — 내 식별자를 스레드 buyer로 해석(buyer: nil).
             MarketChatSheet(item: displayItem, buyer: nil)
@@ -401,6 +438,36 @@ struct MarketItemDetail: View {
             if ok { Haptics.success() } else { overrideBuyerConfirmed = nil }
             confirmBusy = false
         }
+    }
+}
+
+/// 구매자 신고·차단 다이얼로그 묶음 — body 모디파이어 체인 타입체크 부담을 분리(별도 ViewModifier).
+private struct MarketModerationDialogs: ViewModifier {
+    @Binding var showItemReport: Bool
+    @Binding var showSellerBlock: Bool
+    @Binding var reportDoneAlert: Bool
+    let onReport: (String) -> Void
+    let onBlock: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog("매물을 신고할까요?", isPresented: $showItemReport, titleVisibility: .visible) {
+                Button("사기·허위 매물", role: .destructive) { onReport("사기·허위 매물") }
+                Button("부적절한 콘텐츠", role: .destructive) { onReport("부적절한 콘텐츠") }
+                Button("스팸·광고", role: .destructive) { onReport("스팸·광고") }
+                Button("취소", role: .cancel) {}
+            } message: {
+                Text("신고 사유를 선택해 주세요. 접수된 신고는 검토 후 조치됩니다.")
+            }
+            .confirmationDialog("판매자를 차단할까요?", isPresented: $showSellerBlock, titleVisibility: .visible) {
+                Button("차단", role: .destructive) { onBlock() }
+                Button("취소", role: .cancel) {}
+            } message: {
+                Text("차단하면 이 판매자가 보낸 메시지가 보이지 않아요.")
+            }
+            .alert("신고 접수됨", isPresented: $reportDoneAlert) {
+                Button("확인", role: .cancel) {}
+            } message: { Text("신고가 접수됐어요. 검토 후 조치할게요.") }
     }
 }
 
