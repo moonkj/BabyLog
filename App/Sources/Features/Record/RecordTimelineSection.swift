@@ -623,6 +623,12 @@ private struct DiaryTimelineCard: View {
             }
             .disabled(sharing)
             .accessibilityHint("이 기록을 가족 보관함에 올려 함께 하트·댓글을 남길 수 있어요")
+            // 영상 길이·화질 제한 안내(긴 영상이 말없이 잘리지 않게).
+            if hasVideo {
+                Text("영상은 최대 60초·720p로 줄여 올라가요")
+                    .font(.system(size: 11, weight: .regular)).foregroundStyle(AppColors.ink3)
+                    .padding(.bottom, 4)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 12)

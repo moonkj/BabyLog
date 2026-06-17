@@ -584,6 +584,11 @@ struct QuickRecordSheet: View {
                          ? (proFeedActive ? "가족 보관함에 자동 게시 (하트·댓글로 함께)" : "로그인하면 가족과 함께 봐요")
                          : "조부모님과 함께 보고 하트·댓글 — Pro에서 열려요")
                         .font(.system(size: 12, weight: .regular)).foregroundStyle(AppColors.ink3)
+                    // 영상 공유 시 길이·화질 제한 안내(긴 영상이 말없이 잘리지 않게 — 정직한 안내).
+                    if selectedVideoURL != nil && familyShareEnabled {
+                        Text("영상은 최대 60초·720p로 줄여 공유돼요")
+                            .font(.system(size: 11, weight: .regular)).foregroundStyle(AppColors.ink3)
+                    }
                 }
                 Spacer(minLength: 0)
                 Toggle("", isOn: $shareToFamily).labelsHidden().tint(AppColors.primary)
