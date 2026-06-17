@@ -1,6 +1,6 @@
 // MarketBackend.swift
 // BabyLog · 마켓(중고거래) 서버 연동 — PostgREST + Storage (SDK 없이 URLSession)
-// 무료 정책: 1인 1매물(freeListingLimit) · 30일 자동 만료(서버 expires_at, fetch는 미만료만).
+// 무료 정책: 1인 1매물(freeListingLimit) · 자동삭제 없음(매물은 판매완료/직접삭제까지 유지 — 이력 누적 정리는 추후).
 // 사진은 공개 상품 사진(아이 사진 아님) → Storage 'market-photos' 버킷 호스팅.
 // ⚠️ 피처 플래그(AppFeatures.market)로 노출 제어. 스키마: supabase/schema_market.sql
 
@@ -41,14 +41,14 @@ enum MarketBackend {
         let buyer_confirmed: Bool?
     }
 
-    /// 시(city) 단위 매물(미만료) 최신순 조회. 미구성/실패 시 nil(→ 로컬 폴백).
+    /// 시(city) 단위 매물 최신순 조회(만료 필터 없음 — 매물 유지). 미구성/실패 시 nil(→ 로컬 폴백).
     /// 마켓은 시 단위로 노출(동은 좁음). 각 매물에는 판매자 동을 함께 표시.
     static func fetchItems(city: String) async -> [MarketItem]? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               !city.isEmpty, city != "우리 동네",
               let h = city.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
         let cols = "id,hood,city,title,category,grade,months_tag,price,is_free,is_graduate,has_recall,description,hygiene_checks,photo_urls,seller,seller_name,status,created_at,sold_to,buyer_confirmed"
-        guard let url = URL(string: "\(base)/rest/v1/market_item?city=eq.\(h)&expires_at=gt.now()&select=\(cols)&order=created_at.desc&limit=100") else { return nil }
+        guard let url = URL(string: "\(base)/rest/v1/market_item?city=eq.\(h)&select=\(cols)&order=created_at.desc&limit=100") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 12
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")
@@ -93,12 +93,12 @@ enum MarketBackend {
         }
     }
 
-    /// 내 활성(판매중·예약중·미만료) 매물 수 — 무료 1매물 게이트용.
+    /// 내 활성(판매중·예약중) 매물 수 — 무료 1매물 게이트용.
     /// 미구성/네트워크 실패/응답 해석 불가 시 nil(불명) — 0으로 단정하면 비행기모드로 한도를 우회할 수 있다.
     static func myActiveListingCount() async -> Int? {
         guard SupabaseConfig.isConfigured, let base = SupabaseConfig.url, let key = SupabaseConfig.anonKey,
               let s = (await SupabaseConfig.ownerID()).addingPercentEncoding(withAllowedCharacters: .alphanumerics),
-              let url = URL(string: "\(base)/rest/v1/market_item?seller=eq.\(s)&status=in.(%ED%8C%90%EB%A7%A4%EC%A4%91,%EC%98%88%EC%95%BD%EC%A4%91)&expires_at=gt.now()&select=id") else { return nil }
+              let url = URL(string: "\(base)/rest/v1/market_item?seller=eq.\(s)&status=in.(%ED%8C%90%EB%A7%A4%EC%A4%91,%EC%98%88%EC%95%BD%EC%A4%91)&select=id") else { return nil }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(await authBearer())", forHTTPHeaderField: "Authorization")

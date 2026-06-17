@@ -15,13 +15,17 @@ enum DummyBoardFactory {
 
     /// 광고/데모용 성장 보드 1개 생성(사진·메모·스티커·연결선 포함). 대상 아이가 없으면 샘플 아이를 만든다.
     /// - Returns: 생성한 보드 id.
-    /// 대상 아이 — 선택/첫 아이가 있으면 그 아이, 없으면 데모용 샘플 아이(12개월 여아 "라온") 생성.
+    /// 대상 아이 — 성장차트가 '월령' 축이라 곡선이 보이려면 아이가 충분히 커야 한다(약 12개월).
+    /// 선택/첫 아이가 11개월 이상이면 그 아이, 아니면 13개월 데모 아이("라온")를 만든다(0~12개월 6포인트 확보).
     @discardableResult
     static func ensureChildId(_ store: AppStore) -> UUID {
-        if let c = store.selectedChild ?? store.children.first { return c.id }
-        let birth = Calendar.current.date(byAdding: .month, value: -12, to: Date()) ?? Date()
+        if let c = store.selectedChild ?? store.children.first,
+           AgeCalculator.childAgeMonths(birthDate: c.birthDate, asOf: Date()).months >= 11 {
+            return c.id
+        }
+        let birth = Calendar.current.date(byAdding: .month, value: -13, to: Date()) ?? Date()
         store.completeBabyOnboarding(name: "라온", birthDate: birth, gender: .girl)
-        return store.children.first!.id
+        return store.children.last!.id
     }
 
     @discardableResult
@@ -97,18 +101,17 @@ enum DummyBoardFactory {
             store.addExpense(amount: amt, category: cat, date: d, memo: memo)
         }
 
-        // 2) 성장 기록 — 출생~오늘 사이에 6포인트를 고르게 배치(아이 나이와 무관하게 차트가 항상 차도록).
-        //    (이전: 생후 0·2·…12개월 고정 → 12개월 미만 아이는 점이 거의 안 생겨 '안 채워짐' 발생)
-        let birth = store.children.first(where: { $0.id == childId })?.birthDate ?? cal.date(byAdding: .month, value: -12, to: now)!
-        let curve: [(Double, Double)] = [   // 오래된→최근 (키cm, 몸무게kg)
-            (50.0, 3.3), (57.0, 5.2), (62.0, 6.4), (66.0, 7.3), (71.0, 8.5), (75.0, 9.4),
+        // 2) 성장 기록 — 생후 0·2·4·6·9·12개월(서로 다른 월령 → 차트에 곡선). 차트 x축이 '월령'이라
+        //    날짜가 아니라 '월령'이 달라야 점이 퍼진다. ensureChildId가 12개월↑ 아이를 보장.
+        let birth = store.children.first(where: { $0.id == childId })?.birthDate ?? cal.date(byAdding: .month, value: -13, to: now)!
+        let growth: [(Int, Double, Double)] = [   // (개월, 키cm, 몸무게kg)
+            (0, 50.0, 3.3), (2, 57.0, 5.2), (4, 62.0, 6.4),
+            (6, 66.0, 7.3), (9, 71.0, 8.5), (12, 75.0, 9.4),
         ]
-        let span = max(0, now.timeIntervalSince(birth))   // 출생~오늘
-        for (i, hw) in curve.enumerated() {
-            let frac = curve.count > 1 ? Double(i) / Double(curve.count - 1) : 1.0   // 0…1
-            let d = birth.addingTimeInterval(span * frac)
-            store.addGrowthRecord(childId: childId, heightCm: hw.0, weightKg: hw.1,
-                                  headCircumferenceCm: 34.0 + Double(i) * 1.4, date: d)
+        for (m, h, w) in growth {
+            guard let d = cal.date(byAdding: .month, value: m, to: birth), d <= now else { continue }
+            store.addGrowthRecord(childId: childId, heightCm: h, weightKg: w,
+                                  headCircumferenceCm: 34.0 + Double(m) * 0.7, date: d)
         }
 
         // 3) 일기 — 합성 사진 + 이정표(타임라인·홈이 차도록). 날짜는 addDiaryEntry가 오늘로 기록.

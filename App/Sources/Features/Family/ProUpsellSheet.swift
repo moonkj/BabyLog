@@ -77,7 +77,8 @@ struct ProUpsellSheet: View {
             benefit("heart.fill", "하트 · 댓글", "조부모님이 사진에 반응하고 함께 이야기해요")
             benefit("person.2.badge.plus", "조부모님과 가족 초대", "아이폰·안드로이드 어느 쪽이든 함께 봐요 (최대 8명)")
             benefit("rectangle.on.rectangle.angled", "성장 보드 여러 개", "테마별·시기별로 마음껏 — 아이당 최대 100개")
-            benefit("icloud.and.arrow.up", "풀화질 백업", "원본 화질로 서버에 안전하게 보관")
+            benefit("bag.fill", "중고 마켓 여러 개 등록", "무료는 1개, Pro는 여러 매물을 한 번에 올려요")
+            benefit("video.fill", "가족 영상 더 많이", "가족과 나누는 영상 무료 100개 · Pro 300개")
         }
         .padding(Spacing.s4)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -558,9 +558,15 @@ struct BudgetScreen: View {
             BLSectionHead(eyebrow: rangeLabel, title: "카테고리별 지출")
                 .accessibilityAddTraits(.isHeader)
             BLCard {
-                categoryTreemap.frame(height: 176)
+                categoryTreemap.frame(height: treemapHeight)
             }
         }
+    }
+
+    /// 트리맵 높이 — 항목이 많으면(작은 셀 최소높이 누적) 카드도 함께 커지게.
+    private var treemapHeight: CGFloat {
+        let n = categoryBreakdown.count
+        return n <= 5 ? 176 : 176 + CGFloat(n - 5) * 28   // 6→204, 7→232
     }
 
     /// slice-and-dice 3열 트리맵 — 1열=최대 카테고리, 2열=다음 2개, 3열=나머지. 면적이 금액 비중에 비례.
@@ -615,16 +621,41 @@ struct BudgetScreen: View {
     @ViewBuilder
     private func treemapColumn(_ col: [(category: ExpenseCategory, amount: Int)],
                                width: CGFloat, height: CGFloat, topCat: ExpenseCategory?) -> some View {
-        let sum = max(1, col.reduce(0) { $0 + $1.amount })
         let gap: CGFloat = 6
-        let availH = height - gap * CGFloat(max(0, col.count - 1))
+        let availH = max(0, height - gap * CGFloat(max(0, col.count - 1)))
+        let heights = treemapCellHeights(col.map { $0.amount }, availH: availH)
         VStack(spacing: gap) {
-            ForEach(col, id: \.category) { item in
+            ForEach(Array(col.enumerated()), id: \.element.category) { idx, item in
                 treemapCell(item, isBig: item.category == topCat)
-                    .frame(height: max(28, availH * CGFloat(item.amount) / CGFloat(sum)))
+                    .frame(height: heights[idx])
             }
         }
         .frame(width: max(0, width))
+    }
+
+    /// 컬럼 셀 높이 — 작은 셀은 최소높이(minH)로 바닥 고정하고, 나머지 셀이 '남은' 높이를 금액 비례로 나눈다.
+    /// (floor를 비례값에 그냥 더하면 합이 availH를 넘어 카드 밖으로 넘치던 버그 수정. 합 = availH 보장.)
+    private func treemapCellHeights(_ amounts: [Int], availH: CGFloat, minH: CGFloat = 30) -> [CGFloat] {
+        let n = amounts.count
+        guard n > 0, availH > 0 else { return Array(repeating: 0, count: n) }
+        // 최소높이조차 다 못 담으면 균등 분배(과밀 방지).
+        if minH * CGFloat(n) > availH { return Array(repeating: availH / CGFloat(n), count: n) }
+        var floored = Array(repeating: false, count: n)
+        while true {
+            let remaining = availH - minH * CGFloat(floored.filter { $0 }.count)
+            let flexSum = amounts.indices.filter { !floored[$0] }.reduce(0) { $0 + amounts[$1] }
+            guard flexSum > 0 else { break }
+            var changed = false
+            for i in 0..<n where !floored[i] {
+                if remaining * CGFloat(amounts[i]) / CGFloat(flexSum) < minH { floored[i] = true; changed = true }
+            }
+            if !changed { break }
+        }
+        let remaining = availH - minH * CGFloat(floored.filter { $0 }.count)
+        let flexSum = amounts.indices.filter { !floored[$0] }.reduce(0) { $0 + amounts[$1] }
+        return (0..<n).map { i in
+            floored[i] ? minH : (flexSum > 0 ? remaining * CGFloat(amounts[i]) / CGFloat(flexSum) : remaining / CGFloat(n))
+        }
     }
 
     private func treemapCell(_ item: (category: ExpenseCategory, amount: Int), isBig: Bool) -> some View {
